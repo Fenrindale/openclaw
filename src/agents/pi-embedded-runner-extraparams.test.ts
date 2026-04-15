@@ -32,7 +32,7 @@ function createTestXaiFastModeWrapper(
       )(model, context, options);
     }
 
-    const fastModelId = XAI_FAST_MODEL_IDS.get(String(model.id).trim());
+    const fastModelId = XAI_FAST_MODEL_IDS.get(model.id.trim());
     return (
       baseStreamFn ??
       (() => {
@@ -140,45 +140,10 @@ import {
 } from "./pi-embedded-runner/openai-stream-wrappers.js";
 
 type WrapProviderStreamFnParams = Parameters<
-  typeof import("../plugins/provider-runtime.js").wrapProviderStreamFn
+  typeof import("../plugins/provider-hook-runtime.js").wrapProviderStreamFn
 >[0];
 
-function createTestOpenAIProviderWrapper(
-  params: WrapProviderStreamFnParams,
-  withDefaultTransport: boolean,
-): StreamFn {
-  let streamFn = params.context.streamFn;
-  if (withDefaultTransport) {
-    streamFn = createOpenAIDefaultTransportWrapper(streamFn);
-  }
-  streamFn = createOpenAIAttributionHeadersWrapper(streamFn);
-
-  if (resolveOpenAIFastMode(params.context.extraParams)) {
-    streamFn = createOpenAIFastModeWrapper(streamFn);
-  }
-
-  const serviceTier = resolveOpenAIServiceTier(params.context.extraParams);
-  if (serviceTier) {
-    streamFn = createOpenAIServiceTierWrapper(streamFn, serviceTier);
-  }
-
-  const textVerbosity = resolveOpenAITextVerbosity(params.context.extraParams);
-  if (textVerbosity) {
-    streamFn = createOpenAITextVerbosityWrapper(streamFn, textVerbosity);
-  }
-
-  streamFn = createCodexNativeWebSearchWrapper(streamFn, {
-    config: params.context.config,
-    agentDir: params.context.agentDir,
-  });
-  streamFn = createOpenAIStringContentWrapper(streamFn);
-  return createOpenAIResponsesContextManagementWrapper(
-    createOpenAIReasoningCompatibilityWrapper(streamFn),
-    params.context.extraParams,
-  );
-}
-
-beforeEach(() => {
+function installFullProviderRuntimeDepsForTest() {
   extraParamsTesting.setProviderRuntimeDepsForTest({
     prepareProviderExtraParams: (params) => {
       if (params.provider !== "openai-codex") {
@@ -262,6 +227,57 @@ beforeEach(() => {
       return params.context.streamFn;
     },
   });
+}
+
+function withMinimalProviderRuntimeDepsForTest<T>(run: () => T): T {
+  extraParamsTesting.setProviderRuntimeDepsForTest({
+    prepareProviderExtraParams: () => undefined,
+    wrapProviderStreamFn: (params) => params.context.streamFn,
+  });
+  try {
+    return run();
+  } finally {
+    installFullProviderRuntimeDepsForTest();
+  }
+}
+
+function createTestOpenAIProviderWrapper(
+  params: WrapProviderStreamFnParams,
+  withDefaultTransport: boolean,
+): StreamFn {
+  let streamFn = params.context.streamFn;
+  if (withDefaultTransport) {
+    streamFn = createOpenAIDefaultTransportWrapper(streamFn);
+  }
+  streamFn = createOpenAIAttributionHeadersWrapper(streamFn);
+
+  if (resolveOpenAIFastMode(params.context.extraParams)) {
+    streamFn = createOpenAIFastModeWrapper(streamFn);
+  }
+
+  const serviceTier = resolveOpenAIServiceTier(params.context.extraParams);
+  if (serviceTier) {
+    streamFn = createOpenAIServiceTierWrapper(streamFn, serviceTier);
+  }
+
+  const textVerbosity = resolveOpenAITextVerbosity(params.context.extraParams);
+  if (textVerbosity) {
+    streamFn = createOpenAITextVerbosityWrapper(streamFn, textVerbosity);
+  }
+
+  streamFn = createCodexNativeWebSearchWrapper(streamFn, {
+    config: params.context.config,
+    agentDir: params.context.agentDir,
+  });
+  streamFn = createOpenAIStringContentWrapper(streamFn);
+  return createOpenAIResponsesContextManagementWrapper(
+    createOpenAIReasoningCompatibilityWrapper(streamFn),
+    params.context.extraParams,
+  );
+}
+
+beforeEach(() => {
+  installFullProviderRuntimeDepsForTest();
 });
 
 afterEach(() => {
@@ -334,7 +350,7 @@ describe("applyExtraParamsToAgent", () => {
   }): string {
     let resolvedModelId = params.model.id;
     const baseStreamFn: StreamFn = (model) => {
-      resolvedModelId = String(model.id ?? "");
+      resolvedModelId = model.id;
       return {} as ReturnType<StreamFn>;
     };
     const agent = { streamFn: baseStreamFn };
@@ -362,22 +378,24 @@ describe("applyExtraParamsToAgent", () => {
     extraParamsOverride?: Record<string, unknown>;
     payload?: Record<string, unknown>;
   }) {
-    const payload = params.payload ?? {};
-    const baseStreamFn: StreamFn = (model, _context, options) => {
-      options?.onPayload?.(payload, model);
-      return {} as ReturnType<StreamFn>;
-    };
-    const agent = { streamFn: baseStreamFn };
-    applyExtraParamsToAgent(
-      agent,
-      params.cfg as Parameters<typeof applyExtraParamsToAgent>[1],
-      params.applyProvider,
-      params.applyModelId,
-      params.extraParamsOverride,
-    );
-    const context: Context = { messages: [] };
-    void agent.streamFn?.(params.model, context, {});
-    return payload;
+    return withMinimalProviderRuntimeDepsForTest(() => {
+      const payload = params.payload ?? {};
+      const baseStreamFn: StreamFn = (model, _context, options) => {
+        options?.onPayload?.(payload, model);
+        return {} as ReturnType<StreamFn>;
+      };
+      const agent = { streamFn: baseStreamFn };
+      applyExtraParamsToAgent(
+        agent,
+        params.cfg as Parameters<typeof applyExtraParamsToAgent>[1],
+        params.applyProvider,
+        params.applyModelId,
+        params.extraParamsOverride,
+      );
+      const context: Context = { messages: [] };
+      void agent.streamFn?.(params.model, context, {});
+      return payload;
+    });
   }
 
   function runToolPayloadMutationCase(params: {
@@ -567,11 +585,11 @@ describe("applyExtraParamsToAgent", () => {
   it("flattens pure text OpenAI completions message arrays for string-only compat models", () => {
     const payload = runResponsesPayloadMutationCase({
       applyProvider: "inferrs",
-      applyModelId: "gg-hf-gg/gemma-4-E2B-it",
+      applyModelId: "google/gemma-4-E2B-it",
       model: {
         api: "openai-completions",
         provider: "inferrs",
-        id: "gg-hf-gg/gemma-4-E2B-it",
+        id: "google/gemma-4-E2B-it",
         name: "Gemma 4 E2B (inferrs)",
         baseUrl: "http://127.0.0.1:8080/v1",
         reasoning: false,
@@ -1315,6 +1333,36 @@ describe("applyExtraParamsToAgent", () => {
 
     expect(calls).toHaveLength(1);
     expect(calls[0]?.transport).toBe("websocket");
+  });
+
+  it("preserves maxTokens: 0 in shared extra params for providers that forward it", () => {
+    const { calls, agent } = createOptionsCaptureAgent();
+    const cfg = {
+      agents: {
+        defaults: {
+          models: {
+            "openai/gpt-5": {
+              params: {
+                maxTokens: 0,
+              },
+            },
+          },
+        },
+      },
+    };
+
+    applyExtraParamsToAgent(agent, cfg, "openai", "gpt-5");
+
+    const model = {
+      api: "openai-responses",
+      provider: "openai",
+      id: "gpt-5",
+    } as Model<"openai-responses">;
+    const context: Context = { messages: [] };
+    void agent.streamFn?.(model, context, {});
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.maxTokens).toBe(0);
   });
 
   it("defaults Codex transport to auto (WebSocket-first)", () => {
