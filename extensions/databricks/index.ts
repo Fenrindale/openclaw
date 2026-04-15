@@ -4,6 +4,7 @@ import type { StreamFn } from "@mariozechner/pi-agent-core";
 import { applyDatabricksConfig, DATABRICKS_DEFAULT_MODEL_REF } from "./api.js";
 import { normalizeDatabricksBaseUrl } from "./onboard.js";
 import { createProviderApiKeyAuthMethod } from "openclaw/plugin-sdk/provider-auth-api-key";
+import { fetchWithSsrFGuard } from "openclaw/plugin-sdk/ssrf-runtime";
 
 const PROVIDER_ID = "databricks";
 
@@ -186,42 +187,49 @@ export default definePluginEntry({
           }
 
           try {
-            const res = await fetch(`${baseUrl.replace(/\/+$/, "")}/api/2.0/serving-endpoints`, {
-              headers: {
-                Authorization: `Bearer ${auth.apiKey}`,
+            const { response: res, release } = await fetchWithSsrFGuard({
+              url: `${baseUrl.replace(/\/+$/, "")}/api/2.0/serving-endpoints`,
+              init: {
+                headers: {
+                  Authorization: `Bearer ${auth.apiKey}`,
+                },
               },
             });
-            if (!res.ok) {
-              return null;
+            try {
+              if (!res.ok) {
+                return null;
+              }
+
+              const data = (await res.json()) as {
+                endpoints?: Array<{ name: string; endpoint_type: string; task: string }>;
+              };
+              if (!data || !Array.isArray(data.endpoints)) {
+                return null;
+              }
+
+              const models = data.endpoints
+                .filter((ep) => ep.task === "llm/v1/chat")
+                .map((ep) => ({
+                  id: ep.name,
+                  name: ep.name,
+                  api: "openai-completions" as const,
+                  reasoning: false,
+                  input: ["text"] as ["text"],
+                  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+                  contextWindow: 128000,
+                  maxTokens: 4096,
+                }));
+
+              return {
+                provider: {
+                  baseUrl,
+                  api: "openai-completions",
+                  models,
+                },
+              };
+            } finally {
+              await release();
             }
-
-            const data = (await res.json()) as {
-              endpoints?: Array<{ name: string; endpoint_type: string; task: string }>;
-            };
-            if (!data || !Array.isArray(data.endpoints)) {
-              return null;
-            }
-
-            const models = data.endpoints
-              .filter((ep) => ep.task === "llm/v1/chat")
-              .map((ep) => ({
-                id: ep.name,
-                name: ep.name,
-                api: "openai-completions" as const,
-                reasoning: false,
-                input: ["text"] as ["text"],
-                cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-                contextWindow: 128000,
-                maxTokens: 4096,
-              }));
-
-            return {
-              provider: {
-                baseUrl,
-                api: "openai-completions",
-                models,
-              },
-            };
           } catch {
             return null;
           }
@@ -282,14 +290,18 @@ export default definePluginEntry({
                 ...(streamOptions.headers as Record<string, string>),
               };
 
-              const response = await fetch(url, {
-                method: "POST",
-                headers: mergedHeaders,
-                body: JSON.stringify(payload),
+              const { response, release: releaseStream } = await fetchWithSsrFGuard({
+                url,
+                init: {
+                  method: "POST",
+                  headers: mergedHeaders,
+                  body: JSON.stringify(payload),
+                },
                 signal: streamOptions.signal,
               });
 
               if (!response.ok) {
+                await releaseStream();
                 const errorText = await response.text();
                 throw new Error(`Databricks API error (${response.status}): ${errorText}`);
               }
@@ -299,109 +311,113 @@ export default definePluginEntry({
                 throw new Error("Failed to get response reader from Databricks API");
               }
 
-              stream.push({ type: "start", partial: output });
+              try {
+                stream.push({ type: "start", partial: output });
 
-              const decoder = new TextDecoder();
-              let buffer = "";
-              let doneSent = false;
+                const decoder = new TextDecoder();
+                let buffer = "";
+                let doneSent = false;
 
-              const toolCallIndexMap = new Map<number, number>();
+                const toolCallIndexMap = new Map<number, number>();
 
-              while (true) {
-                const { done, value } = await reader.read();
-                if (done || doneSent) {
-                  if (doneSent) {
-                    await reader.cancel().catch(() => {});
-                  }
-                  break;
-                }
-
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split("\n");
-                buffer = lines.pop() || "";
-
-                for (const line of lines) {
-                  const trimmed = line.trim();
-                  if (!trimmed || !trimmed.startsWith("data: ")) {
-                    continue;
-                  }
-                  const data = trimmed.slice(6);
-                  if (data === "[DONE]") {
-                    doneSent = true;
+                while (true) {
+                  const { done, value } = await reader.read();
+                  if (done || doneSent) {
+                    if (doneSent) {
+                      await reader.cancel().catch(() => {});
+                    }
                     break;
                   }
 
-                  const json = JSON.parse(data);
-                  const choice = json.choices?.[0];
-                  const delta = choice?.delta;
-                  const blockIndex = () => (output.content as Array<unknown>).length - 1;
+                  buffer += decoder.decode(value, { stream: true });
+                  const lines = buffer.split("\n");
+                  buffer = lines.pop() || "";
 
-                  if (delta?.content) {
-                    const contentList = output.content as Array<{ type: string; text: string }>;
-                    if (contentList.length === 0 || contentList[contentList.length - 1].type !== "text") {
-                      contentList.push({ type: "text", text: "" });
-                      stream.push({ type: "text_start", contentIndex: blockIndex(), partial: output });
+                  for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (!trimmed || !trimmed.startsWith("data: ")) {
+                      continue;
                     }
-                    const textBlock = contentList[contentList.length - 1] as { text: string };
-                    textBlock.text += delta.content;
-                    stream.push({ type: "text_delta", contentIndex: blockIndex(), delta: delta.content, partial: output });
-                  }
+                    const data = trimmed.slice(6);
+                    if (data === "[DONE]") {
+                      doneSent = true;
+                      break;
+                    }
 
-                  if (delta?.tool_calls) {
-                    for (const toolCall of delta.tool_calls) {
-                      const contentList = output.content as Array<Record<string, unknown>>;
-                      const sseIndex = typeof toolCall.index === "number" ? toolCall.index : 0;
-                      
-                      let contentIndex = toolCallIndexMap.get(sseIndex);
-                      if (contentIndex === undefined) {
-                        const newBlock = {
-                          type: "toolCall",
-                          id: toolCall.id || "",
-                          name: toolCall.function?.name || "",
-                          arguments: {},
-                          partialArgs: "",
-                        };
-                        contentList.push(newBlock);
-                        contentIndex = contentList.length - 1;
-                        toolCallIndexMap.set(sseIndex, contentIndex);
-                        stream.push({ type: "toolcall_start", contentIndex, partial: output });
-                      }
+                    const json = JSON.parse(data);
+                    const choice = json.choices?.[0];
+                    const delta = choice?.delta;
+                    const blockIndex = () => (output.content as Array<unknown>).length - 1;
 
-                      const currentBlock = contentList[contentIndex];
+                    if (delta?.content) {
+                      const contentList = output.content as Array<{ type: string; text: string }>;
+                      if (contentList.length === 0 || contentList[contentList.length - 1].type !== "text") {
+                        contentList.push({ type: "text", text: "" });
+                        stream.push({ type: "text_start", contentIndex: blockIndex(), partial: output });
+                      }
+                      const textBlock = contentList[contentList.length - 1] as { text: string };
+                      textBlock.text += delta.content;
+                      stream.push({ type: "text_delta", contentIndex: blockIndex(), delta: delta.content, partial: output });
+                    }
 
-                      if (toolCall.id) {
-                        currentBlock.id = toolCall.id;
-                      }
-                      if (toolCall.function?.name) {
-                        currentBlock.name = toolCall.function.name;
-                      }
-                      if (toolCall.function?.arguments) {
-                        currentBlock.partialArgs = (currentBlock.partialArgs as string) + toolCall.function.arguments;
-                        stream.push({
-                          type: "toolcall_delta",
-                          contentIndex,
-                          delta: toolCall.function.arguments,
-                          partial: output,
-                        });
+                    if (delta?.tool_calls) {
+                      for (const toolCall of delta.tool_calls) {
+                        const contentList = output.content as Array<Record<string, unknown>>;
+                        const sseIndex = typeof toolCall.index === "number" ? toolCall.index : 0;
+                        
+                        let contentIndex = toolCallIndexMap.get(sseIndex);
+                        if (contentIndex === undefined) {
+                          const newBlock = {
+                            type: "toolCall",
+                            id: toolCall.id || "",
+                            name: toolCall.function?.name || "",
+                            arguments: {},
+                            partialArgs: "",
+                          };
+                          contentList.push(newBlock);
+                          contentIndex = contentList.length - 1;
+                          toolCallIndexMap.set(sseIndex, contentIndex);
+                          stream.push({ type: "toolcall_start", contentIndex, partial: output });
+                        }
+
+                        const currentBlock = contentList[contentIndex];
+
+                        if (toolCall.id) {
+                          currentBlock.id = toolCall.id;
+                        }
+                        if (toolCall.function?.name) {
+                          currentBlock.name = toolCall.function.name;
+                        }
+                        if (toolCall.function?.arguments) {
+                          currentBlock.partialArgs = (currentBlock.partialArgs as string) + toolCall.function.arguments;
+                          stream.push({
+                            type: "toolcall_delta",
+                            contentIndex,
+                            delta: toolCall.function.arguments,
+                            partial: output,
+                          });
+                        }
                       }
                     }
-                  }
-                  
-                  if (json.usage) {
-                    const usage = output.usage as Record<string, number>;
-                    usage.input = json.usage.prompt_tokens;
-                    usage.output = json.usage.completion_tokens;
-                    usage.totalTokens = json.usage.total_tokens;
-                  }
-                  
-                  if (choice?.finish_reason) {
-                    output.stopReason = mapDatabricksStopReason(choice.finish_reason);
+                    
+                    if (json.usage) {
+                      const usage = output.usage as Record<string, number>;
+                      usage.input = json.usage.prompt_tokens;
+                      usage.output = json.usage.completion_tokens;
+                      usage.totalTokens = json.usage.total_tokens;
+                    }
+                    
+                    if (choice?.finish_reason) {
+                      output.stopReason = mapDatabricksStopReason(choice.finish_reason);
+                    }
                   }
                 }
-              }
 
-              stream.push({ type: "done", reason: output.stopReason, message: output });
-              stream.end();
+                stream.push({ type: "done", reason: output.stopReason, message: output });
+                stream.end();
+              } finally {
+                await releaseStream();
+              }
             } catch (e: unknown) {
               output.stopReason = "error";
               output.errorMessage = e instanceof Error ? e.message : String(e);
