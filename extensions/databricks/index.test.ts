@@ -266,4 +266,76 @@ describe("Databricks plugin", () => {
       expect(result.provider.models[0].api).toBe("openai-completions");
     });
   });
+
+  describe("replay normalization", () => {
+    it("inserts synthetic tool-result stub for dangling assistant tool call", async () => {
+      const api = { registerProvider: vi.fn() } as any;
+      await plugin.register(api);
+      const wrapStreamFn = api.registerProvider.mock.calls[0][0].wrapStreamFn;
+
+      const model = { id: "test", baseUrl: "https://test.com", api: "openai-completions" } as any;
+      // history: assistant called a tool, but the session was interrupted before toolResult arrived
+      const context = {
+        messages: [
+          { role: "user", content: "use a tool" },
+          {
+            role: "assistant",
+            content: [{ type: "toolCall", id: "call_x", name: "search", arguments: {} }],
+            stopReason: "toolUse",
+          },
+          // No toolResult for call_x - this is the dangling case
+          { role: "user", content: "what happened?" },
+        ],
+      } as any;
+      const options = { apiKey: "token" } as any;
+
+      fetchWithSsrFGuardMock.mockResolvedValue(mockFetchResult(
+        new Response("data: [DONE]\n", { status: 200 })
+      ));
+
+      const streamFn = wrapStreamFn({} as ProviderWrapStreamFnContext);
+      await streamFn(model, context, options);
+
+      const sentBody = JSON.parse(fetchWithSsrFGuardMock.mock.calls[0][0].init.body);
+      const roles = sentBody.messages.map((m: { role: string }) => m.role);
+      // The synthetic stub should be inserted between assistant and user
+      expect(roles).toContain("tool");
+      const toolMsg = sentBody.messages.find((m: { role: string; tool_call_id?: string }) => m.role === "tool");
+      expect(toolMsg?.tool_call_id).toBe("call_x");
+    });
+
+    it("strips thinking blocks before sending to Databricks", async () => {
+      const api = { registerProvider: vi.fn() } as any;
+      await plugin.register(api);
+      const wrapStreamFn = api.registerProvider.mock.calls[0][0].wrapStreamFn;
+
+      const model = { id: "test", baseUrl: "https://test.com", api: "openai-completions" } as any;
+      const context = {
+        messages: [
+          {
+            role: "assistant",
+            content: [
+              { type: "thinking", thinking: "I should answer carefully.", redacted: false },
+              { type: "text", text: "Here is my answer." },
+            ],
+            stopReason: "stop",
+          },
+          { role: "user", content: "follow-up" },
+        ],
+      } as any;
+      const options = { apiKey: "token" } as any;
+
+      fetchWithSsrFGuardMock.mockResolvedValue(mockFetchResult(
+        new Response("data: [DONE]\n", { status: 200 })
+      ));
+
+      const streamFn = wrapStreamFn({} as ProviderWrapStreamFnContext);
+      await streamFn(model, context, options);
+
+      const sentBody = JSON.parse(fetchWithSsrFGuardMock.mock.calls[0][0].init.body);
+      const assistantMsg = sentBody.messages.find((m: { role: string }) => m.role === "assistant");
+      // Content should not contain any thinking-type objects
+      expect(assistantMsg?.content).not.toMatch(/thinking/i);
+    });
+  });
 });

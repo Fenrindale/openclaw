@@ -25,18 +25,159 @@ interface OpenAIChatMessage {
   name?: string;
 }
 
+/**
+ * Represents a content block in an assistant message as stored in replay history.
+ * Covers text, thinking, and toolCall block shapes we need to handle.
+ */
+interface AssistantContentBlock {
+  type: string;
+  text?: string;
+  thinking?: string;
+  redacted?: boolean;
+  id?: string;
+  name?: string;
+  partialArgs?: string;
+  arguments?: unknown;
+}
+
 function mapDatabricksMessages(context: { messages: unknown[]; systemPrompt?: string }): OpenAIChatMessage[] {
+  // --- Replay normalization pass ---
+  // Mirrors the essential repairs from core's transport-message-transform:
+  // 1. Strip thinking/redacted blocks (not supported by Databricks/OpenAI wire format).
+  // 2. Insert synthetic tool-result stubs for dangling assistant tool calls that have no
+  //    paired toolResult, so interrupted/resumed sessions don't send invalid turn ordering.
+  interface NormalizedMessage {
+    role: string;
+    content: string | AssistantContentBlock[];
+    toolCalls?: Array<{ id: string; name: string }>;
+    toolCallId?: string;
+    name?: string;
+    stopReason?: string;
+  }
+
+  const normalized: NormalizedMessage[] = [];
+  let pendingToolCalls: Array<{ id: string; name: string }> = [];
+  let seenToolResultIds = new Set<string>();
+
+  for (const m of context.messages) {
+    const msg = m as BaseAgentMessage & { stopReason?: string; content: string | AssistantContentBlock[] };
+
+    if (msg.role === "assistant") {
+      // Flush dangling tool calls from previous assistant turn that had no results
+      if (pendingToolCalls.length > 0) {
+        for (const tc of pendingToolCalls) {
+          if (!seenToolResultIds.has(tc.id)) {
+            normalized.push({
+              role: "toolResult",
+              content: "No result provided",
+              toolCallId: tc.id,
+              name: tc.name,
+            });
+          }
+        }
+        pendingToolCalls = [];
+        seenToolResultIds = new Set();
+      }
+
+      // Skip error/aborted assistant turns
+      if (msg.stopReason === "error" || msg.stopReason === "aborted") {
+        continue;
+      }
+
+      // Strip thinking/redacted blocks from assistant content; retain text and toolCall blocks
+      const rawContent = Array.isArray(msg.content) ? msg.content : [];
+      const strippedContent: AssistantContentBlock[] = [];
+      const newToolCalls: Array<{ id: string; name: string }> = [];
+
+      for (const block of rawContent) {
+        if (block.type === "thinking" || block.type === "redacted_thinking") {
+          // Convert non-empty thinking to a text block for context, skip empty/redacted
+          if (!block.redacted && block.thinking && block.thinking.trim()) {
+            strippedContent.push({ type: "text", text: block.thinking });
+          }
+          continue;
+        }
+        if (block.type === "toolCall") {
+          strippedContent.push(block);
+          if (block.id) {
+            newToolCalls.push({ id: block.id, name: block.name ?? "" });
+          }
+          continue;
+        }
+        strippedContent.push(block);
+      }
+
+      pendingToolCalls = newToolCalls;
+      seenToolResultIds = new Set();
+      normalized.push({ ...msg, content: strippedContent });
+      continue;
+    }
+
+    if (msg.role === "toolResult") {
+      const toolCallId = msg.toolCallId ?? "";
+      seenToolResultIds.add(toolCallId);
+      normalized.push(msg as NormalizedMessage);
+      continue;
+    }
+
+    // Flush dangling tool calls before non-assistant, non-toolResult messages (e.g. user)
+    if (pendingToolCalls.length > 0) {
+      for (const tc of pendingToolCalls) {
+        if (!seenToolResultIds.has(tc.id)) {
+          normalized.push({
+            role: "toolResult",
+            content: "No result provided",
+            toolCallId: tc.id,
+            name: tc.name,
+          });
+        }
+      }
+      pendingToolCalls = [];
+      seenToolResultIds = new Set();
+    }
+
+    normalized.push(msg as NormalizedMessage);
+  }
+
+  // --- OpenAI wire-format conversion ---
   const result: OpenAIChatMessage[] = [];
   if (context.systemPrompt) {
     result.push({ role: "system", content: context.systemPrompt });
   }
-  for (const m of context.messages) {
-    const msg = m as BaseAgentMessage;
+  for (const msg of normalized) {
     const role = msg.role === "toolResult" ? "tool" : msg.role;
+
+    if (msg.role === "assistant" && Array.isArray(msg.content)) {
+      // Map assistant content blocks to OpenAI tool_calls wire format
+      const contentBlocks = msg.content as AssistantContentBlock[];
+      const textBlocks = contentBlocks.filter(b => b.type === "text");
+      const toolCallBlocks = contentBlocks.filter(b => b.type === "toolCall");
+
+      const textContent = textBlocks.map(b => b.text ?? "").join("") || null;
+      const tool_calls = toolCallBlocks.length > 0
+        ? toolCallBlocks.map((b, i) => ({
+            id: b.id ?? `call_${i}`,
+            type: "function",
+            function: {
+              name: b.name ?? "",
+              arguments: typeof b.arguments === "string"
+                ? b.arguments
+                : (b.partialArgs ?? JSON.stringify(b.arguments ?? {})),
+            },
+          }))
+        : undefined;
+
+      result.push({
+        role,
+        content: textContent,
+        ...(tool_calls ? { tool_calls } : {}),
+      });
+      continue;
+    }
+
     result.push({
       role,
-      content: msg.content,
-      ...(msg.toolCalls ? { tool_calls: msg.toolCalls } : {}),
+      content: msg.content as string | unknown[],
       ...(msg.toolCallId ? { tool_call_id: msg.toolCallId } : {}),
       ...(msg.name ? { name: msg.name } : {}),
     });
