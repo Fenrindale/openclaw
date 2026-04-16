@@ -1,20 +1,25 @@
-import { definePluginEntry, type ProviderAuthContext, type ProviderWrapStreamFnContext } from "openclaw/plugin-sdk/plugin-entry";
-import { createAssistantMessageEventStream } from "@mariozechner/pi-ai";
 import type { StreamFn } from "@mariozechner/pi-agent-core";
-import { DATABRICKS_DEFAULT_MODEL_REF } from "./api.js";
-import { normalizeDatabricksBaseUrl } from "./onboard.js";
+import { createAssistantMessageEventStream } from "@mariozechner/pi-ai";
+import {
+  definePluginEntry,
+  type ProviderAuthContext,
+  type ProviderWrapStreamFnContext,
+} from "openclaw/plugin-sdk/plugin-entry";
 import { createProviderApiKeyAuthMethod } from "openclaw/plugin-sdk/provider-auth-api-key";
 import { fetchWithSsrFGuard } from "openclaw/plugin-sdk/ssrf-runtime";
+import { DATABRICKS_DEFAULT_MODEL_REF } from "./api.js";
+import { normalizeDatabricksBaseUrl } from "./onboard.js";
 
 const PROVIDER_ID = "databricks";
 
 /** Partial local type for AgentMessage to avoid 'any' in mapping. */
 interface BaseAgentMessage {
   role: string;
-  content: string | unknown[];
+  content: string | AssistantContentBlock[];
   toolCalls?: unknown[];
   toolCallId?: string;
   name?: string;
+  stopReason?: string;
 }
 
 interface OpenAIChatMessage {
@@ -40,7 +45,10 @@ interface AssistantContentBlock {
   arguments?: unknown;
 }
 
-function mapDatabricksMessages(context: { messages: unknown[]; systemPrompt?: string }): OpenAIChatMessage[] {
+function mapDatabricksMessages(context: {
+  messages: unknown[];
+  systemPrompt?: string;
+}): OpenAIChatMessage[] {
   // --- Replay normalization pass ---
   // Mirrors the essential repairs from core's transport-message-transform:
   // 1. Strip thinking/redacted blocks (not supported by Databricks/OpenAI wire format).
@@ -60,7 +68,7 @@ function mapDatabricksMessages(context: { messages: unknown[]; systemPrompt?: st
   let seenToolResultIds = new Set<string>();
 
   for (const m of context.messages) {
-    const msg = m as BaseAgentMessage & { stopReason?: string; content: string | AssistantContentBlock[] };
+    const msg = m as BaseAgentMessage;
 
     if (msg.role === "assistant") {
       // Flush dangling tool calls from previous assistant turn that had no results
@@ -109,7 +117,7 @@ function mapDatabricksMessages(context: { messages: unknown[]; systemPrompt?: st
 
       pendingToolCalls = newToolCalls;
       seenToolResultIds = new Set();
-      normalized.push({ ...msg, content: strippedContent });
+      normalized.push({ role: msg.role, content: strippedContent, stopReason: msg.stopReason });
       continue;
     }
 
@@ -149,23 +157,25 @@ function mapDatabricksMessages(context: { messages: unknown[]; systemPrompt?: st
 
     if (msg.role === "assistant" && Array.isArray(msg.content)) {
       // Map assistant content blocks to OpenAI tool_calls wire format
-      const contentBlocks = msg.content as AssistantContentBlock[];
-      const textBlocks = contentBlocks.filter(b => b.type === "text");
-      const toolCallBlocks = contentBlocks.filter(b => b.type === "toolCall");
+      const contentBlocks = msg.content;
+      const textBlocks = contentBlocks.filter((b) => b.type === "text");
+      const toolCallBlocks = contentBlocks.filter((b) => b.type === "toolCall");
 
-      const textContent = textBlocks.map(b => b.text ?? "").join("") || null;
-      const tool_calls = toolCallBlocks.length > 0
-        ? toolCallBlocks.map((b, i) => ({
-            id: b.id ?? `call_${i}`,
-            type: "function",
-            function: {
-              name: b.name ?? "",
-              arguments: typeof b.arguments === "string"
-                ? b.arguments
-                : (b.partialArgs ?? JSON.stringify(b.arguments ?? {})),
-            },
-          }))
-        : undefined;
+      const textContent = textBlocks.map((b) => b.text ?? "").join("") || null;
+      const tool_calls =
+        toolCallBlocks.length > 0
+          ? toolCallBlocks.map((b, i) => ({
+              id: b.id ?? `call_${i}`,
+              type: "function",
+              function: {
+                name: b.name ?? "",
+                arguments:
+                  typeof b.arguments === "string"
+                    ? b.arguments
+                    : (b.partialArgs ?? JSON.stringify(b.arguments ?? {})),
+              },
+            }))
+          : undefined;
 
       result.push({
         role,
@@ -246,20 +256,25 @@ export default definePluginEntry({
     const originalRun = defaultAuth.run;
     defaultAuth.run = async (ctx: ProviderAuthContext) => {
       const opts = ctx.opts as Record<string, unknown> | undefined;
-      let baseUrl = typeof opts?.databricksBaseUrl === "string" ? opts.databricksBaseUrl : undefined;
+      let baseUrl =
+        typeof opts?.databricksBaseUrl === "string" ? opts.databricksBaseUrl : undefined;
       if (!baseUrl) {
         baseUrl = await ctx.prompter.text({
-          message: "Enter Databricks Workspace Base URL (e.g. https://dbc-xxxx.cloud.databricks.com)",
-          validate: (value) => !normalizeDatabricksBaseUrl(value) ? "Databricks Workspace Base URL is required." : undefined,
+          message:
+            "Enter Databricks Workspace Base URL (e.g. https://dbc-xxxx.cloud.databricks.com)",
+          validate: (value) =>
+            !normalizeDatabricksBaseUrl(value)
+              ? "Databricks Workspace Base URL is required."
+              : undefined,
         });
       }
       const normalizedBaseUrl = normalizeDatabricksBaseUrl(baseUrl);
       if (!normalizedBaseUrl) {
         return originalRun(ctx);
       }
-      
+
       const result = await originalRun(ctx);
-      
+
       const existingPatch = result.configPatch ?? {};
       const providersPatch = existingPatch.models?.providers ?? {};
       const databricksPatch = providersPatch[PROVIDER_ID] ?? {};
@@ -282,7 +297,9 @@ export default definePluginEntry({
     const originalRunNonInteractive = defaultAuth.runNonInteractive;
     defaultAuth.runNonInteractive = async (ctx) => {
       const opts = ctx.opts as Record<string, unknown> | undefined;
-      const baseUrl = normalizeDatabricksBaseUrl(typeof opts?.databricksBaseUrl === "string" ? opts.databricksBaseUrl : undefined);
+      const baseUrl = normalizeDatabricksBaseUrl(
+        typeof opts?.databricksBaseUrl === "string" ? opts.databricksBaseUrl : undefined,
+      );
 
       // Reject incomplete non-interactive setup: baseUrl is required for Databricks to work.
       // Failing early here prevents an invalid config from being saved and deferring the
@@ -328,7 +345,8 @@ export default definePluginEntry({
           }
 
           const providerConfig = ctx.config.models?.providers?.[PROVIDER_ID];
-          const baseUrl = typeof providerConfig?.baseUrl === "string" ? providerConfig.baseUrl : undefined;
+          const baseUrl =
+            typeof providerConfig?.baseUrl === "string" ? providerConfig.baseUrl : undefined;
           if (!baseUrl) {
             return null;
           }
@@ -387,23 +405,29 @@ export default definePluginEntry({
           const streamOptions = options || {};
           // Accept both DATABRICKS_API_KEY and DATABRICKS_TOKEN env vars (Databricks PATs are
           // commonly stored as DATABRICKS_TOKEN in standard Databricks CLI tooling).
-          const apiKey = streamOptions.apiKey
-            ?? process.env.DATABRICKS_API_KEY
-            ?? process.env.DATABRICKS_TOKEN;
+          const apiKey =
+            streamOptions.apiKey ?? process.env.DATABRICKS_API_KEY ?? process.env.DATABRICKS_TOKEN;
           if (!apiKey) {
-            throw new Error("Databricks API key not found. Set DATABRICKS_API_KEY or DATABRICKS_TOKEN, or configure it via openclaw auth.");
+            throw new Error(
+              "Databricks API key not found. Set DATABRICKS_API_KEY or DATABRICKS_TOKEN, or configure it via openclaw auth.",
+            );
           }
 
           const baseUrl = normalizeDatabricksBaseUrl(model.baseUrl || "");
           if (!baseUrl) {
-            throw new Error("Databricks base URL not found. Please provide it during onboarding or in the configuration.");
+            throw new Error(
+              "Databricks base URL not found. Please provide it during onboarding or in the configuration.",
+            );
           }
 
           const messages = mapDatabricksMessages(context);
           const tools = mapDatabricksTools(context.tools);
           const toolChoice = (streamOptions as Record<string, unknown>).toolChoice;
 
-          const extraParams = (streamOptions as Record<string, unknown>).extraParams as Record<string, unknown> | undefined || {};
+          const extraParams =
+            ((streamOptions as Record<string, unknown>).extraParams as
+              | Record<string, unknown>
+              | undefined) || {};
           const payload = {
             messages,
             model: model.id,
@@ -414,7 +438,9 @@ export default definePluginEntry({
             stop: extraParams.stop,
             ...(tools ? { tools } : {}),
             ...(toolChoice ? { tool_choice: toolChoice } : {}),
-            ...(extraParams.response_format ? { response_format: extraParams.response_format } : {}),
+            ...(extraParams.response_format
+              ? { response_format: extraParams.response_format }
+              : {}),
           };
 
           const eventStream = createAssistantMessageEventStream();
@@ -425,7 +451,14 @@ export default definePluginEntry({
             api: model.api,
             provider: model.provider,
             model: model.id,
-            usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+            usage: {
+              input: 0,
+              output: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              totalTokens: 0,
+              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+            },
             stopReason: "stop",
             timestamp: Date.now(),
           };
@@ -434,9 +467,9 @@ export default definePluginEntry({
             try {
               const url = `${baseUrl}/serving-endpoints/${model.id}/invocations`;
               const mergedHeaders = {
-                "Authorization": `Bearer ${apiKey}`,
+                Authorization: `Bearer ${apiKey}`,
                 "Content-Type": "application/json",
-                "Accept": "text/event-stream",
+                Accept: "text/event-stream",
                 ...(model.headers as Record<string, string>),
                 ...(streamOptions.headers as Record<string, string>),
               };
@@ -459,6 +492,7 @@ export default definePluginEntry({
 
               const reader = response.body?.getReader();
               if (!reader) {
+                await releaseStream();
                 throw new Error("Failed to get response reader from Databricks API");
               }
 
@@ -502,20 +536,32 @@ export default definePluginEntry({
 
                     if (delta?.content) {
                       const contentList = output.content as Array<{ type: string; text: string }>;
-                      if (contentList.length === 0 || contentList[contentList.length - 1].type !== "text") {
+                      if (
+                        contentList.length === 0 ||
+                        contentList[contentList.length - 1].type !== "text"
+                      ) {
                         contentList.push({ type: "text", text: "" });
-                        stream.push({ type: "text_start", contentIndex: blockIndex(), partial: output });
+                        stream.push({
+                          type: "text_start",
+                          contentIndex: blockIndex(),
+                          partial: output,
+                        });
                       }
                       const textBlock = contentList[contentList.length - 1] as { text: string };
                       textBlock.text += delta.content;
-                      stream.push({ type: "text_delta", contentIndex: blockIndex(), delta: delta.content, partial: output });
+                      stream.push({
+                        type: "text_delta",
+                        contentIndex: blockIndex(),
+                        delta: delta.content,
+                        partial: output,
+                      });
                     }
 
                     if (delta?.tool_calls) {
                       for (const toolCall of delta.tool_calls) {
                         const contentList = output.content as Array<Record<string, unknown>>;
                         const sseIndex = typeof toolCall.index === "number" ? toolCall.index : 0;
-                        
+
                         let contentIndex = toolCallIndexMap.get(sseIndex);
                         if (contentIndex === undefined) {
                           const newBlock = {
@@ -540,7 +586,8 @@ export default definePluginEntry({
                           currentBlock.name = toolCall.function.name;
                         }
                         if (toolCall.function?.arguments) {
-                          currentBlock.partialArgs = (currentBlock.partialArgs as string) + toolCall.function.arguments;
+                          currentBlock.partialArgs =
+                            (currentBlock.partialArgs as string) + toolCall.function.arguments;
                           stream.push({
                             type: "toolcall_delta",
                             contentIndex,
@@ -550,14 +597,14 @@ export default definePluginEntry({
                         }
                       }
                     }
-                    
+
                     if (json.usage) {
                       const usage = output.usage as Record<string, number>;
                       usage.input = json.usage.prompt_tokens;
                       usage.output = json.usage.completion_tokens;
                       usage.totalTokens = json.usage.total_tokens;
                     }
-                    
+
                     if (choice?.finish_reason) {
                       output.stopReason = mapDatabricksStopReason(choice.finish_reason);
                     }
@@ -572,10 +619,15 @@ export default definePluginEntry({
             } catch (e: unknown) {
               // Preserve aborted stop reason: AbortError means the caller cancelled the
               // stream intentionally (e.g. user hit stop), so report "aborted" not "error".
-              const isAbort = e instanceof Error && (e.name === "AbortError" || e.name === "TimeoutError");
+              const isAbort =
+                e instanceof Error && (e.name === "AbortError" || e.name === "TimeoutError");
               output.stopReason = isAbort ? "aborted" : "error";
               output.errorMessage = e instanceof Error ? e.message : String(e);
-              stream.push({ type: isAbort ? "done" : "error", reason: output.stopReason, ...(isAbort ? { message: output } : { error: output }) });
+              stream.push({
+                type: isAbort ? "done" : "error",
+                reason: output.stopReason,
+                ...(isAbort ? { message: output } : { error: output }),
+              });
               stream.end();
             }
           })();
