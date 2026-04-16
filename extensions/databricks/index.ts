@@ -259,10 +259,14 @@ export default definePluginEntry({
     const originalRun = defaultAuth.run;
     defaultAuth.run = async (ctx: ProviderAuthContext) => {
       const opts = ctx.opts as Record<string, unknown> | undefined;
-      let baseUrl =
+      const rawBaseUrl =
         typeof opts?.databricksBaseUrl === "string" ? opts.databricksBaseUrl : undefined;
-      if (!baseUrl) {
-        baseUrl = await ctx.prompter.text({
+
+      // Prompt for a valid base URL.  If the CLI-provided value normalizes to empty
+      // (e.g. whitespace-only), the user is asked to re-enter so the config is never
+      // left without a baseUrl that would fail at runtime.
+      const promptForBaseUrl = async () =>
+        ctx.prompter.text({
           message:
             "Enter Databricks Workspace Base URL (e.g. https://dbc-xxxx.cloud.databricks.com)",
           validate: (value) =>
@@ -270,8 +274,11 @@ export default definePluginEntry({
               ? "Databricks Workspace Base URL is required."
               : undefined,
         });
-      }
-      const normalizedBaseUrl = normalizeDatabricksBaseUrl(baseUrl);
+
+      const normalizedBaseUrl =
+        normalizeDatabricksBaseUrl(rawBaseUrl) ??
+        normalizeDatabricksBaseUrl(await promptForBaseUrl());
+
       if (!normalizedBaseUrl) {
         return originalRun(ctx);
       }
