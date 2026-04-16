@@ -669,9 +669,7 @@ function isOpenRouterKeyLimitExceededError(raw: string, provider?: string): bool
 }
 
 function isExactUnknownNoDetailsError(raw: string): boolean {
-  return (
-    normalizeOptionalLowercaseString(raw)?.trim() === "unknown error (no error details in response)"
-  );
+  return normalizeOptionalLowercaseString(raw)?.trim() === "unknown error (no error details in response)";
 }
 
 function classifyFailoverClassificationFromMessage(
