@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { setReplyPayloadMetadata } from "../reply-payload.js";
 import {
   createBlockReplyContentKey,
   createBlockReplyPayloadKey,
@@ -56,7 +55,7 @@ describe("createBlockReplyPipeline dedup with threading", () => {
 
     pipeline.enqueue({ text: "response text", replyToId: "thread-root-1" });
     pipeline.enqueue({ text: "response text", replyToId: undefined });
-    await pipeline.flush({ force: true });
+    await pipeline.flush();
 
     expect(sent).toEqual([
       { text: "response text", replyToId: "thread-root-1" },
@@ -71,32 +70,10 @@ describe("createBlockReplyPipeline dedup with threading", () => {
     });
 
     pipeline.enqueue({ text: "response text", replyToId: "thread-root-1" });
-    await pipeline.flush({ force: true });
+    await pipeline.flush();
 
     // Final payload with no replyToId should be recognized as already sent
     expect(pipeline.hasSentPayload({ text: "response text" })).toBe(true);
     expect(pipeline.hasSentPayload({ text: "response text", replyToId: "other-id" })).toBe(true);
-  });
-
-  it("does not coalesce logical assistant blocks across assistantMessageIndex boundaries", async () => {
-    const sent: string[] = [];
-    const pipeline = createBlockReplyPipeline({
-      onBlockReply: async (payload) => {
-        sent.push(payload.text ?? "");
-      },
-      timeoutMs: 5000,
-      coalescing: {
-        minChars: 100,
-        maxChars: 200,
-        idleMs: 1000,
-        joiner: "\n\n",
-      },
-    });
-
-    pipeline.enqueue(setReplyPayloadMetadata({ text: "Alpha" }, { assistantMessageIndex: 0 }));
-    pipeline.enqueue(setReplyPayloadMetadata({ text: "Beta" }, { assistantMessageIndex: 1 }));
-    await pipeline.flush({ force: true });
-
-    expect(sent).toEqual(["Alpha", "Beta"]);
   });
 });

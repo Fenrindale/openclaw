@@ -1,15 +1,10 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { resolveAgentContextLimits, resolveAgentWorkspaceDir } from "../../agents/agent-scope.js";
+import { resolveAgentWorkspaceDir } from "../../agents/agent-scope.js";
 import { resolveMemorySearchConfig } from "../../agents/memory-search.js";
-import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import type { OpenClawConfig } from "../../config/config.js";
 import { isFileMissingError, statRegularFile } from "./fs-utils.js";
 import { isMemoryPath, normalizeExtraMemoryPaths } from "./internal.js";
-import {
-  buildMemoryReadResult,
-  DEFAULT_MEMORY_READ_LINES,
-  type MemoryReadResult,
-} from "./read-file-shared.js";
 
 export async function readMemoryFile(params: {
   workspaceDir: string;
@@ -17,9 +12,7 @@ export async function readMemoryFile(params: {
   relPath: string;
   from?: number;
   lines?: number;
-  defaultLines?: number;
-  maxChars?: number;
-}): Promise<MemoryReadResult> {
+}): Promise<{ text: string; path: string }> {
   const rawPath = params.relPath.trim();
   if (!rawPath) {
     throw new Error("path required");
@@ -72,15 +65,14 @@ export async function readMemoryFile(params: {
     }
     throw err;
   }
-  return buildMemoryReadResult({
-    content,
-    relPath,
-    from: params.from,
-    lines: params.lines,
-    defaultLines: params.defaultLines ?? DEFAULT_MEMORY_READ_LINES,
-    maxChars: params.maxChars,
-    suggestReadFallback: allowedWorkspace,
-  });
+  if (!params.from && !params.lines) {
+    return { text: content, path: relPath };
+  }
+  const fileLines = content.split("\n");
+  const start = Math.max(1, params.from ?? 1);
+  const count = Math.max(1, params.lines ?? fileLines.length);
+  const slice = fileLines.slice(start - 1, start - 1 + count);
+  return { text: slice.join("\n"), path: relPath };
 }
 
 export async function readAgentMemoryFile(params: {
@@ -89,19 +81,16 @@ export async function readAgentMemoryFile(params: {
   relPath: string;
   from?: number;
   lines?: number;
-}): Promise<MemoryReadResult> {
+}): Promise<{ text: string; path: string }> {
   const settings = resolveMemorySearchConfig(params.cfg, params.agentId);
   if (!settings) {
     throw new Error("memory search disabled");
   }
-  const contextLimits = resolveAgentContextLimits(params.cfg, params.agentId);
   return await readMemoryFile({
     workspaceDir: resolveAgentWorkspaceDir(params.cfg, params.agentId),
     extraPaths: settings.extraPaths,
     relPath: params.relPath,
     from: params.from,
     lines: params.lines,
-    defaultLines: contextLimits?.memoryGetDefaultLines,
-    maxChars: contextLimits?.memoryGetMaxChars,
   });
 }

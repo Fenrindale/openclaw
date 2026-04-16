@@ -15,7 +15,6 @@ export const QWEN_STANDARD_GLOBAL_BASE_URL =
   "https://dashscope-intl.aliyuncs.com/compatible-mode/v1";
 
 export const QWEN_DEFAULT_MODEL_ID = "qwen3.5-plus";
-export const QWEN_36_PLUS_MODEL_ID = "qwen3.6-plus";
 export const QWEN_DEFAULT_COST = {
   input: 0,
   output: 0,
@@ -35,8 +34,8 @@ export const QWEN_MODEL_CATALOG: ReadonlyArray<ModelDefinitionConfig> = [
     maxTokens: 65_536,
   },
   {
-    id: QWEN_36_PLUS_MODEL_ID,
-    name: QWEN_36_PLUS_MODEL_ID,
+    id: "qwen3.6-plus",
+    name: "qwen3.6-plus",
     reasoning: false,
     input: ["text", "image"],
     cost: QWEN_DEFAULT_COST,
@@ -107,33 +106,6 @@ export const QWEN_MODEL_CATALOG: ReadonlyArray<ModelDefinitionConfig> = [
     maxTokens: 32_768,
   },
 ];
-
-export function isQwenCodingPlanBaseUrl(baseUrl: string | undefined): boolean {
-  if (!baseUrl?.trim()) {
-    return false;
-  }
-  try {
-    const hostname = new URL(baseUrl).hostname.toLowerCase();
-    return (
-      hostname === "coding.dashscope.aliyuncs.com" ||
-      hostname === "coding-intl.dashscope.aliyuncs.com"
-    );
-  } catch {
-    return false;
-  }
-}
-
-export function isQwen36PlusSupportedBaseUrl(baseUrl: string | undefined): boolean {
-  return !isQwenCodingPlanBaseUrl(baseUrl);
-}
-
-export function buildQwenModelCatalogForBaseUrl(
-  baseUrl: string | undefined,
-): ReadonlyArray<ModelDefinitionConfig> {
-  return isQwen36PlusSupportedBaseUrl(baseUrl)
-    ? QWEN_MODEL_CATALOG
-    : QWEN_MODEL_CATALOG.filter((model) => model.id !== QWEN_36_PLUS_MODEL_ID);
-}
 
 export function isNativeQwenBaseUrl(baseUrl: string | undefined): boolean {
   return supportsNativeStreamingUsageCompat({

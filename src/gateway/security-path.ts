@@ -1,5 +1,3 @@
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
-
 export type SecurityPathCanonicalization = {
   canonicalPath: string;
   candidates: string[];
@@ -20,7 +18,7 @@ function normalizePathSeparators(pathname: string): string {
 }
 
 function normalizeProtectedPrefix(prefix: string): string {
-  return normalizePathSeparators(normalizeLowercaseStringOrEmpty(prefix)) || "/";
+  return normalizePathSeparators(prefix.toLowerCase()) || "/";
 }
 
 function resolveDotSegments(pathname: string): string {
@@ -32,9 +30,7 @@ function resolveDotSegments(pathname: string): string {
 }
 
 function normalizePathForSecurity(pathname: string): string {
-  return (
-    normalizePathSeparators(normalizeLowercaseStringOrEmpty(resolveDotSegments(pathname))) || "/"
-  );
+  return normalizePathSeparators(resolveDotSegments(pathname).toLowerCase()) || "/";
 }
 
 function pushNormalizedCandidate(candidates: string[], seen: Set<string>, value: string): void {
@@ -117,7 +113,7 @@ export function canonicalizePathForSecurity(pathname: string): SecurityPathCanon
     decodePasses,
     decodePassLimitReached,
     malformedEncoding,
-    rawNormalizedPath: normalizePathSeparators(normalizeLowercaseStringOrEmpty(pathname)) || "/",
+    rawNormalizedPath: normalizePathSeparators(pathname.toLowerCase()) || "/",
   };
 }
 

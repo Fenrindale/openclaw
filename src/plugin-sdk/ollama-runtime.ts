@@ -1,5 +1,5 @@
 type FacadeModule = typeof import("@openclaw/ollama/runtime-api.js");
-import { loadBundledPluginPublicSurfaceModuleSync } from "./facade-loader.js";
+import { loadBundledPluginPublicSurfaceModuleSync } from "./facade-runtime.js";
 
 function loadFacadeModule(): FacadeModule {
   return loadBundledPluginPublicSurfaceModuleSync<FacadeModule>({
@@ -9,7 +9,8 @@ function loadFacadeModule(): FacadeModule {
 }
 
 export type OllamaEmbeddingClient = import("@openclaw/ollama/runtime-api.js").OllamaEmbeddingClient;
-export const DEFAULT_OLLAMA_EMBEDDING_MODEL = "nomic-embed-text";
+export const DEFAULT_OLLAMA_EMBEDDING_MODEL: FacadeModule["DEFAULT_OLLAMA_EMBEDDING_MODEL"] =
+  loadFacadeModule().DEFAULT_OLLAMA_EMBEDDING_MODEL;
 export const buildAssistantMessage: FacadeModule["buildAssistantMessage"] = ((...args) =>
   loadFacadeModule().buildAssistantMessage(...args)) as FacadeModule["buildAssistantMessage"];
 export const buildOllamaChatRequest: FacadeModule["buildOllamaChatRequest"] = ((...args) =>

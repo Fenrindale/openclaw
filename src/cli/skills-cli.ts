@@ -8,7 +8,6 @@ import {
 } from "../agents/skills-clawhub.js";
 import { loadConfig } from "../config/config.js";
 import { defaultRuntime } from "../runtime.js";
-import { normalizeOptionalString } from "../shared/string-coerce.js";
 import { formatDocsLink } from "../terminal/links.js";
 import { theme } from "../terminal/theme.js";
 import { formatSkillInfo, formatSkillsCheck, formatSkillsList } from "./skills-cli.format.js";
@@ -68,7 +67,7 @@ export function registerSkillsCli(program: Command) {
     .action(async (queryParts: string[], opts: { limit?: number; json?: boolean }) => {
       try {
         const results = await searchSkillsFromClawHub({
-          query: normalizeOptionalString(queryParts.join(" ")),
+          query: queryParts.join(" ").trim() || undefined,
           limit: opts.limit,
         });
         if (opts.json) {

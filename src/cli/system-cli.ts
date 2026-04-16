@@ -1,7 +1,6 @@
 import type { Command } from "commander";
 import { danger } from "../globals.js";
 import { defaultRuntime } from "../runtime.js";
-import { normalizeOptionalString } from "../shared/string-coerce.js";
 import { formatDocsLink } from "../terminal/links.js";
 import { theme } from "../terminal/theme.js";
 import type { GatewayRpcOpts } from "./gateway-rpc.js";
@@ -11,7 +10,7 @@ type SystemEventOpts = GatewayRpcOpts & { text?: string; mode?: string; json?: b
 type SystemGatewayOpts = GatewayRpcOpts & { json?: boolean };
 
 const normalizeWakeMode = (raw: unknown) => {
-  const mode = normalizeOptionalString(raw) ?? "";
+  const mode = typeof raw === "string" ? raw.trim() : "";
   if (!mode) {
     return "next-heartbeat" as const;
   }
@@ -60,7 +59,7 @@ export function registerSystemCli(program: Command) {
     await runSystemGatewayCommand(
       opts,
       async () => {
-        const text = normalizeOptionalString(opts.text) ?? "";
+        const text = typeof opts.text === "string" ? opts.text.trim() : "";
         if (!text) {
           throw new Error("--text is required");
         }

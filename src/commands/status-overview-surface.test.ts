@@ -5,47 +5,159 @@ import {
   buildStatusOverviewSurfaceFromOverview,
   buildStatusOverviewSurfaceFromScan,
 } from "./status-overview-surface.ts";
-import {
-  baseStatusCfg,
-  baseStatusGatewaySnapshot,
-  baseStatusOverviewScanFields,
-  baseStatusOverviewSurface,
-  baseStatusServices,
-  baseStatusUpdate,
-} from "./status.test-support.ts";
 
 describe("status-overview-surface", () => {
   it("builds the shared overview surface from a status scan result", () => {
     expect(
       buildStatusOverviewSurfaceFromScan({
-        scan: baseStatusOverviewScanFields,
-        ...baseStatusServices,
+        scan: {
+          cfg: { update: { channel: "stable" }, gateway: { bind: "loopback" } },
+          update: { installKind: "git", git: { branch: "main", tag: "v1.2.3" } } as never,
+          tailscaleMode: "serve",
+          tailscaleDns: "box.tail.ts.net",
+          tailscaleHttpsUrl: "https://box.tail.ts.net",
+          gatewayMode: "remote",
+          remoteUrlMissing: false,
+          gatewayConnection: {
+            url: "wss://gateway.example.com",
+            urlSource: "config",
+            message: "Gateway target: wss://gateway.example.com",
+          },
+          gatewayReachable: true,
+          gatewayProbe: { connectLatencyMs: 42, error: null } as never,
+          gatewayProbeAuth: { token: "tok" },
+          gatewayProbeAuthWarning: "warn-text",
+          gatewaySelf: { host: "gateway", version: "1.2.3" },
+        },
+        gatewayService: {
+          label: "LaunchAgent",
+          installed: true,
+          managedByOpenClaw: true,
+          loadedText: "loaded",
+          runtimeShort: "running",
+        },
+        nodeService: {
+          label: "node",
+          installed: true,
+          loadedText: "loaded",
+          runtime: { status: "running", pid: 42 },
+        },
+        nodeOnlyGateway: null,
       }),
-    ).toEqual(baseStatusOverviewSurface);
+    ).toEqual({
+      cfg: { update: { channel: "stable" }, gateway: { bind: "loopback" } },
+      update: { installKind: "git", git: { branch: "main", tag: "v1.2.3" } },
+      tailscaleMode: "serve",
+      tailscaleDns: "box.tail.ts.net",
+      tailscaleHttpsUrl: "https://box.tail.ts.net",
+      gatewayMode: "remote",
+      remoteUrlMissing: false,
+      gatewayConnection: {
+        url: "wss://gateway.example.com",
+        urlSource: "config",
+        message: "Gateway target: wss://gateway.example.com",
+      },
+      gatewayReachable: true,
+      gatewayProbe: { connectLatencyMs: 42, error: null } as never,
+      gatewayProbeAuth: { token: "tok" },
+      gatewayProbeAuthWarning: "warn-text",
+      gatewaySelf: { host: "gateway", version: "1.2.3" },
+      gatewayService: {
+        label: "LaunchAgent",
+        installed: true,
+        managedByOpenClaw: true,
+        loadedText: "loaded",
+        runtimeShort: "running",
+      },
+      nodeService: {
+        label: "node",
+        installed: true,
+        loadedText: "loaded",
+        runtime: { status: "running", pid: 42 },
+      },
+      nodeOnlyGateway: null,
+    });
   });
 
   it("builds the shared overview surface from scan overview data", () => {
     expect(
       buildStatusOverviewSurfaceFromOverview({
         overview: {
-          cfg: baseStatusCfg,
-          update: baseStatusUpdate,
+          cfg: { update: { channel: "stable" }, gateway: { bind: "loopback" } },
+          update: { installKind: "git", git: { branch: "main", tag: "v1.2.3" } } as never,
           tailscaleMode: "serve",
           tailscaleDns: "box.tail.ts.net",
           tailscaleHttpsUrl: "https://box.tail.ts.net",
-          gatewaySnapshot: baseStatusGatewaySnapshot,
+          gatewaySnapshot: {
+            gatewayMode: "remote",
+            remoteUrlMissing: false,
+            gatewayConnection: {
+              url: "wss://gateway.example.com",
+              urlSource: "config",
+              message: "Gateway target: wss://gateway.example.com",
+            },
+            gatewayReachable: true,
+            gatewayProbe: { connectLatencyMs: 42, error: null } as never,
+            gatewayProbeAuth: { token: "tok" },
+            gatewayProbeAuthWarning: "warn-text",
+            gatewaySelf: { host: "gateway", version: "1.2.3" },
+          },
         } as never,
-        ...baseStatusServices,
+        gatewayService: {
+          label: "LaunchAgent",
+          installed: true,
+          managedByOpenClaw: true,
+          loadedText: "loaded",
+          runtimeShort: "running",
+        },
+        nodeService: {
+          label: "node",
+          installed: true,
+          loadedText: "loaded",
+          runtime: { status: "running", pid: 42 },
+        },
+        nodeOnlyGateway: null,
       }),
-    ).toEqual(baseStatusOverviewSurface);
+    ).toEqual({
+      cfg: { update: { channel: "stable" }, gateway: { bind: "loopback" } },
+      update: { installKind: "git", git: { branch: "main", tag: "v1.2.3" } },
+      tailscaleMode: "serve",
+      tailscaleDns: "box.tail.ts.net",
+      tailscaleHttpsUrl: "https://box.tail.ts.net",
+      gatewayMode: "remote",
+      remoteUrlMissing: false,
+      gatewayConnection: {
+        url: "wss://gateway.example.com",
+        urlSource: "config",
+        message: "Gateway target: wss://gateway.example.com",
+      },
+      gatewayReachable: true,
+      gatewayProbe: { connectLatencyMs: 42, error: null } as never,
+      gatewayProbeAuth: { token: "tok" },
+      gatewayProbeAuthWarning: "warn-text",
+      gatewaySelf: { host: "gateway", version: "1.2.3" },
+      gatewayService: {
+        label: "LaunchAgent",
+        installed: true,
+        managedByOpenClaw: true,
+        loadedText: "loaded",
+        runtimeShort: "running",
+      },
+      nodeService: {
+        label: "node",
+        installed: true,
+        loadedText: "loaded",
+        runtime: { status: "running", pid: 42 },
+      },
+      nodeOnlyGateway: null,
+    });
   });
 
   it("builds overview rows from the shared surface bundle", () => {
     expect(
       buildStatusOverviewRowsFromSurface({
         surface: {
-          ...baseStatusOverviewSurface,
-          cfg: baseStatusCfg,
+          cfg: { update: { channel: "stable" }, gateway: { bind: "loopback" } },
           update: {
             installKind: "git",
             git: {
@@ -57,14 +169,36 @@ describe("status-overview-surface", () => {
               dirty: false,
               fetchOk: true,
             },
-            registry: { latestVersion: "2026.4.10" },
+            registry: { latestVersion: "2026.4.9" },
           } as never,
           tailscaleMode: "off",
+          tailscaleDns: "box.tail.ts.net",
           tailscaleHttpsUrl: null,
+          gatewayMode: "remote",
+          remoteUrlMissing: false,
           gatewayConnection: {
             url: "wss://gateway.example.com",
             urlSource: "config",
           },
+          gatewayReachable: true,
+          gatewayProbe: { connectLatencyMs: 42, error: null } as never,
+          gatewayProbeAuth: { token: "tok" },
+          gatewayProbeAuthWarning: "warn-text",
+          gatewaySelf: { host: "gateway", version: "1.2.3" },
+          gatewayService: {
+            label: "LaunchAgent",
+            installed: true,
+            managedByOpenClaw: true,
+            loadedText: "loaded",
+            runtimeShort: "running",
+          },
+          nodeService: {
+            label: "node",
+            installed: true,
+            loadedText: "loaded",
+            runtime: { status: "running", pid: 42 },
+          },
+          nodeOnlyGateway: null,
         },
         prefixRows: [{ Item: "OS", Value: "macOS · node 22" }],
         suffixRows: [{ Item: "Secrets", Value: "none" }],

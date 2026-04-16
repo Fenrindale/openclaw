@@ -1,4 +1,3 @@
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 import { getMatrixRuntime } from "../../runtime.js";
 import type { RoomMessageEventContent } from "./types.js";
 
@@ -27,7 +26,7 @@ function decodeNumericHtmlEntity(match: string, rawValue: string, radix: 10 | 16
 
 function decodeHtmlEntities(value: string): string {
   return value.replace(/&(#x?[0-9a-f]+|\w+);/gi, (match, entity: string) => {
-    const normalized = normalizeLowercaseStringOrEmpty(entity);
+    const normalized = entity.toLowerCase();
     if (normalized.startsWith("#x")) {
       return decodeNumericHtmlEntity(match, normalized.slice(2), 16);
     }
@@ -39,11 +38,12 @@ function decodeHtmlEntities(value: string): string {
 }
 
 function normalizeVisibleMentionText(value: string): string {
-  return normalizeLowercaseStringOrEmpty(
-    decodeHtmlEntities(
-      value.replace(/<[^>]+>/g, " ").replace(/[\u200b-\u200f\u202a-\u202e\u2060-\u206f]/g, ""),
-    ).replace(/\s+/g, " "),
-  );
+  return decodeHtmlEntities(
+    value.replace(/<[^>]+>/g, " ").replace(/[\u200b-\u200f\u202a-\u202e\u2060-\u206f]/g, ""),
+  )
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
 }
 
 function extractVisibleMentionText(value?: string): string {
@@ -81,7 +81,6 @@ function isVisibleMentionLabel(params: {
     localpart ? extractVisibleMentionText(localpart) : null,
     localpart ? extractVisibleMentionText(`@${localpart}`) : null,
     params.displayName ? extractVisibleMentionText(params.displayName) : null,
-    params.displayName ? extractVisibleMentionText(`@${params.displayName}`) : null,
   ].filter((value): value is string => Boolean(value));
   return candidates.includes(cleaned);
 }
@@ -164,9 +163,6 @@ export function resolveMentions(params: {
         mentionRegexes: params.mentionRegexes,
       })
     : false;
-  // Matrix clients can mention users through m.mentions metadata plus a visible
-  // Matrix URI label in formatted_body. Keep the visible-mention requirement so
-  // hidden metadata-only mentions do not trigger the handler.
   const metadataBackedUserMention = Boolean(
     params.userId &&
     mentionedUsers.has(params.userId) &&

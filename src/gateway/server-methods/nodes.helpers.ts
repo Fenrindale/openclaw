@@ -1,5 +1,4 @@
 import type { ErrorObject } from "ajv";
-import { normalizeOptionalString } from "../../shared/string-coerce.js";
 import { ErrorCodes, errorShape, formatValidationErrors } from "../protocol/index.js";
 import { formatForLog } from "../ws-log.js";
 import type { RespondFn } from "./types.js";
@@ -39,7 +38,10 @@ export function uniqueSortedStrings(values: unknown[]) {
 }
 
 export function safeParseJson(value: string | null | undefined): unknown {
-  const trimmed = normalizeOptionalString(value);
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
   if (!trimmed) {
     return undefined;
   }
@@ -61,8 +63,11 @@ export function respondUnavailableOnNodeInvokeError<T extends { ok: boolean; err
     res.error && typeof res.error === "object"
       ? (res.error as { code?: unknown; message?: unknown })
       : null;
-  const nodeCode = normalizeOptionalString(nodeError?.code) ?? "";
-  const nodeMessage = normalizeOptionalString(nodeError?.message) ?? "node invoke failed";
+  const nodeCode = typeof nodeError?.code === "string" ? nodeError.code.trim() : "";
+  const nodeMessage =
+    typeof nodeError?.message === "string" && nodeError.message.trim().length > 0
+      ? nodeError.message.trim()
+      : "node invoke failed";
   const message = nodeCode ? `${nodeCode}: ${nodeMessage}` : nodeMessage;
   respond(
     false,

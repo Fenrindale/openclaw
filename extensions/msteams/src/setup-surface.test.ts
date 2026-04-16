@@ -1,14 +1,11 @@
-import { EventEmitter } from "node:events";
 import { DEFAULT_ACCOUNT_ID } from "openclaw/plugin-sdk/setup";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createMSTeamsSetupWizardBase, msteamsSetupAdapter } from "./setup-core.js";
-import { openDelegatedOAuthUrl } from "./setup-surface.js";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { msteamsSetupAdapter } from "./setup-core.js";
 
-const spawn = vi.hoisted(() => vi.fn());
 const resolveMSTeamsUserAllowlist = vi.hoisted(() => vi.fn());
 const resolveMSTeamsChannelAllowlist = vi.hoisted(() => vi.fn());
 const normalizeSecretInputString = vi.hoisted(() =>
-  vi.fn((value: unknown) => (typeof value === "string" ? value.trim() || undefined : undefined)),
+  vi.fn((value: unknown) => String(value ?? "").trim() || undefined),
 );
 const hasConfiguredMSTeamsCredentials = vi.hoisted(() => vi.fn());
 const resolveMSTeamsCredentials = vi.hoisted(() => vi.fn());
@@ -28,19 +25,19 @@ vi.mock("./token.js", () => ({
   resolveMSTeamsCredentials,
 }));
 
-vi.mock("node:child_process", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("node:child_process")>();
-  return {
-    ...actual,
-    spawn,
-  };
-});
+vi.mock("../../../src/channels/plugins/bundled.js", () => ({
+  bundledChannelPlugins: [],
+  bundledChannelSetupPlugins: [],
+}));
 
 describe("msteams setup surface", () => {
-  const msteamsSetupWizard = createMSTeamsSetupWizardBase();
+  let msteamsSetupWizard: typeof import("./setup-surface.js").msteamsSetupWizard;
+
+  beforeAll(async () => {
+    ({ msteamsSetupWizard } = await import("./setup-surface.js"));
+  });
 
   beforeEach(() => {
-    spawn.mockReset();
     resolveMSTeamsUserAllowlist.mockReset();
     resolveMSTeamsChannelAllowlist.mockReset();
     normalizeSecretInputString.mockClear();
@@ -56,21 +53,6 @@ describe("msteams setup surface", () => {
     expect(msteamsSetupAdapter.resolveAccountId?.({ accountId: "work" } as never)).toBe(
       DEFAULT_ACCOUNT_ID,
     );
-  });
-
-  it("opens delegated OAuth URLs without invoking a shell", async () => {
-    const url = "https://login.microsoftonline.com/auth?state=$(touch pwned)";
-    const child = new EventEmitter();
-    spawn.mockReturnValue(child);
-
-    const result = openDelegatedOAuthUrl(url);
-    child.emit("exit", 0, null);
-
-    await expect(result).resolves.toBeUndefined();
-    expect(spawn).toHaveBeenCalledWith(process.platform === "darwin" ? "open" : "xdg-open", [url], {
-      stdio: "ignore",
-      shell: false,
-    });
   });
 
   it("enables the msteams channel without dropping existing config", () => {

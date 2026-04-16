@@ -18,36 +18,6 @@ import {
 
 installGatewayTestHooks({ scope: "suite" });
 
-async function expectRejectedScopeUpgradeAttempt({
-  attempt,
-  requestedEvent,
-  deviceId,
-  token,
-}: {
-  attempt: { error?: { details?: unknown } };
-  requestedEvent: Promise<unknown>;
-  deviceId: string;
-  token: string;
-}) {
-  const pending = await devicePairingModule.listDevicePairing();
-  expect(pending.pending).toHaveLength(1);
-  expect(((attempt.error?.details ?? {}) as { requestId?: unknown }).requestId).toBe(
-    pending.pending[0]?.requestId,
-  );
-
-  const requested = (await requestedEvent) as {
-    payload?: { requestId?: string; deviceId?: string; scopes?: string[] };
-  };
-  expect(requested.payload?.requestId).toBe(pending.pending[0]?.requestId);
-  expect(requested.payload?.deviceId).toBe(deviceId);
-  expect(requested.payload?.scopes).toEqual(["operator.admin"]);
-
-  const paired = await getPairedDevice(deviceId);
-  expect(paired?.approvedScopes).toEqual(["operator.read"]);
-  expect(paired?.tokens?.operator?.scopes).toEqual(["operator.read"]);
-  expect(paired?.tokens?.operator?.token).toBe(token);
-}
-
 describe("gateway silent scope-upgrade reconnect", () => {
   test("does not silently widen a read-scoped paired device to admin on shared-auth reconnect", async () => {
     const started = await startServerWithClient("secret");
@@ -78,12 +48,23 @@ describe("gateway silent scope-upgrade reconnect", () => {
       expect(sharedAuthUpgradeAttempt.ok).toBe(false);
       expect(sharedAuthUpgradeAttempt.error?.message).toBe("pairing required");
 
-      await expectRejectedScopeUpgradeAttempt({
-        attempt: sharedAuthUpgradeAttempt,
-        requestedEvent,
-        deviceId: paired.deviceId,
-        token: paired.token,
-      });
+      const pending = await devicePairingModule.listDevicePairing();
+      expect(pending.pending).toHaveLength(1);
+      expect(
+        (sharedAuthUpgradeAttempt.error?.details as { requestId?: unknown; code?: string })
+          ?.requestId,
+      ).toBe(pending.pending[0]?.requestId);
+      const requested = (await requestedEvent) as {
+        payload?: { requestId?: string; deviceId?: string; scopes?: string[] };
+      };
+      expect(requested.payload?.requestId).toBe(pending.pending[0]?.requestId);
+      expect(requested.payload?.deviceId).toBe(paired.deviceId);
+      expect(requested.payload?.scopes).toEqual(["operator.admin"]);
+
+      const afterUpgradeAttempt = await getPairedDevice(paired.deviceId);
+      expect(afterUpgradeAttempt?.approvedScopes).toEqual(["operator.read"]);
+      expect(afterUpgradeAttempt?.tokens?.operator?.scopes).toEqual(["operator.read"]);
+      expect(afterUpgradeAttempt?.tokens?.operator?.token).toBe(paired.token);
 
       postAttemptDeviceTokenWs = await openTrackedWs(started.port);
       const afterUpgrade = await connectReq(postAttemptDeviceTokenWs, {
@@ -139,12 +120,23 @@ describe("gateway silent scope-upgrade reconnect", () => {
       expect(reconnectAttempt.ok).toBe(false);
       expect(reconnectAttempt.error?.message).toBe("pairing required");
 
-      await expectRejectedScopeUpgradeAttempt({
-        attempt: reconnectAttempt,
-        requestedEvent,
-        deviceId: paired.deviceId,
-        token: paired.token,
-      });
+      const pending = await devicePairingModule.listDevicePairing();
+      expect(pending.pending).toHaveLength(1);
+      expect(
+        (reconnectAttempt.error?.details as { requestId?: unknown; code?: string })?.requestId,
+      ).toBe(pending.pending[0]?.requestId);
+
+      const requested = (await requestedEvent) as {
+        payload?: { requestId?: string; deviceId?: string; scopes?: string[] };
+      };
+      expect(requested.payload?.requestId).toBe(pending.pending[0]?.requestId);
+      expect(requested.payload?.deviceId).toBe(paired.deviceId);
+      expect(requested.payload?.scopes).toEqual(["operator.admin"]);
+
+      const afterAttempt = await getPairedDevice(paired.deviceId);
+      expect(afterAttempt?.approvedScopes).toEqual(["operator.read"]);
+      expect(afterAttempt?.tokens?.operator?.scopes).toEqual(["operator.read"]);
+      expect(afterAttempt?.tokens?.operator?.token).toBe(paired.token);
     } finally {
       watcherWs?.close();
       backendReconnectWs?.close();
@@ -219,9 +211,7 @@ describe("gateway silent scope-upgrade reconnect", () => {
         started.ws,
         (obj) => obj.type === "event" && obj.event === "device.pair.requested",
         300,
-      )
-        .then((event) => ({ ok: true as const, event }))
-        .catch((error: unknown) => ({ ok: false as const, error }));
+      );
 
       ws = await openTrackedWs(started.port);
       const res = await connectReq(ws, {
@@ -234,13 +224,7 @@ describe("gateway silent scope-upgrade reconnect", () => {
       expect(
         (res.error?.details as { requestId?: unknown; code?: string } | undefined)?.requestId,
       ).toBeUndefined();
-      const requested = await requestedEvent;
-      expect(requested.ok).toBe(false);
-      if (requested.ok) {
-        throw new Error("expected pairing request watcher to time out");
-      }
-      expect(requested.error).toBeInstanceOf(Error);
-      expect((requested.error as Error).message).toContain("timeout");
+      await expect(requestedEvent).rejects.toThrow("timeout");
 
       const pending = await devicePairingModule.listDevicePairing();
       expect(pending.pending).toEqual([]);

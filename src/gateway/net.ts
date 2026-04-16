@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import type { IncomingMessage } from "node:http";
 import net from "node:net";
-import type { GatewayBindMode } from "../config/types.gateway.js";
 import {
   pickMatchingExternalInterfaceAddress,
   readNetworkInterfaces,
@@ -14,7 +13,6 @@ import {
   isPrivateOrLoopbackIpAddress,
   normalizeIpAddress,
 } from "../shared/net/ip.js";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 
 /**
  * Pick the primary non-internal IPv4 address (LAN IP).
@@ -28,7 +26,7 @@ export function pickPrimaryLanIPv4(): string | undefined {
 }
 
 export function normalizeHostHeader(hostHeader?: string): string {
-  return normalizeLowercaseStringOrEmpty(hostHeader);
+  return (hostHeader ?? "").trim().toLowerCase();
 }
 
 export function resolveHostName(hostHeader?: string): string {
@@ -215,14 +213,11 @@ export function isLocalGatewayAddress(ip: string | undefined): boolean {
     return false;
   }
   const tailnetIPv4 = pickPrimaryTailnetIPv4();
-  if (tailnetIPv4 && normalized === normalizeLowercaseStringOrEmpty(tailnetIPv4)) {
+  if (tailnetIPv4 && normalized === tailnetIPv4.toLowerCase()) {
     return true;
   }
   const tailnetIPv6 = pickPrimaryTailnetIPv6();
-  if (
-    tailnetIPv6 &&
-    normalizeLowercaseStringOrEmpty(ip) === normalizeLowercaseStringOrEmpty(tailnetIPv6)
-  ) {
+  if (tailnetIPv6 && ip.trim().toLowerCase() === tailnetIPv6.toLowerCase()) {
     return true;
   }
   return false;
@@ -296,7 +291,7 @@ export function __resetContainerCacheForTest(): void {
  * @returns The bind address to use (never null)
  */
 export async function resolveGatewayBindHost(
-  bind: GatewayBindMode | undefined,
+  bind: import("../config/config.js").GatewayBindMode | undefined,
   customHost?: string,
 ): Promise<string> {
   const mode = bind ?? "loopback";
@@ -366,7 +361,9 @@ export async function resolveGatewayBindHost(
  * environment as the eventual bind decision. Host-side diagnostics should keep
  * their own explicit defaults instead of inferring from the caller process.
  */
-export function defaultGatewayBindMode(tailscaleMode?: string): GatewayBindMode {
+export function defaultGatewayBindMode(
+  tailscaleMode?: string,
+): import("../config/config.js").GatewayBindMode {
   if (tailscaleMode && tailscaleMode !== "off") {
     return "loopback";
   }
@@ -486,7 +483,7 @@ function parseHostForAddressChecks(
   if (!host) {
     return null;
   }
-  const normalizedHost = normalizeLowercaseStringOrEmpty(host);
+  const normalizedHost = host.trim().toLowerCase();
   const canonicalHost = normalizedHost.replace(/\.+$/, "");
   if (canonicalHost === "localhost") {
     return { isLocalhost: true, unbracketedHost: canonicalHost };

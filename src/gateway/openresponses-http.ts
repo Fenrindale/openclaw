@@ -10,9 +10,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ImageContent } from "../agents/command/types.js";
 import type { ClientToolDefinition } from "../agents/pi-embedded-runner/run/params.js";
-import { isClientToolNameConflictError } from "../agents/pi-tool-definition-adapter.js";
 import { createDefaultDeps } from "../cli/deps.js";
-import type { CliDeps } from "../cli/deps.types.js";
 import { agentCommandFromIngress } from "../commands/agent.js";
 import type { GatewayHttpResponsesConfig } from "../config/types.gateway.js";
 import { emitAgentEvent, onAgentEvent } from "../infra/agent-events.js";
@@ -32,10 +30,11 @@ import {
   type InputImageSource,
 } from "../media/input-files.js";
 import { defaultRuntime } from "../runtime.js";
+import { wrapExternalContent } from "../security/external-content.js";
 import { resolveAssistantStreamDeltaText } from "./agent-event-assistant-text.js";
 import type { AuthRateLimiter } from "./auth-rate-limit.js";
 import type { ResolvedGatewayAuth } from "./auth.js";
-import { sendJson, setSseHeaders, watchClientDisconnect, writeDone } from "./http-common.js";
+import { sendJson, setSseHeaders, writeDone } from "./http-common.js";
 import { handleGatewayPostJsonEndpoint } from "./http-endpoint-helpers.js";
 import {
   getBearerToken,
@@ -55,7 +54,6 @@ import {
   type StreamingEvent,
   type Usage,
 } from "./open-responses.schema.js";
-import { wrapUntrustedFileContent } from "./openresponses-file-content.js";
 import { buildAgentPrompt } from "./openresponses-prompt.js";
 import { createAssistantOutputItem, createFunctionCallOutputItem } from "./openresponses-shape.js";
 
@@ -70,6 +68,13 @@ type OpenResponsesHttpOptions = {
 
 const DEFAULT_BODY_BYTES = 20 * 1024 * 1024;
 const DEFAULT_MAX_URL_PARTS = 8;
+
+function wrapUntrustedFileContent(content: string): string {
+  return wrapExternalContent(content, {
+    source: "unknown",
+    includeWarning: false,
+  });
+}
 
 // In-memory map from responseId -> sessionKey for previous_response_id continuity.
 // Entries are evicted after 30 minutes to bound memory usage.
@@ -401,8 +406,7 @@ async function runResponsesAgentCommand(params: {
   runId: string;
   messageChannel: string;
   senderIsOwner: boolean;
-  deps: CliDeps;
-  abortSignal?: AbortSignal;
+  deps: ReturnType<typeof createDefaultDeps>;
 }) {
   return agentCommandFromIngress(
     {
@@ -419,7 +423,6 @@ async function runResponsesAgentCommand(params: {
       bestEffortDeliver: false,
       senderIsOwner: params.senderIsOwner,
       allowModelOverride: true,
-      abortSignal: params.abortSignal,
     },
     defaultRuntime,
     params.deps,
@@ -672,14 +675,12 @@ export async function handleOpenResponsesHttpRequest(
     storeResponseSession(responseId, sessionKey, responseSessionScope);
   const outputItemId = `msg_${randomUUID()}`;
   const deps = createDefaultDeps();
-  const abortController = new AbortController();
   const streamParams =
     typeof payload.max_output_tokens === "number"
       ? { maxTokens: payload.max_output_tokens }
       : undefined;
 
   if (!stream) {
-    const stopWatchingDisconnect = watchClientDisconnect(req, res, abortController);
     try {
       const result = await runResponsesAgentCommand({
         message: prompt.message,
@@ -693,12 +694,7 @@ export async function handleOpenResponsesHttpRequest(
         messageChannel,
         senderIsOwner,
         deps,
-        abortSignal: abortController.signal,
       });
-
-      if (abortController.signal.aborted) {
-        return true;
-      }
 
       const payloads = (result as { payloads?: Array<{ text?: string }> } | null)?.payloads;
       const usage = extractUsageFromResult(result);
@@ -776,21 +772,7 @@ export async function handleOpenResponsesHttpRequest(
       rememberResponseSession();
       sendJson(res, 200, response);
     } catch (err) {
-      if (abortController.signal.aborted) {
-        return true;
-      }
       logWarn(`openresponses: non-stream response failed: ${String(err)}`);
-      if (isClientToolNameConflictError(err)) {
-        const response = createResponseResource({
-          id: responseId,
-          model,
-          status: "failed",
-          output: [],
-          error: { code: "invalid_request_error", message: "invalid tool configuration" },
-        });
-        sendJson(res, 400, response);
-        return true;
-      }
       const response = createResponseResource({
         id: responseId,
         model,
@@ -800,8 +782,6 @@ export async function handleOpenResponsesHttpRequest(
       });
       rememberResponseSession();
       sendJson(res, 500, response);
-    } finally {
-      stopWatchingDisconnect();
     }
     return true;
   }
@@ -816,7 +796,6 @@ export async function handleOpenResponsesHttpRequest(
   let sawAssistantDelta = false;
   let closed = false;
   let unsubscribe = () => {};
-  let stopWatchingDisconnect = () => {};
   let finalUsage: Usage | undefined;
   let finalizeRequested: { status: ResponseResource["status"]; text: string } | null = null;
 
@@ -833,7 +812,6 @@ export async function handleOpenResponsesHttpRequest(
     const usage = finalUsage;
 
     closed = true;
-    stopWatchingDisconnect();
     unsubscribe();
 
     writeSseEvent(res, {
@@ -962,7 +940,7 @@ export async function handleOpenResponsesHttpRequest(
     }
   });
 
-  stopWatchingDisconnect = watchClientDisconnect(req, res, abortController, () => {
+  req.on("close", () => {
     closed = true;
     unsubscribe();
   });
@@ -981,7 +959,6 @@ export async function handleOpenResponsesHttpRequest(
         messageChannel,
         senderIsOwner,
         deps,
-        abortSignal: abortController.signal,
       });
 
       finalUsage = extractUsageFromResult(result);
@@ -1069,7 +1046,6 @@ export async function handleOpenResponsesHttpRequest(
           usage,
         });
         closed = true;
-        stopWatchingDisconnect();
         unsubscribe();
         rememberResponseSession();
         writeSseEvent(res, { type: "response.completed", response: incompleteResponse });
@@ -1107,30 +1083,12 @@ export async function handleOpenResponsesHttpRequest(
         });
       }
     } catch (err) {
-      if (closed || abortController.signal.aborted) {
+      logWarn(`openresponses: streaming response failed: ${String(err)}`);
+      if (closed) {
         return;
       }
-      logWarn(`openresponses: streaming response failed: ${String(err)}`);
 
       finalUsage = finalUsage ?? createEmptyUsage();
-      if (isClientToolNameConflictError(err)) {
-        const errorResponse = createResponseResource({
-          id: responseId,
-          model,
-          status: "failed",
-          output: [],
-          error: { code: "invalid_request_error", message: "invalid tool configuration" },
-          usage: finalUsage,
-        });
-
-        writeSseEvent(res, { type: "response.failed", response: errorResponse });
-        emitAgentEvent({
-          runId: responseId,
-          stream: "lifecycle",
-          data: { phase: "error" },
-        });
-        return;
-      }
       const errorResponse = createResponseResource({
         id: responseId,
         model,

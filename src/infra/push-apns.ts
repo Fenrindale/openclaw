@@ -3,10 +3,6 @@ import fs from "node:fs/promises";
 import http2 from "node:http2";
 import path from "node:path";
 import { resolveStateDir } from "../config/paths.js";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-} from "../shared/string-coerce.js";
 import type { DeviceIdentity } from "./device-identity.js";
 import { formatErrorMessage } from "./errors.js";
 import { createAsyncLock, readJsonFile, writeJsonAtomic } from "./json-files.js";
@@ -144,7 +140,10 @@ function isValidNodeId(value: string): boolean {
 }
 
 function normalizeApnsToken(value: string): string {
-  return normalizeLowercaseStringOrEmpty(value.trim().replace(/[<>\s]/g, ""));
+  return value
+    .trim()
+    .replace(/[<>\s]/g, "")
+    .toLowerCase();
 }
 
 function normalizeRelayHandle(value: string): string {
@@ -184,7 +183,10 @@ function normalizeTokenDebugSuffix(value: unknown): string | undefined {
   if (typeof value !== "string") {
     return undefined;
   }
-  const normalized = normalizeLowercaseStringOrEmpty(value.trim()).replace(/[^0-9a-z]/g, "");
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^0-9a-z]/g, "");
   return normalized.length > 0 ? normalized.slice(-8) : undefined;
 }
 
@@ -252,7 +254,7 @@ function normalizePrivateKey(value: string): string {
 }
 
 function normalizeNonEmptyString(value: string | undefined): string | null {
-  const trimmed = normalizeOptionalString(value) ?? "";
+  const trimmed = value?.trim() ?? "";
   return trimmed.length > 0 ? trimmed : null;
 }
 
@@ -260,9 +262,7 @@ function normalizeDistribution(value: unknown): "official" | null {
   if (typeof value !== "string") {
     return null;
   }
-  const normalized = normalizeOptionalString(value)
-    ? normalizeLowercaseStringOrEmpty(value)
-    : undefined;
+  const normalized = value.trim().toLowerCase();
   return normalized === "official" ? "official" : null;
 }
 
@@ -349,7 +349,8 @@ function normalizeStoredRegistration(record: unknown): ApnsRegistration | null {
     return null;
   }
   const candidate = record as Record<string, unknown>;
-  const transport = normalizeLowercaseStringOrEmpty(candidate.transport) || "direct";
+  const transport =
+    typeof candidate.transport === "string" ? candidate.transport.trim().toLowerCase() : "direct";
   if (transport === "relay") {
     return normalizeRelayRegistration(candidate as Partial<RelayApnsRegistration>);
   }
@@ -396,7 +397,7 @@ export function normalizeApnsEnvironment(value: unknown): ApnsEnvironment | null
   if (typeof value !== "string") {
     return null;
   }
-  const normalized = normalizeLowercaseStringOrEmpty(value);
+  const normalized = value.trim().toLowerCase();
   if (normalized === "sandbox" || normalized === "production") {
     return normalized;
   }
@@ -706,7 +707,7 @@ async function sendApnsRequest(params: {
     });
     req.on("response", (headers) => {
       const statusHeader = headers[":status"];
-      statusCode = statusHeader ?? 0;
+      statusCode = typeof statusHeader === "number" ? statusHeader : Number(statusHeader ?? 0);
       const idHeader = headers["apns-id"];
       if (typeof idHeader === "string" && idHeader.trim().length > 0) {
         apnsId = idHeader.trim();

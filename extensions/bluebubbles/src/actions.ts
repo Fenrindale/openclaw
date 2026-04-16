@@ -8,7 +8,6 @@ import {
 } from "openclaw/plugin-sdk/channel-actions";
 import { createLazyRuntimeNamedExport } from "openclaw/plugin-sdk/lazy-runtime";
 import { isPrivateNetworkOptInEnabled } from "openclaw/plugin-sdk/ssrf-runtime";
-import { normalizeOptionalLowercaseString } from "openclaw/plugin-sdk/text-runtime";
 import { extractToolSend } from "openclaw/plugin-sdk/tool-send";
 import { resolveBlueBubblesAccount } from "./accounts.js";
 import {
@@ -101,7 +100,7 @@ export const bluebubblesMessageActions: ChannelMessageActionAdapter = {
     const normalizedTarget = currentChannelId
       ? normalizeBlueBubblesMessagingTarget(currentChannelId)
       : undefined;
-    const lowered = normalizeOptionalLowercaseString(normalizedTarget) ?? "";
+    const lowered = normalizedTarget?.trim().toLowerCase() ?? "";
     const isGroupTarget =
       lowered.startsWith("chat_guid:") ||
       lowered.startsWith("chat_id:") ||

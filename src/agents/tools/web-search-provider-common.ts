@@ -1,6 +1,5 @@
-import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import type { OpenClawConfig } from "../../config/config.js";
 import { normalizeResolvedSecretInputString } from "../../config/types.secrets.js";
-import { normalizeLowercaseStringOrEmpty } from "../../shared/string-coerce.js";
 import { normalizeSecretInput } from "../../utils/normalize-secret-input.js";
 import { withTrustedWebToolsEndpoint } from "./web-guarded-fetch.js";
 import {
@@ -251,7 +250,7 @@ export function normalizeFreshness(
     return undefined;
   }
 
-  const lower = normalizeLowercaseStringOrEmpty(trimmed);
+  const lower = trimmed.toLowerCase();
   if (BRAVE_FRESHNESS_SHORTCUTS.has(lower)) {
     return provider === "brave" ? lower : FRESHNESS_TO_RECENCY[lower];
   }
@@ -315,7 +314,6 @@ function describeUnsupportedSearchFilter(name: UnsupportedWebSearchFilterName): 
     case "date_before":
       return "date_after/date_before filtering";
   }
-  throw new Error("Unsupported web search filter");
 }
 
 export function buildUnsupportedSearchFilterResponse(

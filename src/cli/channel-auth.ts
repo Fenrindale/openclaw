@@ -15,7 +15,6 @@ import { applyPluginAutoEnable } from "../config/plugin-auto-enable.js";
 import { setVerbose } from "../globals.js";
 import { isBlockedObjectKey } from "../infra/prototype-keys.js";
 import { defaultRuntime, type RuntimeEnv } from "../runtime.js";
-import { normalizeOptionalString } from "../shared/string-coerce.js";
 import { sanitizeForLog } from "../terminal/ansi.js";
 
 type ChannelAuthOptions = {
@@ -129,8 +128,7 @@ function resolveAccountContext(
   opts: ChannelAuthOptions,
   cfg: OpenClawConfig,
 ) {
-  const accountId =
-    normalizeOptionalString(opts.account) || resolveChannelDefaultAccountId({ plugin, cfg });
+  const accountId = opts.account?.trim() || resolveChannelDefaultAccountId({ plugin, cfg });
   return { accountId };
 }
 

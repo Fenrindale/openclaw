@@ -1,4 +1,3 @@
-import { normalizeLowercaseStringOrEmpty } from "../../shared/string-coerce.js";
 import type { EmbeddingProvider } from "./embeddings.js";
 
 const DEFAULT_EMBEDDING_MAX_INPUT_TOKENS = 8192;
@@ -23,7 +22,7 @@ export function resolveEmbeddingMaxInputTokens(provider: EmbeddingProvider): num
 
   // Provider/model mapping is best-effort; different providers use different
   // limits and we prefer to be conservative when we don't know.
-  const key = normalizeLowercaseStringOrEmpty(`${provider.id}:${provider.model}`);
+  const key = `${provider.id}:${provider.model}`.toLowerCase();
   const known = KNOWN_EMBEDDING_MAX_INPUT_TOKENS[key];
   if (typeof known === "number") {
     return known;
@@ -31,10 +30,10 @@ export function resolveEmbeddingMaxInputTokens(provider: EmbeddingProvider): num
 
   // Provider-specific conservative fallbacks. This prevents us from accidentally
   // using the OpenAI default for providers with much smaller limits.
-  if (normalizeLowercaseStringOrEmpty(provider.id) === "gemini") {
+  if (provider.id.toLowerCase() === "gemini") {
     return 2048;
   }
-  if (normalizeLowercaseStringOrEmpty(provider.id) === "local") {
+  if (provider.id.toLowerCase() === "local") {
     return DEFAULT_LOCAL_EMBEDDING_MAX_INPUT_TOKENS;
   }
 

@@ -1,4 +1,3 @@
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import { parseBooleanValue } from "../../utils/boolean.js";
 import type { BrowserRouteContext, ProfileContext } from "../server-context.js";
 import type { BrowserRequest, BrowserResponse } from "./types.js";
@@ -15,14 +14,14 @@ export function getProfileContext(
 
   // Check query string first (works for GET and POST)
   if (typeof req.query.profile === "string") {
-    profileName = normalizeOptionalString(req.query.profile);
+    profileName = req.query.profile.trim() || undefined;
   }
 
   // Fall back to body for POST requests
   if (!profileName && req.body && typeof req.body === "object") {
     const body = req.body as Record<string, unknown>;
     if (typeof body.profile === "string") {
-      profileName = normalizeOptionalString(body.profile);
+      profileName = body.profile.trim() || undefined;
     }
   }
 
@@ -38,8 +37,11 @@ export function jsonError(res: BrowserResponse, status: number, message: string)
 }
 
 export function toStringOrEmpty(value: unknown) {
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
-    return normalizeOptionalString(String(value)) ?? "";
+  if (typeof value === "string") {
+    return value.trim();
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value).trim();
   }
   return "";
 }
@@ -48,9 +50,8 @@ export function toNumber(value: unknown) {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value;
   }
-  const normalized = typeof value === "string" ? normalizeOptionalString(value) : undefined;
-  if (normalized) {
-    const parsed = Number(normalized);
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : undefined;
   }
   return undefined;

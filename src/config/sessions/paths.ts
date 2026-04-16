@@ -3,7 +3,6 @@ import os from "node:os";
 import path from "node:path";
 import { expandHomePrefix, resolveRequiredHomeDir } from "../../infra/home-dir.js";
 import { DEFAULT_AGENT_ID, normalizeAgentId } from "../../routing/session-key.js";
-import { normalizeLowercaseStringOrEmpty } from "../../shared/string-coerce.js";
 import { resolveStateDir } from "../paths.js";
 
 function resolveAgentSessionsDir(
@@ -143,7 +142,7 @@ function resolveStructuralSessionFallbackPath(
     return undefined;
   }
   const normalizedAgentId = normalizeAgentId(agentIdPart);
-  if (normalizedAgentId !== normalizeLowercaseStringOrEmpty(agentIdPart)) {
+  if (normalizedAgentId !== agentIdPart.toLowerCase()) {
     return undefined;
   }
   if (normalizedAgentId !== normalizeAgentId(expectedAgentId)) {

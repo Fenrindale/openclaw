@@ -1,22 +1,17 @@
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalLowercaseString,
-} from "../../shared/string-coerce.js";
-
 type AnthropicCacheRetentionFamily =
   | "anthropic-direct"
   | "anthropic-bedrock"
   | "custom-anthropic-api";
 
 export function isAnthropicModelRef(modelId: string): boolean {
-  return normalizeLowercaseStringOrEmpty(modelId).startsWith("anthropic/");
+  return modelId.trim().toLowerCase().startsWith("anthropic/");
 }
 
 /** Matches Application Inference Profile ARNs across all AWS partitions with Bedrock. */
 const BEDROCK_APP_INFERENCE_PROFILE_ARN_RE = /^arn:aws(-cn|-us-gov)?:bedrock:/;
 
 export function isAnthropicBedrockModel(modelId: string): boolean {
-  const normalized = normalizeLowercaseStringOrEmpty(modelId);
+  const normalized = modelId.trim().toLowerCase();
 
   // Direct Anthropic Claude model IDs and regional inference profiles
   // e.g. "anthropic.claude-sonnet-4-6", "us.anthropic.claude-sonnet-4-6", "global.anthropic.claude-opus-4-6-v1"
@@ -46,9 +41,7 @@ export function isAnthropicBedrockModel(modelId: string): boolean {
 }
 
 export function isOpenRouterAnthropicModelRef(provider: string, modelId: string): boolean {
-  return (
-    normalizeOptionalLowercaseString(provider) === "openrouter" && isAnthropicModelRef(modelId)
-  );
+  return provider.trim().toLowerCase() === "openrouter" && isAnthropicModelRef(modelId);
 }
 
 export function isAnthropicFamilyCacheTtlEligible(params: {
@@ -56,7 +49,7 @@ export function isAnthropicFamilyCacheTtlEligible(params: {
   modelApi?: string;
   modelId: string;
 }): boolean {
-  const normalizedProvider = normalizeOptionalLowercaseString(params.provider);
+  const normalizedProvider = params.provider.trim().toLowerCase();
   if (normalizedProvider === "anthropic" || normalizedProvider === "anthropic-vertex") {
     return true;
   }
@@ -72,7 +65,7 @@ export function resolveAnthropicCacheRetentionFamily(params: {
   modelId?: string;
   hasExplicitCacheConfig: boolean;
 }): AnthropicCacheRetentionFamily | undefined {
-  const normalizedProvider = normalizeOptionalLowercaseString(params.provider);
+  const normalizedProvider = params.provider.trim().toLowerCase();
   if (normalizedProvider === "anthropic" || normalizedProvider === "anthropic-vertex") {
     return "anthropic-direct";
   }

@@ -13,7 +13,6 @@ import {
   type OpenClawConfig,
 } from "openclaw/plugin-sdk/runtime-config-snapshot";
 import { logVerbose } from "openclaw/plugin-sdk/runtime-env";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import { createDiscordRestClient } from "../client.js";
 import {
   createThreadForBinding,
@@ -122,7 +121,7 @@ function toThreadBindingTargetKind(raw: BindingTargetKind): "subagent" | "acp" {
 }
 
 function isDirectConversationBindingId(value?: string | null): boolean {
-  const trimmed = normalizeOptionalString(value);
+  const trimmed = value?.trim();
   return Boolean(trimmed && /^(user:|channel:)/i.test(trimmed));
 }
 
@@ -378,7 +377,7 @@ export function createThreadBindingManager(
     bindTarget: async (bindParams) => {
       const cfg = resolveCurrentCfg();
       let threadId = normalizeThreadId(bindParams.threadId);
-      let channelId = normalizeOptionalString(bindParams.channelId) ?? "";
+      let channelId = bindParams.channelId?.trim() || "";
       const directConversationBinding =
         isDirectConversationBindingId(threadId) || isDirectConversationBindingId(channelId);
 
@@ -396,7 +395,7 @@ export function createThreadBindingManager(
             accountId,
             token: resolveCurrentToken(),
             channelId,
-            threadName: normalizeOptionalString(bindParams.threadName) ?? threadName,
+            threadName: bindParams.threadName?.trim() || threadName,
           })) ?? undefined;
       }
 
@@ -422,21 +421,14 @@ export function createThreadBindingManager(
         return null;
       }
 
-      const existing = manager.getByThreadId(threadId);
-      const targetSessionKey = normalizeOptionalString(bindParams.targetSessionKey) ?? "";
+      const targetSessionKey = bindParams.targetSessionKey.trim();
       if (!targetSessionKey) {
         return null;
       }
 
       const targetKind = normalizeTargetKind(bindParams.targetKind, targetSessionKey);
-      let webhookId =
-        normalizeOptionalString(bindParams.webhookId) ??
-        normalizeOptionalString(existing?.webhookId) ??
-        "";
-      let webhookToken =
-        normalizeOptionalString(bindParams.webhookToken) ??
-        normalizeOptionalString(existing?.webhookToken) ??
-        "";
+      let webhookId = bindParams.webhookId?.trim() || "";
+      let webhookToken = bindParams.webhookToken?.trim() || "";
       if (!directConversationBinding && (!webhookId || !webhookToken)) {
         const cachedWebhook = findReusableWebhook({ accountId, channelId });
         webhookId = cachedWebhook.webhookId ?? "";
@@ -460,29 +452,19 @@ export function createThreadBindingManager(
         threadId,
         targetKind,
         targetSessionKey,
-        agentId:
-          normalizeOptionalString(bindParams.agentId) ??
-          normalizeOptionalString(existing?.agentId) ??
-          resolveAgentIdFromSessionKey(targetSessionKey),
-        label:
-          normalizeOptionalString(bindParams.label) ?? normalizeOptionalString(existing?.label),
+        agentId: bindParams.agentId?.trim() || resolveAgentIdFromSessionKey(targetSessionKey),
+        label: bindParams.label?.trim() || undefined,
         webhookId: webhookId || undefined,
         webhookToken: webhookToken || undefined,
-        boundBy:
-          normalizeOptionalString(bindParams.boundBy) ??
-          normalizeOptionalString(existing?.boundBy) ??
-          "system",
+        boundBy: bindParams.boundBy?.trim() || "system",
         boundAt: now,
         lastActivityAt: now,
-        idleTimeoutMs:
-          typeof existing?.idleTimeoutMs === "number" ? existing.idleTimeoutMs : idleTimeoutMs,
-        maxAgeMs: typeof existing?.maxAgeMs === "number" ? existing.maxAgeMs : maxAgeMs,
+        idleTimeoutMs,
+        maxAgeMs,
         metadata:
           bindParams.metadata && typeof bindParams.metadata === "object"
-            ? { ...existing?.metadata, ...bindParams.metadata }
-            : existing?.metadata
-              ? { ...existing.metadata }
-              : undefined,
+            ? { ...bindParams.metadata }
+            : undefined,
       };
 
       setBindingRecord(record);
@@ -609,28 +591,23 @@ export function createThreadBindingManager(
       if (!targetSessionKey) {
         return null;
       }
-      const conversationId = normalizeOptionalString(input.conversation.conversationId) ?? "";
+      const conversationId = input.conversation.conversationId.trim();
       const placement = input.placement === "child" ? "child" : "current";
       const metadata = input.metadata ?? {};
-      const label = normalizeOptionalString(metadata.label);
+      const label =
+        typeof metadata.label === "string" ? metadata.label.trim() || undefined : undefined;
       const threadName =
         typeof metadata.threadName === "string"
-          ? normalizeOptionalString(metadata.threadName)
+          ? metadata.threadName.trim() || undefined
           : undefined;
       const introText =
-        typeof metadata.introText === "string"
-          ? normalizeOptionalString(metadata.introText)
-          : undefined;
+        typeof metadata.introText === "string" ? metadata.introText.trim() || undefined : undefined;
       const boundBy =
-        typeof metadata.boundBy === "string"
-          ? normalizeOptionalString(metadata.boundBy)
-          : undefined;
+        typeof metadata.boundBy === "string" ? metadata.boundBy.trim() || undefined : undefined;
       const agentId =
-        typeof metadata.agentId === "string"
-          ? normalizeOptionalString(metadata.agentId)
-          : undefined;
+        typeof metadata.agentId === "string" ? metadata.agentId.trim() || undefined : undefined;
       let threadId: string | undefined;
-      let channelId = normalizeOptionalString(input.conversation.parentConversationId);
+      let channelId = input.conversation.parentConversationId?.trim() || undefined;
       let createThread = false;
 
       if (placement === "child") {

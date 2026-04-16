@@ -1,12 +1,8 @@
 import type { AcpRuntimeEvent, AcpSessionUpdateTag } from "../../acp/runtime/types.js";
 import { EmbeddedBlockChunker } from "../../agents/pi-embedded-block-chunker.js";
 import { formatToolSummary, resolveToolDisplay } from "../../agents/tool-display.js";
-import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import type { OpenClawConfig } from "../../config/config.js";
 import { prefixSystemMessage } from "../../infra/system-message.js";
-import {
-  normalizeOptionalLowercaseString,
-  normalizeOptionalString,
-} from "../../shared/string-coerce.js";
 import type { ReplyPayload } from "../types.js";
 import {
   type AcpHiddenBoundarySeparator,
@@ -15,7 +11,7 @@ import {
   resolveAcpStreamingConfig,
 } from "./acp-stream-settings.js";
 import { createBlockReplyPipeline } from "./block-reply-pipeline.js";
-import type { ReplyDispatchKind } from "./reply-dispatcher.types.js";
+import type { ReplyDispatchKind } from "./reply-dispatcher.js";
 
 const ACP_BLOCK_REPLY_TIMEOUT_MS = 15_000;
 const ACP_LIVE_IDLE_FLUSH_FLOOR_MS = 750;
@@ -59,7 +55,10 @@ function hashText(text: string): string {
 }
 
 function normalizeToolStatus(status: string | undefined): string | undefined {
-  const normalized = normalizeOptionalLowercaseString(status);
+  if (!status) {
+    return undefined;
+  }
+  const normalized = status.trim().toLowerCase();
   return normalized || undefined;
 }
 
@@ -141,15 +140,15 @@ function shouldFlushLiveBufferOnIdle(text: string): boolean {
 
 function renderToolSummaryText(event: Extract<AcpRuntimeEvent, { type: "tool_call" }>): string {
   const detailParts: string[] = [];
-  const title = normalizeOptionalString(event.title);
+  const title = event.title?.trim();
   if (title) {
     detailParts.push(title);
   }
-  const status = normalizeOptionalString(event.status);
+  const status = event.status?.trim();
   if (status) {
     detailParts.push(`status=${status}`);
   }
-  const fallback = normalizeOptionalString(event.text);
+  const fallback = event.text?.trim();
   if (detailParts.length === 0 && fallback) {
     detailParts.push(fallback);
   }
@@ -335,7 +334,7 @@ export function createAcpReplyProjector(params: {
     const renderedToolSummary = renderToolSummaryText(event);
     const toolSummary = truncateText(renderedToolSummary, settings.maxSessionUpdateChars);
     const hash = hashText(renderedToolSummary);
-    const toolCallId = normalizeOptionalString(event.toolCallId);
+    const toolCallId = event.toolCallId?.trim() || undefined;
     const status = normalizeToolStatus(event.status);
     const isTerminal = status ? TERMINAL_TOOL_STATUSES.has(status) : false;
     const isStart = status === "in_progress" || event.tag === "tool_call";

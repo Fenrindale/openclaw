@@ -4,10 +4,6 @@ import path from "node:path";
 import { loadConfig } from "../config/config.js";
 import { loadSessionStore } from "../config/sessions.js";
 import { onSessionTranscriptUpdate } from "../sessions/transcript-events.js";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-} from "../shared/string-coerce.js";
 import type { AuthRateLimiter } from "./auth-rate-limit.js";
 import type { ResolvedGatewayAuth } from "./auth.js";
 import {
@@ -40,14 +36,14 @@ function resolveSessionHistoryPath(req: IncomingMessage): string | null {
     return null;
   }
   try {
-    return normalizeOptionalString(decodeURIComponent(match[1] ?? "")) ?? null;
+    return decodeURIComponent(match[1] ?? "").trim() || null;
   } catch {
     return "";
   }
 }
 
 function shouldStreamSse(req: IncomingMessage): boolean {
-  const accept = normalizeLowercaseStringOrEmpty(getHeader(req, "accept"));
+  const accept = getHeader(req, "accept")?.toLowerCase() ?? "";
   return accept.includes("text/event-stream");
 }
 
@@ -67,8 +63,14 @@ function resolveLimit(req: IncomingMessage): number | undefined {
   return Math.min(MAX_SESSION_HISTORY_LIMIT, Math.max(1, value));
 }
 
+function resolveCursor(req: IncomingMessage): string | undefined {
+  const raw = getRequestUrl(req).searchParams.get("cursor");
+  const trimmed = raw?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
 function canonicalizePath(value: string | undefined): string | undefined {
-  const trimmed = normalizeOptionalString(value);
+  const trimmed = value?.trim();
   if (!trimmed) {
     return undefined;
   }
@@ -150,7 +152,7 @@ export async function handleSessionHistoryHttpRequest(
     return true;
   }
   const limit = resolveLimit(req);
-  const cursor = normalizeOptionalString(getRequestUrl(req).searchParams.get("cursor"));
+  const cursor = resolveCursor(req);
   const effectiveMaxChars =
     typeof cfg.gateway?.webchat?.chatHistoryMaxChars === "number"
       ? cfg.gateway.webchat.chatHistoryMaxChars

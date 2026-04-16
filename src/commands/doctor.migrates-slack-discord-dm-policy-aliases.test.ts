@@ -33,7 +33,6 @@ describe("doctor command", () => {
       });
 
       const runtime = { log: vi.fn(), error: vi.fn(), exit: vi.fn() };
-      writeConfigFile.mockClear();
 
       await doctorCommand(runtime, { nonInteractive: true, repair: true });
 

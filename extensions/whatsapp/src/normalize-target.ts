@@ -1,5 +1,4 @@
 import { normalizeE164 } from "openclaw/plugin-sdk/account-resolution";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 
 const WHATSAPP_USER_JID_RE = /^(\d+)(?::\d+)?@s\.whatsapp\.net$/i;
 const WHATSAPP_LEGACY_USER_JID_RE = /^(\d+)@c\.us$/i;
@@ -18,7 +17,7 @@ function stripWhatsAppTargetPrefixes(value: string): string {
 
 export function isWhatsAppGroupJid(value: string): boolean {
   const candidate = stripWhatsAppTargetPrefixes(value);
-  const lower = normalizeLowercaseStringOrEmpty(candidate);
+  const lower = candidate.toLowerCase();
   if (!lower.endsWith("@g.us")) {
     return false;
   }

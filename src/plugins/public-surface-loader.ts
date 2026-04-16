@@ -1,16 +1,15 @@
 import fs from "node:fs";
-import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createJiti } from "jiti";
 import { openBoundaryFileSync } from "../infra/boundary-file-read.js";
 import { resolveBundledPluginsDir } from "./bundled-dir.js";
-import { getCachedPluginJitiLoader, type PluginJitiLoaderCache } from "./jiti-loader-cache.js";
 import { resolveBundledPluginPublicSurfacePath } from "./public-surface-runtime.js";
 import {
   buildPluginLoaderAliasMap,
-  isBundledPluginExtensionPath,
-  resolvePluginLoaderJitiTryNative,
+  buildPluginLoaderJitiOptions,
   resolveLoaderPackageRoot,
+  shouldPreferNativeJiti,
 } from "./sdk-alias.js";
 
 const OPENCLAW_PACKAGE_ROOT =
@@ -19,7 +18,6 @@ const OPENCLAW_PACKAGE_ROOT =
     moduleUrl: import.meta.url,
   }) ?? fileURLToPath(new URL("../..", import.meta.url));
 const loadedPublicSurfaceModules = new Map<string, unknown>();
-const sourceArtifactRequire = createRequire(import.meta.url);
 const publicSurfaceLocations = new Map<
   string,
   {
@@ -27,30 +25,7 @@ const publicSurfaceLocations = new Map<
     boundaryRoot: string;
   } | null
 >();
-const jitiLoaders: PluginJitiLoaderCache = new Map();
-const sharedBundledPublicSurfaceJitiLoaders: PluginJitiLoaderCache = new Map();
-
-function isSourceArtifactPath(modulePath: string): boolean {
-  switch (path.extname(modulePath).toLowerCase()) {
-    case ".ts":
-    case ".tsx":
-    case ".mts":
-    case ".cts":
-    case ".mtsx":
-    case ".ctsx":
-      return true;
-    default:
-      return false;
-  }
-}
-
-function canUseSourceArtifactRequire(params: { modulePath: string; tryNative: boolean }): boolean {
-  return (
-    !params.tryNative &&
-    isSourceArtifactPath(params.modulePath) &&
-    typeof sourceArtifactRequire.extensions?.[".ts"] === "function"
-  );
-}
+const jitiLoaders = new Map<string, ReturnType<typeof createJiti>>();
 
 function createResolutionKey(params: { dirName: string; artifactBasename: string }): string {
   const bundledPluginsDir = resolveBundledPluginsDir();
@@ -94,51 +69,23 @@ function resolvePublicSurfaceLocation(params: {
 }
 
 function getJiti(modulePath: string) {
-  const tryNative = resolvePluginLoaderJitiTryNative(modulePath, { preferBuiltDist: true });
-  const sharedLoader = getSharedBundledPublicSurfaceJiti(modulePath, tryNative);
-  if (sharedLoader) {
-    return sharedLoader;
-  }
-  const loader = getCachedPluginJitiLoader({
-    cache: jitiLoaders,
-    modulePath,
-    importerUrl: import.meta.url,
-    preferBuiltDist: true,
-    jitiFilename: import.meta.url,
-  });
-  return loader;
-}
-
-function loadPublicSurfaceModule(modulePath: string): unknown {
-  const tryNative = resolvePluginLoaderJitiTryNative(modulePath, { preferBuiltDist: true });
-  if (canUseSourceArtifactRequire({ modulePath, tryNative })) {
-    return sourceArtifactRequire(modulePath);
-  }
-  return getJiti(modulePath)(modulePath);
-}
-
-function getSharedBundledPublicSurfaceJiti(modulePath: string, tryNative: boolean) {
-  const bundledPluginsDir = resolveBundledPluginsDir();
-  if (
-    !isBundledPluginExtensionPath({
-      modulePath,
-      openClawPackageRoot: OPENCLAW_PACKAGE_ROOT,
-      ...(bundledPluginsDir ? { bundledPluginsDir } : {}),
-    })
-  ) {
-    return null;
-  }
-  const cacheKey = tryNative ? "bundled:native" : "bundled:source";
+  const tryNative =
+    shouldPreferNativeJiti(modulePath) || modulePath.includes(`${path.sep}dist${path.sep}`);
   const aliasMap = buildPluginLoaderAliasMap(modulePath, process.argv[1], import.meta.url);
-  return getCachedPluginJitiLoader({
-    cache: sharedBundledPublicSurfaceJitiLoaders,
-    modulePath,
-    importerUrl: import.meta.url,
-    jitiFilename: import.meta.url,
-    cacheScopeKey: cacheKey,
-    aliasMap,
+  const cacheKey = JSON.stringify({
+    tryNative,
+    aliasMap: Object.entries(aliasMap).toSorted(([left], [right]) => left.localeCompare(right)),
+  });
+  const cached = jitiLoaders.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  const loader = createJiti(import.meta.url, {
+    ...buildPluginLoaderJitiOptions(aliasMap),
     tryNative,
   });
+  jitiLoaders.set(cacheKey, loader);
+  return loader;
 }
 
 export function loadBundledPluginPublicArtifactModuleSync<T extends object>(params: {
@@ -176,7 +123,7 @@ export function loadBundledPluginPublicArtifactModuleSync<T extends object>(para
   const sentinel = {} as T;
   loadedPublicSurfaceModules.set(location.modulePath, sentinel);
   try {
-    const loaded = loadPublicSurfaceModule(location.modulePath) as T;
+    const loaded = getJiti(location.modulePath)(location.modulePath) as T;
     Object.assign(sentinel, loaded);
     return sentinel;
   } catch (error) {
@@ -185,16 +132,8 @@ export function loadBundledPluginPublicArtifactModuleSync<T extends object>(para
   }
 }
 
-export function resolveBundledPluginPublicArtifactPath(params: {
-  dirName: string;
-  artifactBasename: string;
-}): string | null {
-  return resolvePublicSurfaceLocation(params)?.modulePath ?? null;
-}
-
 export function resetBundledPluginPublicArtifactLoaderForTest(): void {
   loadedPublicSurfaceModules.clear();
   publicSurfaceLocations.clear();
   jitiLoaders.clear();
-  sharedBundledPublicSurfaceJitiLoaders.clear();
 }

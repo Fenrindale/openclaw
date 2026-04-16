@@ -4,8 +4,7 @@ import {
   resolveMergedAccountConfig,
   type OpenClawConfig,
 } from "openclaw/plugin-sdk/account-resolution";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
-import type { IMessageAccountConfig } from "./account-types.js";
+import type { IMessageAccountConfig } from "../runtime-api.js";
 
 export type ResolvedIMessageAccount = {
   accountId: string;
@@ -58,7 +57,7 @@ export function resolveIMessageAccount(params: {
   return {
     accountId,
     enabled: baseEnabled && accountEnabled,
-    name: normalizeOptionalString(merged.name),
+    name: merged.name?.trim() || undefined,
     config: merged,
     configured,
   };

@@ -1,8 +1,5 @@
 import MarkdownIt from "markdown-it";
-import {
-  isAutoLinkedFileRef,
-  normalizeLowercaseStringOrEmpty,
-} from "openclaw/plugin-sdk/text-runtime";
+import { isAutoLinkedFileRef } from "openclaw/plugin-sdk/text-runtime";
 import type { MatrixClient } from "./sdk.js";
 import { isMatrixQualifiedUserId } from "./target-ids.js";
 
@@ -150,7 +147,7 @@ function buildMentionCandidate(raw: string, start: number): MatrixMentionCandida
   if (!normalized) {
     return null;
   }
-  const kind = normalizeLowercaseStringOrEmpty(normalized.raw) === "@room" ? "room" : "user";
+  const kind = normalized.raw.toLowerCase() === "@room" ? "room" : "user";
   const base: MatrixMentionCandidate = {
     raw: normalized.raw,
     start,

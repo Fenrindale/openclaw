@@ -6,7 +6,6 @@
 
 import * as fs from "node:fs";
 import path from "node:path";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import { asRecord, readString } from "./config-record-shared.js";
 import { sanitizeFileName } from "./utils/platform.js";
 
@@ -90,5 +89,5 @@ export async function transcribeAudio(
   }
 
   const result = (await resp.json()) as { text?: string };
-  return normalizeOptionalString(result.text) ?? null;
+  return result.text?.trim() || null;
 }

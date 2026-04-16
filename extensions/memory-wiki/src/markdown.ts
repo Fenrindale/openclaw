@@ -1,10 +1,5 @@
-import { createHash } from "node:crypto";
 import path from "node:path";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-  normalizeSingleOrTrimmedStringList,
-} from "openclaw/plugin-sdk/text-runtime";
+import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import YAML from "yaml";
 
 export const WIKI_PAGE_KINDS = ["entity", "concept", "source", "synthesis", "report"] as const;
@@ -18,24 +13,6 @@ export type ParsedWikiMarkdown = {
   body: string;
 };
 
-export type WikiClaimEvidence = {
-  sourceId?: string;
-  path?: string;
-  lines?: string;
-  weight?: number;
-  note?: string;
-  updatedAt?: string;
-};
-
-export type WikiClaim = {
-  id?: string;
-  text: string;
-  status?: string;
-  confidence?: number;
-  evidence: WikiClaimEvidence[];
-  updatedAt?: string;
-};
-
 export type WikiPageSummary = {
   absolutePath: string;
   relativePath: string;
@@ -45,7 +22,6 @@ export type WikiPageSummary = {
   pageType?: string;
   sourceIds: string[];
   linkTargets: string[];
-  claims: WikiClaim[];
   contradictions: string[];
   questions: string[];
   confidence?: number;
@@ -66,54 +42,15 @@ const RELATED_BLOCK_PATTERN = new RegExp(
   `${WIKI_RELATED_START_MARKER}[\\s\\S]*?${WIKI_RELATED_END_MARKER}`,
   "g",
 );
-const MAX_WIKI_SEGMENT_BYTES = 240;
-const MAX_WIKI_FILENAME_COMPONENT_BYTES = 255;
-const WIKI_SEGMENT_HASH_BYTES = 12;
-
-function truncateUtf8CodePointSafe(value: string, maxBytes: number): string {
-  let result = "";
-  let bytes = 0;
-  for (const char of value) {
-    const nextBytes = Buffer.byteLength(char);
-    if (bytes + nextBytes > maxBytes) {
-      break;
-    }
-    result += char;
-    bytes += nextBytes;
-  }
-  return result;
-}
-
-function capWikiValueWithHash(raw: string, maxBytes: number, fallback: string): string {
-  if (Buffer.byteLength(raw) <= maxBytes) {
-    return raw;
-  }
-  const suffix = createHash("sha1").update(raw).digest("hex").slice(0, WIKI_SEGMENT_HASH_BYTES);
-  const truncated = truncateUtf8CodePointSafe(
-    raw,
-    maxBytes - Buffer.byteLength(`-${suffix}`),
-  ).replace(/-+$/g, "");
-  return `${truncated || fallback}-${suffix}`;
-}
 
 export function slugifyWikiSegment(raw: string): string {
-  const slug = normalizeLowercaseStringOrEmpty(raw)
-    .replace(/[^\p{L}\p{N}\p{M}]+/gu, "-")
+  const slug = raw
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-+|-+$/g, "");
-  if (!slug) {
-    return "page";
-  }
-  return capWikiValueWithHash(slug, MAX_WIKI_SEGMENT_BYTES, "page");
-}
-
-export function createWikiPageFilename(stem: string, extension = ".md"): string {
-  const normalizedExtension = extension.startsWith(".") ? extension : `.${extension}`;
-  const maxStemBytes = Math.max(
-    1,
-    MAX_WIKI_FILENAME_COMPONENT_BYTES - Buffer.byteLength(normalizedExtension),
-  );
-  return `${capWikiValueWithHash(stem, maxStemBytes, "page")}${normalizedExtension}`;
+  return slug || "page";
 }
 
 export function parseWikiMarkdown(content: string): ParsedWikiMarkdown {
@@ -141,76 +78,27 @@ export function renderWikiMarkdown(params: {
 
 export function extractTitleFromMarkdown(body: string): string | undefined {
   const match = body.match(/^#\s+(.+?)\s*$/m);
-  return normalizeOptionalString(match?.[1]);
+  return match?.[1]?.trim() || undefined;
 }
 
 export function normalizeSourceIds(value: unknown): string[] {
-  return normalizeSingleOrTrimmedStringList(value);
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => (typeof item === "string" && item.trim() ? [item.trim()] : []));
+  }
+  if (typeof value === "string" && value.trim()) {
+    return [value.trim()];
+  }
+  return [];
 }
 
-function normalizeWikiClaimEvidence(value: unknown): WikiClaimEvidence | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return null;
+function normalizeStringList(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => (typeof item === "string" && item.trim() ? [item.trim()] : []));
   }
-  const record = value as Record<string, unknown>;
-  const sourceId = normalizeOptionalString(record.sourceId);
-  const evidencePath = normalizeOptionalString(record.path);
-  const lines = normalizeOptionalString(record.lines);
-  const note = normalizeOptionalString(record.note);
-  const updatedAt = normalizeOptionalString(record.updatedAt);
-  const weight =
-    typeof record.weight === "number" && Number.isFinite(record.weight) ? record.weight : undefined;
-  if (!sourceId && !evidencePath && !lines && !note && weight === undefined && !updatedAt) {
-    return null;
+  if (typeof value === "string" && value.trim()) {
+    return [value.trim()];
   }
-  return {
-    ...(sourceId ? { sourceId } : {}),
-    ...(evidencePath ? { path: evidencePath } : {}),
-    ...(lines ? { lines } : {}),
-    ...(weight !== undefined ? { weight } : {}),
-    ...(note ? { note } : {}),
-    ...(updatedAt ? { updatedAt } : {}),
-  };
-}
-
-export function normalizeWikiClaims(value: unknown): WikiClaim[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value.flatMap((entry) => {
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
-      return [];
-    }
-    const record = entry as Record<string, unknown>;
-    const text = normalizeOptionalString(record.text);
-    if (!text) {
-      return [];
-    }
-    const evidence = Array.isArray(record.evidence)
-      ? record.evidence.flatMap((candidate) => {
-          const normalized = normalizeWikiClaimEvidence(candidate);
-          return normalized ? [normalized] : [];
-        })
-      : [];
-    const confidence =
-      typeof record.confidence === "number" && Number.isFinite(record.confidence)
-        ? record.confidence
-        : undefined;
-    return [
-      {
-        ...(normalizeOptionalString(record.id) ? { id: normalizeOptionalString(record.id) } : {}),
-        text,
-        ...(normalizeOptionalString(record.status)
-          ? { status: normalizeOptionalString(record.status) }
-          : {}),
-        ...(confidence !== undefined ? { confidence } : {}),
-        evidence,
-        ...(normalizeOptionalString(record.updatedAt)
-          ? { updatedAt: normalizeOptionalString(record.updatedAt) }
-          : {}),
-      },
-    ];
-  });
+  return [];
 }
 
 export function extractWikiLinks(markdown: string): string[] {
@@ -299,9 +187,8 @@ export function toWikiPageSummary(params: {
     pageType: normalizeOptionalString(parsed.frontmatter.pageType),
     sourceIds: normalizeSourceIds(parsed.frontmatter.sourceIds),
     linkTargets: extractWikiLinks(params.raw),
-    claims: normalizeWikiClaims(parsed.frontmatter.claims),
-    contradictions: normalizeSingleOrTrimmedStringList(parsed.frontmatter.contradictions),
-    questions: normalizeSingleOrTrimmedStringList(parsed.frontmatter.questions),
+    contradictions: normalizeStringList(parsed.frontmatter.contradictions),
+    questions: normalizeStringList(parsed.frontmatter.questions),
     confidence:
       typeof parsed.frontmatter.confidence === "number" &&
       Number.isFinite(parsed.frontmatter.confidence)

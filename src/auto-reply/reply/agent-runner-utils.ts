@@ -1,21 +1,8 @@
 import { resolveRunModelFallbacksOverride } from "../../agents/agent-scope.js";
 import { getChannelPlugin } from "../../channels/plugins/index.js";
-import type {
-  ChannelId,
-  ChannelThreadingToolContext,
-} from "../../channels/plugins/types.public.js";
+import type { ChannelId, ChannelThreadingToolContext } from "../../channels/plugins/types.js";
 import { normalizeAnyChannelId, normalizeChannelId } from "../../channels/registry.js";
-import { resolveCommandSecretRefsViaGateway } from "../../cli/command-secret-gateway.js";
-import {
-  getAgentRuntimeCommandSecretTargetIds,
-  getScopedChannelsCommandSecretTargets,
-} from "../../cli/command-secret-targets.js";
-import { resolveMessageSecretScope } from "../../cli/message-secret-scope.js";
-import { getRuntimeConfigSnapshot, type OpenClawConfig } from "../../config/config.js";
-import {
-  normalizeOptionalLowercaseString,
-  normalizeOptionalString,
-} from "../../shared/string-coerce.js";
+import type { OpenClawConfig } from "../../config/config.js";
 import { isReasoningTagProvider } from "../../utils/provider-utils.js";
 import type { TemplateContext } from "../templating.js";
 import {
@@ -27,57 +14,6 @@ import { resolveOriginMessageProvider, resolveOriginMessageTo } from "./origin-r
 import type { FollowupRun } from "./queue.js";
 
 const BUN_FETCH_SOCKET_ERROR_RE = /socket connection was closed unexpectedly/i;
-
-export function resolveQueuedReplyRuntimeConfig(config: OpenClawConfig): OpenClawConfig {
-  return (
-    (typeof getRuntimeConfigSnapshot === "function" ? getRuntimeConfigSnapshot() : null) ?? config
-  );
-}
-
-export async function resolveQueuedReplyExecutionConfig(
-  config: OpenClawConfig,
-  params?: {
-    originatingChannel?: string;
-    messageProvider?: string;
-    originatingAccountId?: string;
-    agentAccountId?: string;
-  },
-): Promise<OpenClawConfig> {
-  const runtimeConfig = resolveQueuedReplyRuntimeConfig(config);
-  const { resolvedConfig } = await resolveCommandSecretRefsViaGateway({
-    config: runtimeConfig,
-    commandName: "reply",
-    targetIds: getAgentRuntimeCommandSecretTargetIds(),
-  });
-  const baseResolvedConfig = resolvedConfig ?? runtimeConfig;
-
-  const scope = resolveMessageSecretScope({
-    channel: params?.originatingChannel,
-    fallbackChannel: params?.messageProvider,
-    accountId: params?.originatingAccountId,
-    fallbackAccountId: params?.agentAccountId,
-  });
-  if (!scope.channel) {
-    return baseResolvedConfig;
-  }
-
-  const scopedTargets = getScopedChannelsCommandSecretTargets({
-    config: baseResolvedConfig,
-    channel: scope.channel,
-    accountId: scope.accountId,
-  });
-  if (scopedTargets.targetIds.size === 0) {
-    return baseResolvedConfig;
-  }
-
-  const scopedResolved = await resolveCommandSecretRefsViaGateway({
-    config: baseResolvedConfig,
-    commandName: "reply",
-    targetIds: scopedTargets.targetIds,
-    ...(scopedTargets.allowedPaths ? { allowedPaths: scopedTargets.allowedPaths } : {}),
-  });
-  return scopedResolved.resolvedConfig ?? baseResolvedConfig;
-}
 
 /**
  * Build provider-specific threading context for tool auto-injection.
@@ -102,7 +38,7 @@ export function buildThreadingToolContext(params: {
       currentMessageId,
     };
   }
-  const rawProvider = normalizeOptionalLowercaseString(originProvider);
+  const rawProvider = originProvider?.trim().toLowerCase();
   if (!rawProvider) {
     return {
       currentMessageId,
@@ -113,7 +49,7 @@ export function buildThreadingToolContext(params: {
   const threading = provider ? getChannelPlugin(provider)?.threading : undefined;
   if (!threading?.buildToolContext) {
     return {
-      currentChannelId: normalizeOptionalString(originTo),
+      currentChannelId: originTo?.trim() || undefined,
       currentChannelProvider: provider ?? (rawProvider as ChannelId),
       currentMessageId,
       hasRepliedRef,
@@ -144,7 +80,7 @@ export function buildThreadingToolContext(params: {
 }
 
 export const isBunFetchSocketError = (message?: string) =>
-  message ? BUN_FETCH_SOCKET_ERROR_RE.test(message) : false;
+  Boolean(message && BUN_FETCH_SOCKET_ERROR_RE.test(message));
 
 export const formatBunFetchSocketError = (message: string) => {
   const trimmed = message.trim();
@@ -161,23 +97,24 @@ export const resolveEnforceFinalTag = (
   provider: string,
   model = run.model,
 ) =>
-  (run.skipProviderRuntimeHints ? false : undefined) ??
-  (run.enforceFinalTag ||
-    isReasoningTagProvider(provider, {
-      config: run.config,
-      workspaceDir: run.workspaceDir,
-      modelId: model,
-    }));
+  Boolean(
+    (run.skipProviderRuntimeHints ? false : undefined) ??
+    (run.enforceFinalTag ||
+      isReasoningTagProvider(provider, {
+        config: run.config,
+        workspaceDir: run.workspaceDir,
+        modelId: model,
+      })),
+  );
 
 export function resolveModelFallbackOptions(run: FollowupRun["run"]) {
-  const config = run.config;
   return {
-    cfg: config,
+    cfg: run.config,
     provider: run.provider,
     model: run.model,
     agentDir: run.agentDir,
     fallbacksOverride: resolveRunModelFallbacksOverride({
-      cfg: config,
+      cfg: run.config,
       agentId: run.agentId,
       sessionKey: run.sessionKey,
     }),
@@ -192,12 +129,11 @@ export function buildEmbeddedRunBaseParams(params: {
   authProfile: ReturnType<typeof resolveProviderScopedAuthProfile>;
   allowTransientCooldownProbe?: boolean;
 }) {
-  const config = params.run.config;
   return {
     sessionFile: params.run.sessionFile,
     workspaceDir: params.run.workspaceDir,
     agentDir: params.run.agentDir,
-    config,
+    config: params.run.config,
     skillsSnapshot: params.run.skillsSnapshot,
     ownerNumbers: params.run.ownerNumbers,
     inputProvenance: params.run.inputProvenance,
@@ -223,7 +159,6 @@ export function buildEmbeddedContextFromTemplate(params: {
   sessionCtx: TemplateContext;
   hasRepliedRef: { value: boolean } | undefined;
 }) {
-  const config = params.run.config;
   return {
     sessionId: params.run.sessionId,
     sessionKey: params.run.sessionKey,
@@ -241,7 +176,7 @@ export function buildEmbeddedContextFromTemplate(params: {
     // Provider threading context for tool auto-injection
     ...buildThreadingToolContext({
       sessionCtx: params.sessionCtx,
-      config,
+      config: params.run.config,
       hasRepliedRef: params.hasRepliedRef,
     }),
   };
@@ -249,10 +184,10 @@ export function buildEmbeddedContextFromTemplate(params: {
 
 export function buildTemplateSenderContext(sessionCtx: TemplateContext) {
   return {
-    senderId: normalizeOptionalString(sessionCtx.SenderId),
-    senderName: normalizeOptionalString(sessionCtx.SenderName),
-    senderUsername: normalizeOptionalString(sessionCtx.SenderUsername),
-    senderE164: normalizeOptionalString(sessionCtx.SenderE164),
+    senderId: sessionCtx.SenderId?.trim() || undefined,
+    senderName: sessionCtx.SenderName?.trim() || undefined,
+    senderUsername: sessionCtx.SenderUsername?.trim() || undefined,
+    senderE164: sessionCtx.SenderE164?.trim() || undefined,
   };
 }
 

@@ -1,4 +1,3 @@
-import { resolveSessionAgentId } from "../../agents/agent-scope.js";
 import { resolveFastModeState } from "../../agents/fast-mode.js";
 import {
   setChannelConversationBindingIdleTimeoutBySessionKey,
@@ -7,17 +6,12 @@ import {
 import { getChannelPlugin, normalizeChannelId } from "../../channels/plugins/index.js";
 import { formatThreadBindingDurationLabel } from "../../channels/thread-bindings-messages.js";
 import { parseDurationMs } from "../../cli/parse-duration.js";
-import { isRestartEnabled } from "../../config/commands.flags.js";
+import { isRestartEnabled } from "../../config/commands.js";
 import { logVerbose } from "../../globals.js";
 import { getSessionBindingService } from "../../infra/outbound/session-binding-service.js";
 import type { SessionBindingRecord } from "../../infra/outbound/session-binding-service.js";
 import { scheduleGatewaySigusr1Restart, triggerOpenClawRestart } from "../../infra/restart.js";
 import { loadCostUsageSummary, loadSessionCostSummary } from "../../infra/session-cost-usage.js";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalLowercaseString,
-  normalizeOptionalString,
-} from "../../shared/string-coerce.js";
 import { formatTokenCount, formatUsd } from "../../utils/usage-format.js";
 import { parseActivationCommand } from "../group-activation.js";
 import { parseSendPolicyCommand } from "../send-policy.js";
@@ -39,7 +33,7 @@ function resolveSessionCommandUsage() {
 }
 
 function parseSessionDurationMs(raw: string): number {
-  const normalized = normalizeOptionalLowercaseString(raw);
+  const normalized = raw.trim().toLowerCase();
   if (!normalized) {
     throw new Error("missing duration");
   }
@@ -82,7 +76,7 @@ function resolveSessionBindingLastActivityAt(binding: SessionBindingRecord): num
 
 function resolveSessionBindingBoundBy(binding: SessionBindingRecord): string {
   const raw = binding.metadata?.boundBy;
-  return normalizeOptionalString(raw) ?? "";
+  return typeof raw === "string" ? raw.trim() : "";
 }
 
 type UpdatedLifecycleBinding = {
@@ -264,17 +258,13 @@ export const handleUsageCommand: CommandHandler = async (params, allowTextComman
 
   const rawArgs = normalized === "/usage" ? "" : normalized.slice("/usage".length).trim();
   const requested = rawArgs ? normalizeUsageDisplay(rawArgs) : undefined;
-  if (normalizeLowercaseStringOrEmpty(rawArgs).startsWith("cost")) {
-    const targetSessionEntry = params.sessionStore?.[params.sessionKey] ?? params.sessionEntry;
-    const sessionAgentId = params.sessionKey
-      ? resolveSessionAgentId({ sessionKey: params.sessionKey, config: params.cfg })
-      : params.agentId;
+  if (rawArgs.toLowerCase().startsWith("cost")) {
     const sessionSummary = await loadSessionCostSummary({
-      sessionId: targetSessionEntry?.sessionId,
-      sessionEntry: targetSessionEntry,
-      sessionFile: targetSessionEntry?.sessionFile,
+      sessionId: params.sessionEntry?.sessionId,
+      sessionEntry: params.sessionEntry,
+      sessionFile: params.sessionEntry?.sessionFile,
       config: params.cfg,
-      agentId: sessionAgentId,
+      agentId: params.agentId,
     });
     const summary = await loadCostUsageSummary({ days: 30, config: params.cfg });
 
@@ -314,19 +304,19 @@ export const handleUsageCommand: CommandHandler = async (params, allowTextComman
     };
   }
 
-  const targetSessionEntry = params.sessionStore?.[params.sessionKey] ?? params.sessionEntry;
-  const currentRaw = targetSessionEntry?.responseUsage;
+  const currentRaw =
+    params.sessionEntry?.responseUsage ??
+    (params.sessionKey ? params.sessionStore?.[params.sessionKey]?.responseUsage : undefined);
   const current = resolveResponseUsageMode(currentRaw);
   const next = requested ?? (current === "off" ? "tokens" : current === "tokens" ? "full" : "off");
 
-  if (targetSessionEntry && params.sessionStore && params.sessionKey) {
+  if (params.sessionEntry && params.sessionStore && params.sessionKey) {
     if (next === "off") {
-      delete targetSessionEntry.responseUsage;
+      delete params.sessionEntry.responseUsage;
     } else {
-      targetSessionEntry.responseUsage = next;
+      params.sessionEntry.responseUsage = next;
     }
-    params.sessionStore[params.sessionKey] = targetSessionEntry;
-    await persistSessionEntry({ ...params, sessionEntry: targetSessionEntry });
+    await persistSessionEntry(params);
   }
 
   return {
@@ -353,18 +343,14 @@ export const handleFastCommand: CommandHandler = async (params, allowTextCommand
   }
 
   const rawArgs = normalized === "/fast" ? "" : normalized.slice("/fast".length).trim();
-  const rawMode = normalizeLowercaseStringOrEmpty(rawArgs);
+  const rawMode = rawArgs.toLowerCase();
   if (!rawMode || rawMode === "status") {
-    const targetSessionEntry = params.sessionStore?.[params.sessionKey] ?? params.sessionEntry;
-    const sessionAgentId = params.sessionKey
-      ? resolveSessionAgentId({ sessionKey: params.sessionKey, config: params.cfg })
-      : params.agentId;
     const state = resolveFastModeState({
       cfg: params.cfg,
       provider: params.provider,
       model: params.model,
-      agentId: sessionAgentId,
-      sessionEntry: targetSessionEntry,
+      agentId: params.agentId,
+      sessionEntry: params.sessionEntry,
     });
     const suffix =
       state.source === "agent"
@@ -416,7 +402,7 @@ export const handleSessionCommand: CommandHandler = async (params, allowTextComm
 
   const rest = normalized.slice(SESSION_COMMAND_PREFIX.length).trim();
   const tokens = rest.split(/\s+/).filter(Boolean);
-  const action = normalizeOptionalLowercaseString(tokens[0]);
+  const action = tokens[0]?.toLowerCase();
   if (action !== SESSION_ACTION_IDLE && action !== SESSION_ACTION_MAX_AGE) {
     return {
       shouldContinue: false,
@@ -540,7 +526,7 @@ export const handleSessionCommand: CommandHandler = async (params, allowTextComm
     };
   }
 
-  const senderId = normalizeOptionalString(params.command.senderId) ?? "";
+  const senderId = params.command.senderId?.trim() || "";
   const boundBy = resolveSessionBindingBoundBy(activeBinding);
   if (boundBy && boundBy !== "system" && senderId && senderId !== boundBy) {
     return {

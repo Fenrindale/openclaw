@@ -90,11 +90,6 @@ type SetupWizardAdapterParams = Parameters<typeof buildChannelSetupWizardAdapter
 type SetupWizardPlugin = SetupWizardAdapterParams["plugin"];
 type SetupWizard = NonNullable<SetupWizardAdapterParams["wizard"]>;
 type SetupWizardCredentialValues = Record<string, string>;
-type SetupWizardTestPlugin = {
-  id: string;
-  setupWizard?: ChannelPlugin["setupWizard"];
-  config: Record<string, unknown>;
-} & Record<string, unknown>;
 
 function isDeclarativeSetupWizard(
   setupWizard: ChannelPlugin["setupWizard"],
@@ -107,7 +102,9 @@ function isDeclarativeSetupWizard(
   );
 }
 
-function requireDeclarativeSetupWizard(plugin: SetupWizardTestPlugin): SetupWizard {
+function requireDeclarativeSetupWizard(
+  plugin: SetupWizardPlugin & Pick<ChannelPlugin, "setupWizard">,
+): SetupWizard {
   const { setupWizard } = plugin;
   if (!setupWizard) {
     throw new Error(`${plugin.id} is missing setupWizard`);
@@ -151,25 +148,25 @@ export function createSetupWizardAdapter(params: SetupWizardAdapterParams) {
   return buildChannelSetupWizardAdapterFromSetupWizard(params);
 }
 
-export function createPluginSetupWizardAdapter<TPlugin extends SetupWizardTestPlugin>(
-  plugin: TPlugin,
-) {
+export function createPluginSetupWizardAdapter<
+  TPlugin extends SetupWizardPlugin & Pick<ChannelPlugin, "setupWizard">,
+>(plugin: TPlugin) {
   const wizard = requireDeclarativeSetupWizard(plugin);
   return createSetupWizardAdapter({
-    plugin: plugin as unknown as SetupWizardPlugin,
+    plugin,
     wizard,
   });
 }
 
-export function createPluginSetupWizardConfigure<TPlugin extends SetupWizardTestPlugin>(
-  plugin: TPlugin,
-) {
+export function createPluginSetupWizardConfigure<
+  TPlugin extends SetupWizardPlugin & Pick<ChannelPlugin, "setupWizard">,
+>(plugin: TPlugin) {
   return createPluginSetupWizardAdapter(plugin).configure;
 }
 
-export function createPluginSetupWizardStatus<TPlugin extends SetupWizardTestPlugin>(
-  plugin: TPlugin,
-) {
+export function createPluginSetupWizardStatus<
+  TPlugin extends SetupWizardPlugin & Pick<ChannelPlugin, "setupWizard">,
+>(plugin: TPlugin) {
   return createPluginSetupWizardAdapter(plugin).getStatus;
 }
 

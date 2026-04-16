@@ -35,25 +35,11 @@ function renderEnvLines(env: Record<string, string | undefined> | undefined): st
   });
 }
 
-function renderEnvironmentFileLines(environmentFiles: string[] | undefined): string[] {
-  if (!environmentFiles) {
-    return [];
-  }
-  return environmentFiles
-    .map((entry) => entry.trim())
-    .filter(Boolean)
-    .map((entry) => {
-      assertNoSystemdLineBreaks(entry, "Systemd EnvironmentFile values");
-      return `EnvironmentFile=-${systemdEscapeArg(entry)}`;
-    });
-}
-
 export function buildSystemdUnit({
   description,
   programArguments,
   workingDirectory,
   environment,
-  environmentFiles,
 }: GatewayServiceRenderArgs): string {
   const execStart = programArguments.map(systemdEscapeArg).join(" ");
   const descriptionValue = description?.trim() || "OpenClaw Gateway";
@@ -63,20 +49,16 @@ export function buildSystemdUnit({
     ? `WorkingDirectory=${systemdEscapeArg(workingDirectory)}`
     : null;
   const envLines = renderEnvLines(environment);
-  const environmentFileLines = renderEnvironmentFileLines(environmentFiles);
   return [
     "[Unit]",
     descriptionLine,
     "After=network-online.target",
     "Wants=network-online.target",
-    "StartLimitBurst=5",
-    "StartLimitIntervalSec=60",
     "",
     "[Service]",
     `ExecStart=${execStart}`,
     "Restart=always",
     "RestartSec=5",
-    "RestartPreventExitStatus=78",
     "TimeoutStopSec=30",
     "TimeoutStartSec=30",
     "SuccessExitStatus=0 143",
@@ -84,7 +66,6 @@ export function buildSystemdUnit({
     // orphan ACP/runtime workers behind.
     "KillMode=control-group",
     workingDirLine,
-    ...environmentFileLines,
     ...envLines,
     "",
     "[Install]",

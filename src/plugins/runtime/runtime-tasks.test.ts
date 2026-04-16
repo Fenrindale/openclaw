@@ -1,21 +1,46 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { resetTaskFlowRegistryForTests } from "../../tasks/task-flow-registry.js";
 import {
-  getRuntimeTaskMocks,
-  installRuntimeTaskDeliveryMock,
-  resetRuntimeTaskTestState,
-} from "./runtime-task-test-harness.js";
+  resetTaskRegistryDeliveryRuntimeForTests,
+  resetTaskRegistryForTests,
+  setTaskRegistryDeliveryRuntimeForTests,
+} from "../../tasks/task-registry.js";
 import { createRuntimeTaskFlow } from "./runtime-taskflow.js";
 import { createRuntimeTaskFlows, createRuntimeTaskRuns } from "./runtime-tasks.js";
 
-const runtimeTaskMocks = getRuntimeTaskMocks();
+const hoisted = vi.hoisted(() => {
+  const sendMessageMock = vi.fn();
+  const cancelSessionMock = vi.fn();
+  const killSubagentRunAdminMock = vi.fn();
+  return {
+    sendMessageMock,
+    cancelSessionMock,
+    killSubagentRunAdminMock,
+  };
+});
+
+vi.mock("../../acp/control-plane/manager.js", () => ({
+  getAcpSessionManager: () => ({
+    cancelSession: hoisted.cancelSessionMock,
+  }),
+}));
+
+vi.mock("../../agents/subagent-control.js", () => ({
+  killSubagentRunAdmin: (params: unknown) => hoisted.killSubagentRunAdminMock(params),
+}));
 
 afterEach(() => {
-  resetRuntimeTaskTestState();
+  resetTaskRegistryDeliveryRuntimeForTests();
+  resetTaskRegistryForTests();
+  resetTaskFlowRegistryForTests({ persist: false });
+  vi.clearAllMocks();
 });
 
 describe("runtime tasks", () => {
   beforeEach(() => {
-    installRuntimeTaskDeliveryMock();
+    setTaskRegistryDeliveryRuntimeForTests({
+      sendMessage: hoisted.sendMessageMock,
+    });
   });
 
   it("exposes canonical task and TaskFlow DTOs without leaking raw registry fields", () => {
@@ -160,7 +185,7 @@ describe("runtime tasks", () => {
       cfg: {} as never,
     });
 
-    expect(runtimeTaskMocks.cancelSessionMock).toHaveBeenCalledWith({
+    expect(hoisted.cancelSessionMock).toHaveBeenCalledWith({
       cfg: {},
       sessionKey: "agent:main:subagent:child",
       reason: "task-cancel",
@@ -207,7 +232,7 @@ describe("runtime tasks", () => {
       cfg: {} as never,
     });
 
-    expect(runtimeTaskMocks.cancelSessionMock).not.toHaveBeenCalled();
+    expect(hoisted.cancelSessionMock).not.toHaveBeenCalled();
     expect(result).toEqual({
       found: false,
       cancelled: false,

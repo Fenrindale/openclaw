@@ -15,12 +15,11 @@ import type {
   ChannelAccountSnapshot,
   ChannelId,
   ChannelPlugin,
-} from "../../channels/plugins/types.public.js";
+} from "../../channels/plugins/types.js";
 import { inspectReadOnlyChannelAccount } from "../../channels/read-only-account-inspect.js";
-import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import type { OpenClawConfig } from "../../config/config.js";
 import { sha256HexPrefix } from "../../logging/redact-identifier.js";
-import { asRecord } from "../../shared/record-coerce.js";
-import { normalizeOptionalString } from "../../shared/string-coerce.js";
+import { isRecord } from "../../utils.js";
 import { formatTimeAgo } from "./format.js";
 
 export type ChannelRow = {
@@ -46,6 +45,8 @@ type ResolvedChannelAccountRowParams = {
   accountId: string;
 };
 
+const asRecord = (value: unknown): Record<string, unknown> => (isRecord(value) ? value : {});
+
 function summarizeSources(sources: Array<string | undefined>): {
   label: string;
   parts: string[];
@@ -63,7 +64,7 @@ function summarizeSources(sources: Array<string | undefined>): {
 }
 
 function existsSyncMaybe(p: string | undefined): boolean | null {
-  const path = normalizeOptionalString(p) ?? "";
+  const path = p?.trim() || "";
   if (!path) {
     return null;
   }
@@ -356,14 +357,14 @@ function summarizeTokenConfig(params: {
     const unavailable = enabled.filter((a) => hasConfiguredUnavailableCredentialStatus(a.account));
     const ready = enabled.filter((a) => {
       const rec = asRecord(a.account);
-      const bot = normalizeOptionalString(rec.botToken) ?? "";
-      const app = normalizeOptionalString(rec.appToken) ?? "";
+      const bot = typeof rec.botToken === "string" ? rec.botToken.trim() : "";
+      const app = typeof rec.appToken === "string" ? rec.appToken.trim() : "";
       return Boolean(bot) && Boolean(app);
     });
     const partial = enabled.filter((a) => {
       const rec = asRecord(a.account);
-      const bot = normalizeOptionalString(rec.botToken) ?? "";
-      const app = normalizeOptionalString(rec.appToken) ?? "";
+      const bot = typeof rec.botToken === "string" ? rec.botToken.trim() : "";
+      const app = typeof rec.appToken === "string" ? rec.appToken.trim() : "";
       const hasBot = Boolean(bot);
       const hasApp = Boolean(app);
       return (hasBot && !hasApp) || (!hasBot && hasApp);
@@ -411,7 +412,7 @@ function summarizeTokenConfig(params: {
     const unavailable = enabled.filter((a) => hasConfiguredUnavailableCredentialStatus(a.account));
     const ready = enabled.filter((a) => {
       const rec = asRecord(a.account);
-      const bot = normalizeOptionalString(rec.botToken) ?? "";
+      const bot = typeof rec.botToken === "string" ? rec.botToken.trim() : "";
       return Boolean(bot);
     });
 
@@ -442,7 +443,7 @@ function summarizeTokenConfig(params: {
   const unavailable = enabled.filter((a) => hasConfiguredUnavailableCredentialStatus(a.account));
   const ready = enabled.filter((a) => {
     const rec = asRecord(a.account);
-    return Boolean(normalizeOptionalString(rec.token));
+    return typeof rec.token === "string" ? Boolean(rec.token.trim()) : false;
   });
   if (unavailable.length > 0) {
     return {

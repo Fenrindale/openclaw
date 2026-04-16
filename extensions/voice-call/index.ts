@@ -1,6 +1,5 @@
 import { Type } from "@sinclair/typebox";
 import { formatErrorMessage } from "openclaw/plugin-sdk/error-runtime";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import {
   definePluginEntry,
   type GatewayRequestHandlerOptions,
@@ -197,8 +196,8 @@ export default definePluginEntry({
     };
 
     const resolveCallMessageRequest = async (params: GatewayRequestHandlerOptions["params"]) => {
-      const callId = normalizeOptionalString(params?.callId) ?? "";
-      const message = normalizeOptionalString(params?.message) ?? "";
+      const callId = typeof params?.callId === "string" ? params.callId.trim() : "";
+      const message = typeof params?.message === "string" ? params.message.trim() : "";
       if (!callId || !message) {
         return { error: "callId and message required" } as const;
       }
@@ -258,13 +257,16 @@ export default definePluginEntry({
       "voicecall.initiate",
       async ({ params, respond }: GatewayRequestHandlerOptions) => {
         try {
-          const message = normalizeOptionalString(params?.message) ?? "";
+          const message = typeof params?.message === "string" ? params.message.trim() : "";
           if (!message) {
             respond(false, { error: "message required" });
             return;
           }
           const rt = await ensureRuntime();
-          const to = normalizeOptionalString(params?.to) ?? rt.config.toNumber;
+          const to =
+            typeof params?.to === "string" && params.to.trim()
+              ? params.to.trim()
+              : rt.config.toNumber;
           if (!to) {
             respond(false, { error: "to required" });
             return;
@@ -321,7 +323,7 @@ export default definePluginEntry({
       "voicecall.end",
       async ({ params, respond }: GatewayRequestHandlerOptions) => {
         try {
-          const callId = normalizeOptionalString(params?.callId) ?? "";
+          const callId = typeof params?.callId === "string" ? params.callId.trim() : "";
           if (!callId) {
             respond(false, { error: "callId required" });
             return;
@@ -344,7 +346,11 @@ export default definePluginEntry({
       async ({ params, respond }: GatewayRequestHandlerOptions) => {
         try {
           const raw =
-            normalizeOptionalString(params?.callId) ?? normalizeOptionalString(params?.sid) ?? "";
+            typeof params?.callId === "string"
+              ? params.callId.trim()
+              : typeof params?.sid === "string"
+                ? params.sid.trim()
+                : "";
           if (!raw) {
             respond(false, { error: "callId required" });
             return;
@@ -366,8 +372,8 @@ export default definePluginEntry({
       "voicecall.start",
       async ({ params, respond }: GatewayRequestHandlerOptions) => {
         try {
-          const to = normalizeOptionalString(params?.to) ?? "";
-          const message = normalizeOptionalString(params?.message) ?? "";
+          const to = typeof params?.to === "string" ? params.to.trim() : "";
+          const message = typeof params?.message === "string" ? params.message.trim() : "";
           if (!to) {
             respond(false, { error: "to required" });
             return;
@@ -402,11 +408,14 @@ export default definePluginEntry({
           if (typeof params?.action === "string") {
             switch (params.action) {
               case "initiate_call": {
-                const message = normalizeOptionalString(params.message) ?? "";
+                const message = String(params.message || "").trim();
                 if (!message) {
                   throw new Error("message required");
                 }
-                const to = normalizeOptionalString(params.to) ?? rt.config.toNumber;
+                const to =
+                  typeof params.to === "string" && params.to.trim()
+                    ? params.to.trim()
+                    : rt.config.toNumber;
                 if (!to) {
                   throw new Error("to required");
                 }
@@ -423,8 +432,8 @@ export default definePluginEntry({
                 return json({ callId: result.callId, initiated: true });
               }
               case "continue_call": {
-                const callId = normalizeOptionalString(params.callId) ?? "";
-                const message = normalizeOptionalString(params.message) ?? "";
+                const callId = String(params.callId || "").trim();
+                const message = String(params.message || "").trim();
                 if (!callId || !message) {
                   throw new Error("callId and message required");
                 }
@@ -435,8 +444,8 @@ export default definePluginEntry({
                 return json({ success: true, transcript: result.transcript });
               }
               case "speak_to_user": {
-                const callId = normalizeOptionalString(params.callId) ?? "";
-                const message = normalizeOptionalString(params.message) ?? "";
+                const callId = String(params.callId || "").trim();
+                const message = String(params.message || "").trim();
                 if (!callId || !message) {
                   throw new Error("callId and message required");
                 }
@@ -447,7 +456,7 @@ export default definePluginEntry({
                 return json({ success: true });
               }
               case "end_call": {
-                const callId = normalizeOptionalString(params.callId) ?? "";
+                const callId = String(params.callId || "").trim();
                 if (!callId) {
                   throw new Error("callId required");
                 }
@@ -458,7 +467,7 @@ export default definePluginEntry({
                 return json({ success: true });
               }
               case "get_status": {
-                const callId = normalizeOptionalString(params.callId) ?? "";
+                const callId = String(params.callId || "").trim();
                 if (!callId) {
                   throw new Error("callId required");
                 }
@@ -471,7 +480,7 @@ export default definePluginEntry({
 
           const mode = params?.mode ?? "call";
           if (mode === "status") {
-            const sid = normalizeOptionalString(params.sid) ?? "";
+            const sid = typeof params.sid === "string" ? params.sid.trim() : "";
             if (!sid) {
               throw new Error("sid required for status");
             }
@@ -479,12 +488,18 @@ export default definePluginEntry({
             return json(call ? { found: true, call } : { found: false });
           }
 
-          const to = normalizeOptionalString(params.to) ?? rt.config.toNumber;
+          const to =
+            typeof params.to === "string" && params.to.trim()
+              ? params.to.trim()
+              : rt.config.toNumber;
           if (!to) {
             throw new Error("to required for call");
           }
           const result = await rt.manager.initiateCall(to, undefined, {
-            message: normalizeOptionalString(params.message),
+            message:
+              typeof params.message === "string" && params.message.trim()
+                ? params.message.trim()
+                : undefined,
           });
           if (!result.success) {
             throw new Error(result.error || "initiate failed");

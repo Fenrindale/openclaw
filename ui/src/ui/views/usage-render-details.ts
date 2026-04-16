@@ -1,7 +1,6 @@
 import { html, svg, nothing } from "lit";
 import { formatDurationCompact } from "../../../../src/infra/format-time/format-duration.ts";
 import { t } from "../../i18n/index.ts";
-import { normalizeLowercaseStringOrEmpty } from "../string-coerce.ts";
 import { parseToolSummary } from "../usage-helpers.ts";
 import { charsToTokens, formatCost, formatTokens } from "./usage-metrics.ts";
 import { renderInsightList } from "./usage-render-overview.ts";
@@ -125,10 +124,8 @@ function renderSessionSummary(
         <div class="session-summary-title">${t("usage.overview.messages")}</div>
         <div class="stat-value session-summary-value">${usage.messageCounts?.total ?? 0}</div>
         <div class="session-summary-meta">
-          ${usage.messageCounts?.user ?? 0}
-          ${normalizeLowercaseStringOrEmpty(t("usage.overview.user"))} ·
-          ${usage.messageCounts?.assistant ?? 0}
-          ${normalizeLowercaseStringOrEmpty(t("usage.overview.assistant"))}
+          ${usage.messageCounts?.user ?? 0} ${t("usage.overview.user").toLowerCase()} ·
+          ${usage.messageCounts?.assistant ?? 0} ${t("usage.overview.assistant").toLowerCase()}
         </div>
       </div>
       <div class="stat session-summary-card">
@@ -283,10 +280,9 @@ function renderSessionDetailPanel(
           ${usage
             ? html`
                 <span
-                  ><strong>${formatTokens(headerStats.totalTokens)}</strong>
-                  ${normalizeLowercaseStringOrEmpty(
-                    t("usage.metrics.tokens"),
-                  )}${cursorIndicator}</span
+                  ><strong>${formatTokens(headerStats.totalTokens)}</strong> ${t(
+                    "usage.metrics.tokens",
+                  ).toLowerCase()}${cursorIndicator}</span
                 >
                 <span><strong>${formatCost(headerStats.totalCost)}</strong>${cursorIndicator}</span>
               `
@@ -586,7 +582,7 @@ function renderTimeSeriesCompact(
                 hour: "2-digit",
                 minute: "2-digit",
               }),
-              `${formatTokens(val)} ${normalizeLowercaseStringOrEmpty(t("usage.metrics.tokens"))}`,
+              `${formatTokens(val)} ${t("usage.metrics.tokens").toLowerCase()}`,
             ];
             if (breakdownByType) {
               tooltipLines.push(`Out ${formatTokens(p.output)}`);
@@ -1038,7 +1034,7 @@ function renderSessionLogsCompact(
     `;
   }
 
-  const normalizedQuery = normalizeLowercaseStringOrEmpty(filters.query);
+  const normalizedQuery = filters.query.trim().toLowerCase();
   const entries = logs.map((log) => {
     const toolInfo = parseToolSummary(log.content);
     const cleanContent = toolInfo.cleanContent || log.content;
@@ -1073,7 +1069,7 @@ function renderSessionLogsCompact(
       }
     }
     if (normalizedQuery) {
-      const haystack = normalizeLowercaseStringOrEmpty(entry.cleanContent);
+      const haystack = entry.cleanContent.toLowerCase();
       if (!haystack.includes(normalizedQuery)) {
         return false;
       }
@@ -1097,7 +1093,7 @@ function renderSessionLogsCompact(
         <span>
           ${t("usage.details.conversation")}
           <span class="session-logs-header-count">
-            (${displayedCount} ${normalizeLowercaseStringOrEmpty(t("usage.overview.messages"))})
+            (${displayedCount} ${t("usage.overview.messages").toLowerCase()})
           </span>
         </span>
         <button class="btn btn--sm" @click=${onToggleExpandedAll}>

@@ -10,7 +10,6 @@ import {
   type SimpleStreamOptions,
   type ThinkingLevel,
 } from "@mariozechner/pi-ai";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 import {
   applyAnthropicPayloadPolicyToParams,
   resolveAnthropicPayloadPolicy,
@@ -19,7 +18,6 @@ import { buildCopilotDynamicHeaders, hasCopilotVisionInput } from "./copilot-dyn
 import { buildGuardedModelFetch } from "./provider-transport-fetch.js";
 import { transformTransportMessages } from "./transport-message-transform.js";
 import {
-  coerceTransportToolCallArguments,
   createEmptyTransportUsage,
   createWritableTransportEventStream,
   failTransportStream,
@@ -49,7 +47,7 @@ const CLAUDE_CODE_TOOLS = [
   "WebSearch",
 ] as const;
 const CLAUDE_CODE_TOOL_LOOKUP = new Map(
-  CLAUDE_CODE_TOOLS.map((tool) => [normalizeLowercaseStringOrEmpty(tool), tool]),
+  CLAUDE_CODE_TOOLS.map((tool) => [tool.toLowerCase(), tool]),
 );
 
 type AnthropicTransportModel = Model<"anthropic-messages"> & {
@@ -128,26 +126,6 @@ function clampReasoningLevel(level: ThinkingLevel): "minimal" | "low" | "medium"
   return level === "xhigh" ? "high" : level;
 }
 
-function resolvePositiveAnthropicMaxTokens(value: unknown): number | undefined {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    return undefined;
-  }
-  const floored = Math.floor(value);
-  return floored > 0 ? floored : undefined;
-}
-
-function resolveAnthropicMessagesMaxTokens(params: {
-  modelMaxTokens: number | undefined;
-  requestedMaxTokens: number | undefined;
-}): number | undefined {
-  const requested = resolvePositiveAnthropicMaxTokens(params.requestedMaxTokens);
-  if (requested !== undefined) {
-    return requested;
-  }
-  const modelMax = resolvePositiveAnthropicMaxTokens(params.modelMaxTokens);
-  return modelMax !== undefined ? Math.min(modelMax, 32_000) : undefined;
-}
-
 function adjustMaxTokensForThinking(params: {
   baseMaxTokens: number;
   modelMaxTokens: number;
@@ -176,15 +154,13 @@ function isAnthropicOAuthToken(apiKey: string): boolean {
 }
 
 function toClaudeCodeName(name: string): string {
-  return CLAUDE_CODE_TOOL_LOOKUP.get(normalizeLowercaseStringOrEmpty(name)) ?? name;
+  return CLAUDE_CODE_TOOL_LOOKUP.get(name.toLowerCase()) ?? name;
 }
 
 function fromClaudeCodeName(name: string, tools: Context["tools"] | undefined): string {
   if (tools && tools.length > 0) {
-    const lowerName = normalizeLowercaseStringOrEmpty(name);
-    const matchedTool = tools.find(
-      (tool) => normalizeLowercaseStringOrEmpty(tool.name) === lowerName,
-    );
+    const lowerName = name.toLowerCase();
+    const matchedTool = tools.find((tool) => tool.name.toLowerCase() === lowerName);
     if (matchedTool) {
       return matchedTool.name;
     }
@@ -329,7 +305,7 @@ function convertAnthropicMessages(
             type: "tool_use",
             id: block.id,
             name: isOAuthToken ? toClaudeCodeName(block.name) : block.name,
-            input: coerceTransportToolCallArguments(block.arguments),
+            input: block.arguments ?? {},
           });
         }
       }
@@ -499,15 +475,6 @@ function buildAnthropicParams(
   isOAuthToken: boolean,
   options: AnthropicTransportOptions | undefined,
 ) {
-  const maxTokens = resolveAnthropicMessagesMaxTokens({
-    modelMaxTokens: model.maxTokens,
-    requestedMaxTokens: options?.maxTokens,
-  });
-  if (maxTokens === undefined) {
-    throw new Error(
-      `Anthropic Messages transport requires a positive maxTokens value for ${model.provider}/${model.id}`,
-    );
-  }
   const payloadPolicy = resolveAnthropicPayloadPolicy({
     provider: model.provider,
     api: model.api,
@@ -515,10 +482,11 @@ function buildAnthropicParams(
     cacheRetention: options?.cacheRetention,
     enableCacheControl: true,
   });
+  const defaultMaxTokens = Math.min(model.maxTokens, 32_000);
   const params: Record<string, unknown> = {
     model: model.id,
     messages: convertAnthropicMessages(context.messages, model, isOAuthToken),
-    max_tokens: maxTokens,
+    max_tokens: options?.maxTokens || defaultMaxTokens,
     stream: true,
   };
   if (isOAuthToken) {
@@ -583,17 +551,7 @@ function resolveAnthropicTransportOptions(
   options: AnthropicTransportOptions | undefined,
   apiKey: string,
 ): AnthropicTransportOptions {
-  const baseMaxTokens = resolveAnthropicMessagesMaxTokens({
-    modelMaxTokens: model.maxTokens,
-    requestedMaxTokens: options?.maxTokens,
-  });
-  if (baseMaxTokens === undefined) {
-    throw new Error(
-      `Anthropic Messages transport requires a positive maxTokens value for ${model.provider}/${model.id}`,
-    );
-  }
-  const reasoningModelMaxTokens =
-    resolvePositiveAnthropicMaxTokens(model.maxTokens) ?? baseMaxTokens;
+  const baseMaxTokens = options?.maxTokens || Math.min(model.maxTokens, 32_000);
   const resolved: AnthropicTransportOptions = {
     temperature: options?.temperature,
     maxTokens: baseMaxTokens,
@@ -621,7 +579,7 @@ function resolveAnthropicTransportOptions(
   }
   const adjusted = adjustMaxTokensForThinking({
     baseMaxTokens,
-    modelMaxTokens: reasoningModelMaxTokens,
+    modelMaxTokens: model.maxTokens,
     reasoningLevel: options.reasoning,
     customBudgets: options.thinkingBudgets,
   });
@@ -815,7 +773,7 @@ export function createAnthropicMessagesTransportStreamFn(): StreamFn {
               delta?.type === "signature_delta" &&
               typeof delta.signature === "string"
             ) {
-              block.thinkingSignature = `${block.thinkingSignature ?? ""}${delta.signature}`;
+              block.thinkingSignature = `${String(block.thinkingSignature ?? "")}${delta.signature}`;
             }
             continue;
           }

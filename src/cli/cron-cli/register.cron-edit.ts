@@ -3,10 +3,6 @@ import type { CronJob } from "../../cron/types.js";
 import { danger } from "../../globals.js";
 import { sanitizeAgentId } from "../../routing/session-key.js";
 import { defaultRuntime } from "../../runtime.js";
-import {
-  normalizeOptionalLowercaseString,
-  normalizeOptionalString,
-} from "../../shared/string-coerce.js";
 import { addGatewayClientOptions, callGatewayFromCli } from "../gateway-rpc.js";
 import {
   applyExistingCronSchedulePatch,
@@ -173,8 +169,12 @@ export function registerCronEditCommand(cron: Command) {
           }
 
           const hasSystemEventPatch = typeof opts.systemEvent === "string";
-          const model = normalizeOptionalString(opts.model);
-          const thinking = normalizeOptionalString(opts.thinking);
+          const model =
+            typeof opts.model === "string" && opts.model.trim() ? opts.model.trim() : undefined;
+          const thinking =
+            typeof opts.thinking === "string" && opts.thinking.trim()
+              ? opts.thinking.trim()
+              : undefined;
           const timeoutSeconds = opts.timeoutSeconds
             ? Number.parseInt(String(opts.timeoutSeconds), 10)
             : undefined;
@@ -282,10 +282,11 @@ export function registerCronEditCommand(cron: Command) {
               failureAlert.after = after;
             }
             if (hasFailureAlertChannel) {
-              failureAlert.channel = normalizeOptionalLowercaseString(opts.failureAlertChannel);
+              const channel = String(opts.failureAlertChannel).trim().toLowerCase();
+              failureAlert.channel = channel ? channel : undefined;
             }
             if (hasFailureAlertTo) {
-              const to = normalizeOptionalString(opts.failureAlertTo) ?? "";
+              const to = String(opts.failureAlertTo).trim();
               failureAlert.to = to ? to : undefined;
             }
             if (hasFailureAlertCooldown) {
@@ -296,14 +297,14 @@ export function registerCronEditCommand(cron: Command) {
               failureAlert.cooldownMs = cooldownMs;
             }
             if (hasFailureAlertMode) {
-              const mode = normalizeOptionalLowercaseString(opts.failureAlertMode);
+              const mode = String(opts.failureAlertMode).trim().toLowerCase();
               if (mode !== "announce" && mode !== "webhook") {
                 throw new Error("Invalid --failure-alert-mode (must be 'announce' or 'webhook').");
               }
               failureAlert.mode = mode;
             }
             if (hasFailureAlertAccountId) {
-              const accountId = normalizeOptionalString(opts.failureAlertAccountId) ?? "";
+              const accountId = String(opts.failureAlertAccountId).trim();
               failureAlert.accountId = accountId ? accountId : undefined;
             }
             patch.failureAlert = failureAlert;

@@ -1,8 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { OpenClawConfig } from "openclaw/plugin-sdk/config-runtime";
+import type { OpenClawConfig } from "openclaw/plugin-sdk/core";
 import type { QaBusState } from "./bus-state.js";
-import { createQaTransportAdapter, type QaTransportId } from "./qa-transport-registry.js";
+import { startQaLabServer } from "./lab-server.js";
 import { renderQaMarkdownReport } from "./report.js";
 import { runQaScenario, type QaScenarioResult } from "./scenario.js";
 import { createQaSelfCheckScenario } from "./self-check-scenario.js";
@@ -14,37 +14,16 @@ export type QaSelfCheckResult = {
   scenarioResult: QaScenarioResult;
 };
 
-export function resolveQaSelfCheckOutputPath(params?: { outputPath?: string; repoRoot?: string }) {
-  if (params?.outputPath) {
-    return params.outputPath;
-  }
-  const repoRoot = path.resolve(params?.repoRoot ?? process.cwd());
-  return path.join(repoRoot, ".artifacts", "qa-e2e", "self-check.md");
-}
-
 export async function runQaSelfCheckAgainstState(params: {
   state: QaBusState;
   cfg: OpenClawConfig;
-  transportId?: QaTransportId;
   outputPath?: string;
-  repoRoot?: string;
   notes?: string[];
 }): Promise<QaSelfCheckResult> {
   const startedAt = new Date();
-  const transport = createQaTransportAdapter({
-    id: params.transportId ?? "qa-channel",
-    state: params.state,
-  });
   params.state.reset();
-  const scenarioResult = await runQaScenario(createQaSelfCheckScenario(), {
+  const scenarioResult = await runQaScenario(createQaSelfCheckScenario(params.cfg), {
     state: params.state,
-    performAction: async (action, args) =>
-      await transport.handleAction({
-        action,
-        args,
-        cfg: params.cfg,
-        accountId: transport.accountId,
-      }),
   });
   const checks = [
     {
@@ -81,14 +60,12 @@ export async function runQaSelfCheckAgainstState(params: {
     timeline,
     notes: params.notes ?? [
       "Vertical slice: qa-channel + qa-lab bus + private debugger surface.",
-      "Docker orchestration, additional QA runners, and auto-fix loops remain follow-up work.",
+      "Docker orchestration, matrix runs, and auto-fix loops remain follow-up work.",
     ],
   });
 
-  const outputPath = resolveQaSelfCheckOutputPath({
-    outputPath: params.outputPath,
-    repoRoot: params.repoRoot,
-  });
+  const outputPath =
+    params.outputPath ?? path.join(process.cwd(), ".artifacts", "qa-e2e", "self-check.md");
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
   await fs.writeFile(outputPath, report, "utf8");
 
@@ -99,3 +76,16 @@ export async function runQaSelfCheckAgainstState(params: {
     scenarioResult,
   };
 }
+
+export async function runQaLabSelfCheck(params?: { outputPath?: string }) {
+  const server = await startQaLabServer({
+    outputPath: params?.outputPath,
+  });
+  try {
+    return await server.runSelfCheck();
+  } finally {
+    await server.stop();
+  }
+}
+
+export const runQaE2eSelfCheck = runQaLabSelfCheck;

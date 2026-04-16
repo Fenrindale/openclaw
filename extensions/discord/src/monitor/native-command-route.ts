@@ -1,7 +1,6 @@
 import type { OpenClawConfig } from "openclaw/plugin-sdk/config-runtime";
 import * as conversationRuntime from "openclaw/plugin-sdk/conversation-binding-runtime";
 import type { ResolvedAgentRoute } from "openclaw/plugin-sdk/routing";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import {
   resolveDiscordBoundConversationRoute,
   resolveDiscordEffectiveRoute,
@@ -64,9 +63,9 @@ export async function resolveDiscordNativeInteractionRouteState(params: {
         })
       : null;
   const configuredBinding = configuredRoute?.bindingResolution ?? null;
-  const configuredBoundSessionKey = normalizeOptionalString(configuredRoute?.boundSessionKey);
+  const configuredBoundSessionKey = configuredRoute?.boundSessionKey?.trim() || undefined;
   const boundSessionKey =
-    normalizeOptionalString(params.threadBinding?.targetSessionKey) ?? configuredBoundSessionKey;
+    params.threadBinding?.targetSessionKey?.trim() || configuredBoundSessionKey;
   const effectiveRoute = resolveDiscordEffectiveRoute({
     route,
     boundSessionKey,

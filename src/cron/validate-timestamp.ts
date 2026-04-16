@@ -1,4 +1,3 @@
-import { normalizeOptionalString } from "../shared/string-coerce.js";
 import { parseAbsoluteTimeMs } from "./parse.js";
 import type { CronSchedule } from "./types.js";
 
@@ -30,13 +29,13 @@ export function validateScheduleTimestamp(
     return { ok: true };
   }
 
-  const atRaw = normalizeOptionalString(schedule.at) ?? "";
+  const atRaw = typeof schedule.at === "string" ? schedule.at.trim() : "";
   const atMs = atRaw ? parseAbsoluteTimeMs(atRaw) : null;
 
   if (atMs === null || !Number.isFinite(atMs)) {
     return {
       ok: false,
-      message: `Invalid schedule.at: expected ISO-8601 timestamp (got ${schedule.at})`,
+      message: `Invalid schedule.at: expected ISO-8601 timestamp (got ${String(schedule.at)})`,
     };
   }
 

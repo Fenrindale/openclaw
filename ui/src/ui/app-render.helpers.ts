@@ -1,22 +1,21 @@
 import { html, nothing } from "lit";
 import { repeat } from "lit/directives/repeat.js";
 import { t } from "../i18n/index.ts";
-import { refreshChat, refreshChatAvatar } from "./app-chat.ts";
+import { refreshChat } from "./app-chat.ts";
 import { syncUrlWithSessionKey } from "./app-settings.ts";
 import type { AppViewState } from "./app-view-state.ts";
+import { OpenClawApp } from "./app.ts";
 import { createChatModelOverride } from "./chat-model-ref.ts";
 import {
   resolveChatModelOverrideValue,
   resolveChatModelSelectState,
 } from "./chat-model-select-state.ts";
-import { refreshSlashCommands } from "./chat/slash-commands.ts";
 import { refreshVisibleToolsEffectiveForCurrentSession } from "./controllers/agents.ts";
 import { ChatState, loadChatHistory } from "./controllers/chat.ts";
 import { loadSessions } from "./controllers/sessions.ts";
 import { icons } from "./icons.ts";
 import { iconForTab, pathForTab, titleForTab, type Tab } from "./navigation.ts";
 import { parseAgentSessionKey } from "./session-key.ts";
-import { normalizeLowercaseStringOrEmpty, normalizeOptionalString } from "./string-coerce.ts";
 import type { ThemeMode } from "./theme.ts";
 import {
   listThinkingLevelLabels,
@@ -30,38 +29,15 @@ type SessionDefaultsSnapshot = {
   mainKey?: string;
 };
 
-type SessionSwitchHost = AppViewState & {
-  chatStreamStartedAt: number | null;
-  chatSideResultTerminalRuns: Set<string>;
-  resetToolStream(): void;
-  resetChatScroll(): void;
-};
-
-type ChatRefreshHost = AppViewState & {
-  chatManualRefreshInFlight: boolean;
-  chatNewMessagesBelow: boolean;
-  resetToolStream(): void;
-  scrollToBottom(opts?: { smooth?: boolean }): void;
-  updateComplete?: Promise<unknown>;
-};
-
-export function resolveAssistantAttachmentAuthToken(
-  state: Pick<AppViewState, "settings" | "password">,
-) {
-  return (
-    normalizeOptionalString(state.settings.token) ?? normalizeOptionalString(state.password) ?? null
-  );
-}
-
 function resolveSidebarChatSessionKey(state: AppViewState): string {
   const snapshot = state.hello?.snapshot as
     | { sessionDefaults?: SessionDefaultsSnapshot }
     | undefined;
-  const mainSessionKey = normalizeOptionalString(snapshot?.sessionDefaults?.mainSessionKey);
+  const mainSessionKey = snapshot?.sessionDefaults?.mainSessionKey?.trim();
   if (mainSessionKey) {
     return mainSessionKey;
   }
-  const mainKey = normalizeOptionalString(snapshot?.sessionDefaults?.mainKey);
+  const mainKey = snapshot?.sessionDefaults?.mainKey?.trim();
   if (mainKey) {
     return mainKey;
   }
@@ -69,26 +45,13 @@ function resolveSidebarChatSessionKey(state: AppViewState): string {
 }
 
 function resetChatStateForSessionSwitch(state: AppViewState, sessionKey: string) {
-  const host = state as unknown as SessionSwitchHost;
   state.sessionKey = sessionKey;
   state.chatMessage = "";
-  state.chatAttachments = [];
-  state.chatMessages = [];
-  state.chatToolMessages = [];
-  state.chatStreamSegments = [];
-  state.chatThinkingLevel = null;
   state.chatStream = null;
-  state.chatSideResult = null;
-  state.lastError = null;
-  state.compactionStatus = null;
-  state.fallbackStatus = null;
-  state.chatAvatarUrl = null;
-  state.chatQueue = [];
-  host.chatStreamStartedAt = null;
+  (state as unknown as OpenClawApp).chatStreamStartedAt = null;
   state.chatRunId = null;
-  host.chatSideResultTerminalRuns.clear();
-  host.resetToolStream();
-  host.resetChatScroll();
+  (state as unknown as OpenClawApp).resetToolStream();
+  (state as unknown as OpenClawApp).resetChatScroll();
   state.applySettings({
     ...state.settings,
     sessionKey,
@@ -117,11 +80,9 @@ export function renderTab(state: AppViewState, tab: Tab, opts?: { collapsed?: bo
         }
         event.preventDefault();
         if (tab === "chat") {
-          if (!state.sessionKey) {
-            const mainSessionKey = resolveSidebarChatSessionKey(state);
+          const mainSessionKey = resolveSidebarChatSessionKey(state);
+          if (state.sessionKey !== mainSessionKey) {
             resetChatStateForSessionSwitch(state, mainSessionKey);
-          }
-          if (state.tab !== "chat") {
             void state.loadAssistantIdentity();
           }
         }
@@ -204,13 +165,7 @@ export function renderChatSessionSelect(state: AppViewState) {
                   group.options,
                   (entry) => entry.key,
                   (entry) =>
-                    html`<option
-                      value=${entry.key}
-                      title=${entry.title}
-                      ?selected=${entry.key === state.sessionKey}
-                    >
-                      ${entry.label}
-                    </option>`,
+                    html`<option value=${entry.key} title=${entry.title}>${entry.label}</option>`,
                 )}
               </optgroup>`,
           )}
@@ -286,7 +241,7 @@ export function renderChatControls(state: AppViewState) {
         class="btn btn--sm btn--icon"
         ?disabled=${state.chatLoading || !state.connected}
         @click=${async () => {
-          const app = state as unknown as ChatRefreshHost;
+          const app = state as unknown as OpenClawApp;
           app.chatManualRefreshInFlight = true;
           app.chatNewMessagesBelow = false;
           await app.updateComplete;
@@ -482,13 +437,7 @@ export function renderChatMobileToggle(state: AppViewState) {
                   <optgroup label=${group.label}>
                     ${group.options.map(
                       (opt) => html`
-                        <option
-                          value=${opt.key}
-                          title=${opt.title}
-                          ?selected=${opt.key === state.sessionKey}
-                        >
-                          ${opt.label}
-                        </option>
+                        <option value=${opt.key} title=${opt.title}>${opt.label}</option>
                       `,
                     )}
                   </optgroup>
@@ -554,13 +503,21 @@ export function renderChatMobileToggle(state: AppViewState) {
 }
 
 export function switchChatSession(state: AppViewState, nextSessionKey: string) {
-  resetChatStateForSessionSwitch(state, nextSessionKey);
-  void state.loadAssistantIdentity();
-  void refreshChatAvatar(state);
-  void refreshSlashCommands({
-    client: state.client,
-    agentId: parseAgentSessionKey(nextSessionKey)?.agentId,
+  state.sessionKey = nextSessionKey;
+  state.chatMessage = "";
+  state.chatStream = null;
+  // P1: Clear queued chat items from the previous session
+  (state as unknown as { chatQueue: unknown[] }).chatQueue = [];
+  (state as unknown as OpenClawApp).chatStreamStartedAt = null;
+  state.chatRunId = null;
+  (state as unknown as OpenClawApp).resetToolStream();
+  (state as unknown as OpenClawApp).resetChatScroll();
+  state.applySettings({
+    ...state.settings,
+    sessionKey: nextSessionKey,
+    lastActiveSessionKey: nextSessionKey,
   });
+  void state.loadAssistantIdentity();
   syncUrlWithSessionKey(
     state as unknown as Parameters<typeof syncUrlWithSessionKey>[0],
     nextSessionKey,
@@ -650,7 +607,7 @@ function buildThinkingOptions(
     if (!trimmed) {
       return;
     }
-    const key = normalizeLowercaseStringOrEmpty(trimmed);
+    const key = trimmed.toLowerCase();
     if (seen.has(key)) {
       return;
     }
@@ -667,7 +624,7 @@ function buildThinkingOptions(
   };
 
   for (const label of listThinkingLevelLabels(provider)) {
-    const normalized = normalizeThinkLevel(label) ?? normalizeLowercaseStringOrEmpty(label);
+    const normalized = normalizeThinkLevel(label) ?? label.trim().toLowerCase();
     addOption(normalized);
   }
   if (currentOverride) {
@@ -850,7 +807,7 @@ function capitalize(s: string): string {
  * fallback display name.  Exported for testing.
  */
 export function parseSessionKey(key: string): SessionKeyInfo {
-  const normalized = normalizeLowercaseStringOrEmpty(key);
+  const normalized = key.toLowerCase();
 
   // ── Main session ─────────────────────────────────
   if (key === "main" || key === "agent:main:main") {
@@ -899,8 +856,8 @@ export function resolveSessionDisplayName(
   key: string,
   row?: SessionsListResult["sessions"][number],
 ): string {
-  const label = normalizeOptionalString(row?.label) ?? "";
-  const displayName = normalizeOptionalString(row?.displayName) ?? "";
+  const label = row?.label?.trim() || "";
+  const displayName = row?.displayName?.trim() || "";
   const { prefix, fallbackName } = parseSessionKey(key);
 
   const applyTypedPrefix = (name: string): string => {
@@ -921,7 +878,7 @@ export function resolveSessionDisplayName(
 }
 
 export function isCronSessionKey(key: string): boolean {
-  const normalized = normalizeLowercaseStringOrEmpty(key);
+  const normalized = key.trim().toLowerCase();
   if (!normalized) {
     return false;
   }
@@ -989,11 +946,11 @@ export function resolveSessionOptionGroups(
     const parsed = parseAgentSessionKey(key);
     const group = parsed
       ? ensureGroup(
-          `agent:${normalizeLowercaseStringOrEmpty(parsed.agentId)}`,
+          `agent:${parsed.agentId.toLowerCase()}`,
           resolveAgentGroupLabel(state, parsed.agentId),
         )
       : ensureGroup("other", "Other Sessions");
-    const scopeLabel = normalizeOptionalString(parsed?.rest) ?? key;
+    const scopeLabel = parsed?.rest?.trim() || key;
     const label = resolveSessionScopedOptionLabel(key, row, parsed?.rest);
     group.options.push({
       key,
@@ -1103,12 +1060,11 @@ function countHiddenCronSessions(sessionKey: string, sessions: SessionsListResul
 }
 
 function resolveAgentGroupLabel(state: AppViewState, agentIdRaw: string): string {
-  const normalized = normalizeLowercaseStringOrEmpty(agentIdRaw);
+  const normalized = agentIdRaw.trim().toLowerCase();
   const agent = (state.agentsList?.agents ?? []).find(
-    (entry) => normalizeLowercaseStringOrEmpty(entry.id) === normalized,
+    (entry) => entry.id.trim().toLowerCase() === normalized,
   );
-  const name =
-    normalizeOptionalString(agent?.identity?.name) ?? normalizeOptionalString(agent?.name) ?? "";
+  const name = agent?.identity?.name?.trim() || agent?.name?.trim() || "";
   return name && name !== agentIdRaw ? `${name} (${agentIdRaw})` : agentIdRaw;
 }
 
@@ -1117,13 +1073,13 @@ function resolveSessionScopedOptionLabel(
   row?: SessionsListResult["sessions"][number],
   rest?: string,
 ) {
-  const base = normalizeOptionalString(rest) ?? key;
+  const base = rest?.trim() || key;
   if (!row) {
     return base;
   }
 
-  const label = normalizeOptionalString(row.label) ?? "";
-  const displayName = normalizeOptionalString(row.displayName) ?? "";
+  const label = row.label?.trim() || "";
+  const displayName = row.displayName?.trim() || "";
   if ((label && label !== key) || (displayName && displayName !== key)) {
     return resolveSessionDisplayName(key, row);
   }

@@ -3,7 +3,6 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { stageBundledPluginRuntime } from "../../scripts/stage-bundled-plugin-runtime.mjs";
 import { bundledDistPluginFile } from "../../test/helpers/bundled-plugin-paths.js";
-import type { PluginJitiLoaderCache } from "./jiti-loader-cache.js";
 import { loadPluginBoundaryModuleWithJiti } from "./runtime/runtime-plugin-boundary.js";
 import { cleanupTrackedTempDirs, makeTrackedTempDir } from "./test-helpers/fs-fixtures.js";
 
@@ -12,7 +11,7 @@ type LightModule = {
 };
 
 type HeavyModule = {
-  registerControllerForTest: (
+  setActiveWebListener: (
     accountId: string | null | undefined,
     listener: { sendMessage: () => Promise<{ messageId: string }> } | null,
   ) => void;
@@ -49,35 +48,23 @@ function createBundledWhatsAppRuntimeFixture() {
     [bundledDistPluginFile("whatsapp", "light-runtime-api.js")]:
       'export { getActiveWebListener } from "../../active-listener.js";\n',
     [bundledDistPluginFile("whatsapp", "runtime-api.js")]:
-      'export { registerControllerForTest } from "../../connection-controller-registry.js";\n',
-    "dist/connection-controller-registry.js": [
-      'const key = Symbol.for("openclaw.whatsapp.connectionControllerRegistry");',
+      'export { getActiveWebListener, setActiveWebListener } from "../../active-listener.js";\n',
+    "dist/active-listener.js": [
+      'const key = Symbol.for("openclaw.whatsapp.activeListenerState");',
       "const g = globalThis;",
       "if (!g[key]) {",
-      "  g[key] = { controllers: new Map() };",
+      "  g[key] = { listeners: new Map(), current: null };",
       "}",
       "const state = g[key];",
-      "export function getRegisteredWhatsAppConnectionController(accountId) {",
-      "  return state.controllers.get(accountId) ?? null;",
+      "export function setActiveWebListener(accountIdOrListener, maybeListener) {",
+      '  const accountId = typeof accountIdOrListener === "string" ? accountIdOrListener : "default";',
+      '  const listener = typeof accountIdOrListener === "string" ? (maybeListener ?? null) : (accountIdOrListener ?? null);',
+      "  if (!listener) state.listeners.delete(accountId);",
+      "  else state.listeners.set(accountId, listener);",
+      '  if (accountId === "default") state.current = listener;',
       "}",
-      "export function registerControllerForTest(accountId, listener) {",
-      '  const id = accountId ?? "default";',
-      "  if (!listener) {",
-      "    state.controllers.delete(id);",
-      "    return;",
-      "  }",
-      "  state.controllers.set(id, {",
-      "    getActiveListener() {",
-      "      return listener;",
-      "    },",
-      "  });",
-      "}",
-      "",
-    ].join("\n"),
-    "dist/active-listener.js": [
-      'import { getRegisteredWhatsAppConnectionController } from "./connection-controller-registry.js";',
       "export function getActiveWebListener(accountId) {",
-      '  return getRegisteredWhatsAppConnectionController(accountId ?? "default")?.getActiveListener() ?? null;',
+      '  return state.listeners.get(accountId ?? "default") ?? null;',
       "}",
       "",
     ].join("\n"),
@@ -90,7 +77,7 @@ function createBundledWhatsAppRuntimeFixture() {
 }
 
 function loadWhatsAppBoundaryModules(runtimePluginDir: string) {
-  const loaders: PluginJitiLoaderCache = new Map();
+  const loaders = new Map<boolean, ReturnType<typeof import("jiti").createJiti>>();
   return {
     light: loadPluginBoundaryModuleWithJiti<LightModule>(
       path.join(runtimePluginDir, "light-runtime-api.js"),
@@ -113,9 +100,9 @@ function expectSharedWhatsAppListenerState(runtimePluginDir: string, accountId: 
   const { light, heavy } = loadWhatsAppBoundaryModules(runtimePluginDir);
   const listener = createListener();
 
-  heavy.registerControllerForTest(accountId, listener);
+  heavy.setActiveWebListener(accountId, listener);
   expect(light.getActiveWebListener(accountId)).toBe(listener);
-  heavy.registerControllerForTest(accountId, null);
+  heavy.setActiveWebListener(accountId, null);
 }
 
 afterEach(() => {

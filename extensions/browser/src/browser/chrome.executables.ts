@@ -2,10 +2,6 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-} from "openclaw/plugin-sdk/text-runtime";
 import type { ResolvedBrowserConfig } from "./config.js";
 
 export type BrowserExecutable = {
@@ -118,14 +114,14 @@ function execText(
       encoding: "utf8",
       maxBuffer,
     });
-    return normalizeOptionalString(output) ?? null;
+    return String(output ?? "").trim() || null;
   } catch {
     return null;
   }
 }
 
 function inferKindFromIdentifier(identifier: string): BrowserExecutable["kind"] {
-  const id = normalizeLowercaseStringOrEmpty(identifier);
+  const id = identifier.toLowerCase();
   if (id.includes("brave")) {
     return "brave";
   }
@@ -150,7 +146,7 @@ function inferKindFromIdentifier(identifier: string): BrowserExecutable["kind"] 
 }
 
 function inferKindFromExecutableName(name: string): BrowserExecutable["kind"] {
-  const lower = normalizeLowercaseStringOrEmpty(name);
+  const lower = name.toLowerCase();
   if (lower.includes("brave")) {
     return "brave";
   }
@@ -195,7 +191,7 @@ function detectDefaultChromiumExecutableMac(): BrowserExecutable | null {
   if (!appPathRaw) {
     return null;
   }
-  const appPath = appPathRaw.replace(/\/$/, "");
+  const appPath = appPathRaw.trim().replace(/\/$/, "");
   const exeName = execText("/usr/bin/defaults", [
     "read",
     path.join(appPath, "Contents", "Info"),
@@ -204,7 +200,7 @@ function detectDefaultChromiumExecutableMac(): BrowserExecutable | null {
   if (!exeName) {
     return null;
   }
-  const exePath = path.join(appPath, "Contents", "MacOS", exeName);
+  const exePath = path.join(appPath, "Contents", "MacOS", exeName.trim());
   if (!exists(exePath)) {
     return null;
   }
@@ -289,7 +285,7 @@ function detectDefaultChromiumExecutableLinux(): BrowserExecutable | null {
   if (!resolved) {
     return null;
   }
-  const exeName = normalizeLowercaseStringOrEmpty(path.posix.basename(resolved));
+  const exeName = path.posix.basename(resolved).toLowerCase();
   if (!CHROMIUM_EXE_NAMES.has(exeName)) {
     return null;
   }
@@ -311,7 +307,7 @@ function detectDefaultChromiumExecutableWindows(): BrowserExecutable | null {
   if (!exists(exePath)) {
     return null;
   }
-  const exeName = normalizeLowercaseStringOrEmpty(path.win32.basename(exePath));
+  const exeName = path.win32.basename(exePath).toLowerCase();
   if (!CHROMIUM_EXE_NAMES.has(exeName)) {
     return null;
   }
@@ -433,12 +429,12 @@ function readWindowsCommandForProgId(progId: string): string | null {
     return null;
   }
   const match = output.match(/REG_\w+\s+(.+)$/im);
-  return normalizeOptionalString(match?.[1]) ?? null;
+  return match?.[1]?.trim() || null;
 }
 
 function expandWindowsEnvVars(value: string): string {
   return value.replace(/%([^%]+)%/g, (_match, name) => {
-    const key = normalizeOptionalString(name) ?? "";
+    const key = String(name ?? "").trim();
     return key ? (process.env[key] ?? `%${key}%`) : _match;
   });
 }
@@ -468,7 +464,7 @@ function findFirstExecutable(candidates: Array<BrowserExecutable>): BrowserExecu
 function findFirstChromeExecutable(candidates: string[]): BrowserExecutable | null {
   for (const candidate of candidates) {
     if (exists(candidate)) {
-      const normalizedPath = normalizeLowercaseStringOrEmpty(candidate);
+      const normalizedPath = candidate.toLowerCase();
       return {
         kind:
           normalizedPath.includes("beta") ||
@@ -691,7 +687,7 @@ export function readBrowserVersion(executablePath: string): string | null {
 }
 
 export function parseBrowserMajorVersion(rawVersion: string | null | undefined): number | null {
-  const matches = [...(rawVersion ?? "").matchAll(CHROME_VERSION_RE)];
+  const matches = [...String(rawVersion ?? "").matchAll(CHROME_VERSION_RE)];
   const match = matches.at(-1);
   if (!match?.[1]) {
     return null;

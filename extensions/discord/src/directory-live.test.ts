@@ -1,6 +1,6 @@
 import type { OpenClawConfig } from "openclaw/plugin-sdk/config-runtime";
 import type { DirectoryConfigParams } from "openclaw/plugin-sdk/directory-runtime";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { listDiscordDirectoryGroupsLive, listDiscordDirectoryPeersLive } from "./directory-live.js";
 
 function makeParams(overrides: Partial<DirectoryConfigParams> = {}): DirectoryConfigParams {
@@ -31,11 +31,6 @@ function resolveFetchUrl(input: string | URL | Request): string {
 describe("discord directory live lookups", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    vi.stubEnv("DISCORD_BOT_TOKEN", "");
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
   });
 
   it("returns empty group directory when token is missing", async () => {

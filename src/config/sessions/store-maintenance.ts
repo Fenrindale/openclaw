@@ -3,7 +3,6 @@ import path from "node:path";
 import { parseByteSize } from "../../cli/parse-bytes.js";
 import { parseDurationMs } from "../../cli/parse-duration.js";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
-import { normalizeStringifiedOptionalString } from "../../shared/string-coerce.js";
 import { loadConfig } from "../config.js";
 import type { SessionMaintenanceConfig, SessionMaintenanceMode } from "../types.base.js";
 import type { SessionEntry } from "./types.js";
@@ -38,12 +37,11 @@ export type ResolvedSessionMaintenanceConfig = {
 
 function resolvePruneAfterMs(maintenance?: SessionMaintenanceConfig): number {
   const raw = maintenance?.pruneAfter ?? maintenance?.pruneDays;
-  const normalized = normalizeStringifiedOptionalString(raw);
-  if (!normalized) {
+  if (raw === undefined || raw === null || raw === "") {
     return DEFAULT_SESSION_PRUNE_AFTER_MS;
   }
   try {
-    return parseDurationMs(normalized, { defaultUnit: "d" });
+    return parseDurationMs(String(raw).trim(), { defaultUnit: "d" });
   } catch {
     return DEFAULT_SESSION_PRUNE_AFTER_MS;
   }
@@ -51,12 +49,11 @@ function resolvePruneAfterMs(maintenance?: SessionMaintenanceConfig): number {
 
 function resolveRotateBytes(maintenance?: SessionMaintenanceConfig): number {
   const raw = maintenance?.rotateBytes;
-  const normalized = normalizeStringifiedOptionalString(raw);
-  if (!normalized) {
+  if (raw === undefined || raw === null || raw === "") {
     return DEFAULT_SESSION_ROTATE_BYTES;
   }
   try {
-    return parseByteSize(normalized, { defaultUnit: "b" });
+    return parseByteSize(String(raw).trim(), { defaultUnit: "b" });
   } catch {
     return DEFAULT_SESSION_ROTATE_BYTES;
   }
@@ -70,12 +67,11 @@ function resolveResetArchiveRetentionMs(
   if (raw === false) {
     return null;
   }
-  const normalized = normalizeStringifiedOptionalString(raw);
-  if (!normalized) {
+  if (raw === undefined || raw === null || raw === "") {
     return pruneAfterMs;
   }
   try {
-    return parseDurationMs(normalized, { defaultUnit: "d" });
+    return parseDurationMs(String(raw).trim(), { defaultUnit: "d" });
   } catch {
     return pruneAfterMs;
   }
@@ -83,12 +79,11 @@ function resolveResetArchiveRetentionMs(
 
 function resolveMaxDiskBytes(maintenance?: SessionMaintenanceConfig): number | null {
   const raw = maintenance?.maxDiskBytes;
-  const normalized = normalizeStringifiedOptionalString(raw);
-  if (!normalized) {
+  if (raw === undefined || raw === null || raw === "") {
     return null;
   }
   try {
-    return parseByteSize(normalized, { defaultUnit: "b" });
+    return parseByteSize(String(raw).trim(), { defaultUnit: "b" });
   } catch {
     return null;
   }
@@ -117,12 +112,11 @@ function resolveHighWaterBytes(
     return null;
   }
   const raw = maintenance?.highWaterBytes;
-  const normalized = normalizeStringifiedOptionalString(raw);
-  if (!normalized) {
+  if (raw === undefined || raw === null || raw === "") {
     return computeDefault();
   }
   try {
-    const parsed = parseByteSize(normalized, { defaultUnit: "b" });
+    const parsed = parseByteSize(String(raw).trim(), { defaultUnit: "b" });
     return Math.min(parsed, maxDiskBytes);
   } catch {
     return computeDefault();
@@ -133,9 +127,13 @@ function resolveHighWaterBytes(
  * Resolve maintenance settings from openclaw.json (`session.maintenance`).
  * Falls back to built-in defaults when config is missing or unset.
  */
-export function resolveMaintenanceConfigFromInput(
-  maintenance?: SessionMaintenanceConfig,
-): ResolvedSessionMaintenanceConfig {
+export function resolveMaintenanceConfig(): ResolvedSessionMaintenanceConfig {
+  let maintenance: SessionMaintenanceConfig | undefined;
+  try {
+    maintenance = loadConfig().session?.maintenance;
+  } catch {
+    // Config may not be available (e.g. in tests). Use defaults.
+  }
   const pruneAfterMs = resolvePruneAfterMs(maintenance);
   const maxDiskBytes = resolveMaxDiskBytes(maintenance);
   return {
@@ -147,16 +145,6 @@ export function resolveMaintenanceConfigFromInput(
     maxDiskBytes,
     highWaterBytes: resolveHighWaterBytes(maintenance, maxDiskBytes),
   };
-}
-
-export function resolveMaintenanceConfig(): ResolvedSessionMaintenanceConfig {
-  let maintenance: SessionMaintenanceConfig | undefined;
-  try {
-    maintenance = loadConfig().session?.maintenance;
-  } catch {
-    // Config may not be available (e.g. in tests). Use defaults.
-  }
-  return resolveMaintenanceConfigFromInput(maintenance);
 }
 
 /**

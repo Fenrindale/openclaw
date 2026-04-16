@@ -40,7 +40,6 @@ import {
 } from "../../infra/provider-usage.js";
 import { getShellEnvAppliedKeys, shouldEnableShellEnvFallback } from "../../infra/shell-env.js";
 import { type RuntimeEnv, writeRuntimeJson } from "../../runtime.js";
-import { normalizeOptionalString } from "../../shared/string-coerce.js";
 import { getTerminalTableWidth, renderTable } from "../../terminal/table.js";
 import { colorize, theme } from "../../terminal/theme.js";
 import { shortenHomePath } from "../../utils.js";
@@ -107,7 +106,7 @@ export async function modelsStatusCommand(
   const imageFallbacks = resolveAgentModelFallbackValues(cfg.agents?.defaults?.imageModel);
   const aliases = Object.entries(cfg.agents?.defaults?.models ?? {}).reduce<Record<string, string>>(
     (acc, [key, entry]) => {
-      const alias = normalizeOptionalString(entry?.alias);
+      const alias = typeof entry?.alias === "string" ? entry.alias.trim() : undefined;
       if (alias) {
         acc[alias] = key;
       }
@@ -133,13 +132,13 @@ export async function modelsStatusCommand(
   const providersFromModels = new Set<string>();
   const providersInUse = new Set<string>();
   for (const raw of [defaultLabel, ...fallbacks, imageModel, ...imageFallbacks, ...allowed]) {
-    const parsed = parseModelRef(raw ?? "", DEFAULT_PROVIDER);
+    const parsed = parseModelRef(String(raw ?? ""), DEFAULT_PROVIDER);
     if (parsed?.provider) {
       providersFromModels.add(normalizeProviderId(parsed.provider));
     }
   }
   for (const raw of [defaultLabel, ...fallbacks, imageModel, ...imageFallbacks]) {
-    const parsed = parseModelRef(raw ?? "", DEFAULT_PROVIDER);
+    const parsed = parseModelRef(String(raw ?? ""), DEFAULT_PROVIDER);
     if (parsed?.provider) {
       providersInUse.add(normalizeProviderId(parsed.provider));
     }
@@ -162,7 +161,7 @@ export async function modelsStatusCommand(
       ...providersFromEnv,
     ]),
   )
-    .map((p) => normalizeOptionalString(p) ?? "")
+    .map((p) => (typeof p === "string" ? p.trim() : ""))
     .filter(Boolean)
     .toSorted((a, b) => a.localeCompare(b));
 
@@ -188,7 +187,7 @@ export async function modelsStatusCommand(
     }
     const raw = Array.isArray(opts.probeProfile) ? opts.probeProfile : [opts.probeProfile];
     return raw
-      .flatMap((value) => (value ?? "").split(","))
+      .flatMap((value) => String(value ?? "").split(","))
       .map((value) => value.trim())
       .filter(Boolean);
   })();
@@ -217,7 +216,7 @@ export async function modelsStatusCommand(
     .map(
       (raw) =>
         resolveModelRefFromString({
-          raw: raw ?? "",
+          raw: String(raw ?? ""),
           defaultProvider: DEFAULT_PROVIDER,
           aliasIndex,
         })?.ref,

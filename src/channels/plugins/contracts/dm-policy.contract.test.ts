@@ -3,6 +3,8 @@ import {
   isSignalSenderAllowed,
   type SignalSender,
 } from "../../../../test/helpers/channels/dm-policy-contract.js";
+import { isAllowedBlueBubblesSender } from "../../../plugin-sdk/bluebubbles-policy.js";
+import { isMattermostSenderAllowed } from "../../../plugin-sdk/mattermost-policy.js";
 import {
   DM_GROUP_ACCESS_REASON,
   resolveDmGroupAccessWithLists,
@@ -24,7 +26,12 @@ const channelSmokeCases: ChannelSmokeCase[] = [
   {
     name: "bluebubbles",
     storeAllowFrom: ["attacker-user"],
-    isSenderAllowed: (allowFrom) => allowFrom.includes("attacker-user"),
+    isSenderAllowed: (allowFrom) =>
+      isAllowedBlueBubblesSender({
+        allowFrom,
+        sender: "attacker-user",
+        chatId: 101,
+      }),
   },
   {
     name: "signal",
@@ -34,7 +41,12 @@ const channelSmokeCases: ChannelSmokeCase[] = [
   {
     name: "mattermost",
     storeAllowFrom: ["user:attacker-user"],
-    isSenderAllowed: (allowFrom) => allowFrom.includes("user:attacker-user"),
+    isSenderAllowed: (allowFrom) =>
+      isMattermostSenderAllowed({
+        senderId: "attacker-user",
+        senderName: "Attacker",
+        allowFrom,
+      }),
   },
 ];
 

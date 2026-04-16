@@ -1,4 +1,3 @@
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 import type { FeishuIdType } from "./types.js";
 
 const CHAT_ID_PREFIX = "oc_";
@@ -30,7 +29,7 @@ export function normalizeFeishuTarget(raw: string): string | null {
   }
 
   const withoutProvider = stripProviderPrefix(trimmed);
-  const lowered = normalizeLowercaseStringOrEmpty(withoutProvider);
+  const lowered = withoutProvider.toLowerCase();
   if (lowered.startsWith("chat:")) {
     return withoutProvider.slice("chat:".length).trim() || null;
   }
@@ -66,7 +65,7 @@ export function formatFeishuTarget(id: string, type?: FeishuIdType): string {
 
 export function resolveReceiveIdType(id: string): "chat_id" | "open_id" | "user_id" {
   const trimmed = id.trim();
-  const lowered = normalizeLowercaseStringOrEmpty(trimmed);
+  const lowered = trimmed.toLowerCase();
   if (
     lowered.startsWith("chat:") ||
     lowered.startsWith("group:") ||

@@ -5,7 +5,6 @@ import { loadOpenClawPluginCliRegistry, loadOpenClawPlugins } from "./loader.js"
 import {
   cleanupPluginLoaderFixturesForTest,
   EMPTY_PLUGIN_SCHEMA,
-  inlineChannelPluginEntryFactorySource,
   makeTempDir,
   resetPluginLoaderTestStateForTest,
   useNoBundledPlugins,
@@ -163,7 +162,7 @@ describe("plugin loader CLI metadata", () => {
     );
     fs.writeFileSync(
       path.join(pluginDir, "index.cjs"),
-      `${inlineChannelPluginEntryFactorySource()}
+      `const { defineChannelPluginEntry } = require("openclaw/plugin-sdk/core");
 require("node:fs").writeFileSync(${JSON.stringify(fullMarker)}, "loaded", "utf-8");
 module.exports = {
   ...defineChannelPluginEntry({
@@ -486,7 +485,7 @@ module.exports = {
     );
     fs.writeFileSync(
       path.join(pluginDir, "index.cjs"),
-      `${inlineChannelPluginEntryFactorySource()}
+      `const { defineChannelPluginEntry } = require("openclaw/plugin-sdk/core");
 module.exports = {
   ...defineChannelPluginEntry({
     id: "full-cli-metadata-channel",
@@ -636,7 +635,7 @@ module.exports = {
     );
     const memory = registry.plugins.find((entry) => entry.id === "memory-external");
     expect(memory?.status).toBe("disabled");
-    expect(memory?.error ?? "").toContain('memory slot set to "memory-other"');
+    expect(String(memory?.error ?? "")).toContain('memory slot set to "memory-other"');
   });
 
   it("re-evaluates memory slot gating after resolving exported plugin kind", async () => {
@@ -676,6 +675,6 @@ module.exports = {
     );
     const memory = registry.plugins.find((entry) => entry.id === "memory-export-only");
     expect(memory?.status).toBe("disabled");
-    expect(memory?.error ?? "").toContain('memory slot set to "memory-other"');
+    expect(String(memory?.error ?? "")).toContain('memory slot set to "memory-other"');
   });
 });

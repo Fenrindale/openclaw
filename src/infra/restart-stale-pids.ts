@@ -2,7 +2,6 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { resolveGatewayPort } from "../config/paths.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 import { isGatewayArgv } from "./gateway-process-argv.js";
 import { resolveLsofCommandSync } from "./ports-lsof.js";
 import {
@@ -71,11 +70,7 @@ function parsePidsFromLsofOutput(stdout: string): number[] {
   let currentCmd: string | undefined;
   for (const line of stdout.split(/\r?\n/).filter(Boolean)) {
     if (line.startsWith("p")) {
-      if (
-        currentPid != null &&
-        currentCmd &&
-        normalizeLowercaseStringOrEmpty(currentCmd).includes("openclaw")
-      ) {
+      if (currentPid != null && currentCmd && currentCmd.toLowerCase().includes("openclaw")) {
         pids.push(currentPid);
       }
       const parsed = Number.parseInt(line.slice(1), 10);
@@ -85,11 +80,7 @@ function parsePidsFromLsofOutput(stdout: string): number[] {
       currentCmd = line.slice(1);
     }
   }
-  if (
-    currentPid != null &&
-    currentCmd &&
-    normalizeLowercaseStringOrEmpty(currentCmd).includes("openclaw")
-  ) {
+  if (currentPid != null && currentCmd && currentCmd.toLowerCase().includes("openclaw")) {
     pids.push(currentPid);
   }
   // Deduplicate: dual-stack listeners (IPv4 + IPv6) cause lsof to emit the

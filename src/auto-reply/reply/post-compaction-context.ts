@@ -1,13 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
-import { resolveAgentContextLimits } from "../../agents/agent-scope.js";
 import { resolveCronStyleNow } from "../../agents/current-time.js";
 import { resolveUserTimezone } from "../../agents/date-time.js";
-import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import type { OpenClawConfig } from "../../config/config.js";
 import { openBoundaryFile } from "../../infra/boundary-file-read.js";
-import { normalizeLowercaseStringOrEmpty } from "../../shared/string-coerce.js";
 
-const MAX_CONTEXT_CHARS = 1800;
+const MAX_CONTEXT_CHARS = 3000;
 const DEFAULT_POST_COMPACTION_SECTIONS = ["Session Startup", "Red Lines"];
 const LEGACY_POST_COMPACTION_SECTIONS = ["Every Session", "Safety"];
 
@@ -20,12 +18,12 @@ function matchesSectionSet(sectionNames: string[], expectedSections: string[]): 
 
   const counts = new Map<string, number>();
   for (const name of expectedSections) {
-    const normalized = normalizeLowercaseStringOrEmpty(name);
+    const normalized = name.trim().toLowerCase();
     counts.set(normalized, (counts.get(normalized) ?? 0) + 1);
   }
 
   for (const name of sectionNames) {
-    const normalized = normalizeLowercaseStringOrEmpty(name);
+    const normalized = name.trim().toLowerCase();
     const count = counts.get(normalized);
     if (!count) {
       return false;
@@ -62,19 +60,11 @@ function formatDateStamp(nowMs: number, timezone: string): string {
  * Substitutes YYYY-MM-DD placeholders with the real date so agents read the correct
  * daily memory files instead of guessing based on training cutoff.
  */
-export type PostCompactionContextOptions = {
-  cfg?: OpenClawConfig;
-  agentId?: string;
-  nowMs?: number;
-};
-
 export async function readPostCompactionContext(
   workspaceDir: string,
-  options?: PostCompactionContextOptions,
+  cfg?: OpenClawConfig,
+  nowMs?: number,
 ): Promise<string | null> {
-  const cfg = options?.cfg;
-  const agentId = options?.agentId;
-  const effectiveNowMs = options?.nowMs;
   const agentsPath = path.join(workspaceDir, "AGENTS.md");
 
   try {
@@ -127,19 +117,17 @@ export async function readPostCompactionContext(
     // Only reference section names that were actually found and injected.
     const displayNames = foundSectionNames.length > 0 ? foundSectionNames : sectionNames;
 
-    const resolvedNowMs = effectiveNowMs ?? Date.now();
+    const resolvedNowMs = nowMs ?? Date.now();
     const timezone = resolveUserTimezone(cfg?.agents?.defaults?.userTimezone);
     const dateStamp = formatDateStamp(resolvedNowMs, timezone);
-    const maxContextChars =
-      resolveAgentContextLimits(cfg, agentId)?.postCompactionMaxChars ?? MAX_CONTEXT_CHARS;
     // Always append the real runtime timestamp — AGENTS.md content may itself contain
     // "Current time:" as user-authored text, so we must not gate on that substring.
     const { timeLine } = resolveCronStyleNow(cfg ?? {}, resolvedNowMs);
 
     const combined = sections.join("\n\n").replaceAll("YYYY-MM-DD", dateStamp);
     const safeContent =
-      combined.length > maxContextChars
-        ? combined.slice(0, maxContextChars) + "\n...[truncated]..."
+      combined.length > MAX_CONTEXT_CHARS
+        ? combined.slice(0, MAX_CONTEXT_CHARS) + "\n...[truncated]..."
         : combined;
 
     // When using the default section set, use precise prose that names the
@@ -213,9 +201,7 @@ export function extractSections(
 
         if (!inSection) {
           // Check if this is our target section (case-insensitive)
-          if (
-            normalizeLowercaseStringOrEmpty(headingText) === normalizeLowercaseStringOrEmpty(name)
-          ) {
+          if (headingText.toLowerCase() === name.toLowerCase()) {
             inSection = true;
             sectionLevel = level;
             sectionLines = [line];

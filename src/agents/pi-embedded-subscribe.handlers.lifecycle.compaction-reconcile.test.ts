@@ -57,7 +57,6 @@ function createLifecycleContext(params: {
       pendingMessagingTargets: new Map(),
       successfulCronAdds: 0,
       pendingMessagingMediaUrls: new Map(),
-      deterministicApprovalPromptPending: false,
       deterministicApprovalPromptSent: false,
     } as never,
     log: {

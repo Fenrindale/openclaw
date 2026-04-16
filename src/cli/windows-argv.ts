@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import path from "node:path";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 
 export function normalizeWindowsArgv(argv: string[]): string[] {
   if (process.platform !== "win32") {
@@ -29,8 +28,8 @@ export function normalizeWindowsArgv(argv: string[]): string[] {
     normalizeArg(value).replace(/^\\\\\\?\\/, "");
 
   const execPath = normalizeCandidate(process.execPath);
-  const execPathLower = normalizeLowercaseStringOrEmpty(execPath);
-  const execBase = normalizeLowercaseStringOrEmpty(path.basename(execPath));
+  const execPathLower = execPath.toLowerCase();
+  const execBase = path.basename(execPath).toLowerCase();
   const isExecPath = (value: string | undefined): boolean => {
     if (!value) {
       return false;
@@ -39,7 +38,7 @@ export function normalizeWindowsArgv(argv: string[]): string[] {
     if (!normalized) {
       return false;
     }
-    const lower = normalizeLowercaseStringOrEmpty(normalized);
+    const lower = normalized.toLowerCase();
     return (
       lower === execPathLower ||
       path.basename(lower) === execBase ||

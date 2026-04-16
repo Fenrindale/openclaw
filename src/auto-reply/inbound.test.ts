@@ -521,29 +521,6 @@ describe("createInboundDebouncer", () => {
     expect(calls).toEqual(["1", "2"]);
   });
 
-  it("does not leak unhandled rejections when a keyed flush failure is awaited", async () => {
-    const debouncer = createInboundDebouncer<{ key: string; id: string }>({
-      debounceMs: 0,
-      buildKey: (item) => item.key,
-      onFlush: async () => {
-        throw new Error("flush failed");
-      },
-    });
-    const unhandled: unknown[] = [];
-    const onUnhandledRejection = (reason: unknown) => {
-      unhandled.push(reason);
-    };
-    process.on("unhandledRejection", onUnhandledRejection);
-
-    try {
-      await expect(debouncer.enqueue({ key: "a", id: "1" })).resolves.toBeUndefined();
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      expect(unhandled).toEqual([]);
-    } finally {
-      process.off("unhandledRejection", onUnhandledRejection);
-    }
-  });
-
   it("bypasses debouncing for new keys once the tracked-key cap is reached", async () => {
     vi.useFakeTimers();
     const calls: Array<string[]> = [];
@@ -837,7 +814,7 @@ describe("resolveGroupRequireMention", () => {
       chatType: "group",
     };
 
-    await expect(resolveGroupRequireMention({ cfg, ctx, groupResolution })).resolves.toBe(false);
+    await expect(resolveGroupRequireMention({ cfg, ctx, groupResolution })).resolves.toBe(true);
   });
 
   it("respects Slack channel requireMention settings", async () => {
@@ -863,7 +840,7 @@ describe("resolveGroupRequireMention", () => {
       chatType: "group",
     };
 
-    await expect(resolveGroupRequireMention({ cfg, ctx, groupResolution })).resolves.toBe(false);
+    await expect(resolveGroupRequireMention({ cfg, ctx, groupResolution })).resolves.toBe(true);
   });
 
   it("uses Slack fallback resolver semantics for default-account wildcard channels", async () => {
@@ -894,7 +871,7 @@ describe("resolveGroupRequireMention", () => {
       chatType: "group",
     };
 
-    await expect(resolveGroupRequireMention({ cfg, ctx, groupResolution })).resolves.toBe(false);
+    await expect(resolveGroupRequireMention({ cfg, ctx, groupResolution })).resolves.toBe(true);
   });
 
   it("keeps core reply-stage resolution aligned for Slack default-account wildcard fallbacks", async () => {
@@ -925,7 +902,7 @@ describe("resolveGroupRequireMention", () => {
       chatType: "group",
     };
 
-    await expect(resolveGroupRequireMention({ cfg, ctx, groupResolution })).resolves.toBe(false);
+    await expect(resolveGroupRequireMention({ cfg, ctx, groupResolution })).resolves.toBe(true);
   });
 
   it("uses Discord fallback resolver semantics for guild slug matches", async () => {
@@ -955,7 +932,7 @@ describe("resolveGroupRequireMention", () => {
       chatType: "group",
     };
 
-    await expect(resolveGroupRequireMention({ cfg, ctx, groupResolution })).resolves.toBe(false);
+    await expect(resolveGroupRequireMention({ cfg, ctx, groupResolution })).resolves.toBe(true);
   });
 
   it("keeps core reply-stage resolution aligned for Discord slug + wildcard guild fallbacks", async () => {

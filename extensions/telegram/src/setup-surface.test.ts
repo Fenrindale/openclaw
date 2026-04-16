@@ -1,97 +1,171 @@
 import type { OpenClawConfig } from "openclaw/plugin-sdk/config-runtime";
 import { DEFAULT_ACCOUNT_ID } from "openclaw/plugin-sdk/setup";
 import { describe, expect, it, vi } from "vitest";
-import { resolveTelegramAllowFromEntries } from "./setup-core.js";
 import {
-  buildTelegramDmAccessWarningLines,
-  ensureTelegramDefaultGroupMentionGate,
-  shouldShowTelegramDmAccessWarning,
-  telegramSetupDmPolicy,
-} from "./setup-surface.helpers.js";
+  createTestWizardPrompter,
+  runSetupWizardFinalize,
+  runSetupWizardPrepare,
+} from "../../../test/helpers/plugins/setup-wizard.js";
+import { resolveTelegramAllowFromEntries } from "./setup-core.js";
+import { telegramSetupWizard } from "./setup-surface.js";
 
-describe("ensureTelegramDefaultGroupMentionGate", () => {
+async function runPrepare(cfg: OpenClawConfig, accountId: string) {
+  return await runSetupWizardPrepare({
+    prepare: telegramSetupWizard.prepare,
+    cfg,
+    accountId,
+    options: {},
+  });
+}
+
+async function runFinalize(cfg: OpenClawConfig, accountId: string) {
+  const note = vi.fn(async () => undefined);
+
+  await runSetupWizardFinalize({
+    finalize: telegramSetupWizard.finalize,
+    cfg,
+    accountId,
+    prompter: createTestWizardPrompter({ note }),
+  });
+
+  return note;
+}
+
+function expectPreparedResult(
+  prepared: Awaited<ReturnType<typeof runPrepare>>,
+): { cfg: OpenClawConfig } & Exclude<Awaited<ReturnType<typeof runPrepare>>, void | undefined> {
+  expect(prepared).toBeDefined();
+  if (
+    !prepared ||
+    typeof prepared !== "object" ||
+    !("cfg" in prepared) ||
+    prepared.cfg === undefined
+  ) {
+    throw new Error("Expected prepare result with cfg");
+  }
+  return prepared as { cfg: OpenClawConfig } & Exclude<
+    Awaited<ReturnType<typeof runPrepare>>,
+    void | undefined
+  >;
+}
+
+describe("telegramSetupWizard.prepare", () => {
   it('adds groups["*"].requireMention=true for fresh setups', async () => {
-    const cfg = ensureTelegramDefaultGroupMentionGate(
-      {
-        channels: {
-          telegram: {
-            botToken: "tok",
-          },
-        },
-      },
-      DEFAULT_ACCOUNT_ID,
-    );
-
-    expect(cfg.channels?.telegram?.groups).toEqual({
-      "*": { requireMention: true },
-    });
-  });
-
-  it("preserves an explicit wildcard group mention setting", async () => {
-    const cfg = ensureTelegramDefaultGroupMentionGate(
-      {
-        channels: {
-          telegram: {
-            botToken: "tok",
-            groups: {
-              "*": { requireMention: false },
-            },
-          },
-        },
-      },
-      DEFAULT_ACCOUNT_ID,
-    );
-
-    expect(cfg.channels?.telegram?.groups).toEqual({
-      "*": { requireMention: false },
-    });
-  });
-});
-
-describe("telegram DM access warning helpers", () => {
-  it("shows global config commands for the default account", () => {
-    const lines = buildTelegramDmAccessWarningLines(DEFAULT_ACCOUNT_ID);
-
-    expect(lines.join("\n")).toContain(
-      'openclaw config set channels.telegram.dmPolicy "allowlist"',
-    );
-    expect(lines.join("\n")).toContain(
-      `openclaw config set channels.telegram.allowFrom '["YOUR_USER_ID"]'`,
-    );
-  });
-
-  it("shows account-scoped config commands for named accounts", () => {
-    const lines = buildTelegramDmAccessWarningLines("alerts");
-
-    expect(lines.join("\n")).toContain(
-      'openclaw config set channels.telegram.accounts.alerts.dmPolicy "allowlist"',
-    );
-    expect(lines.join("\n")).toContain(
-      `openclaw config set channels.telegram.accounts.alerts.allowFrom '["YOUR_USER_ID"]'`,
-    );
-  });
-
-  it("skips the warning when an allowFrom entry already exists", () => {
-    expect(
-      shouldShowTelegramDmAccessWarning(
+    const prepared = expectPreparedResult(
+      await runPrepare(
         {
           channels: {
             telegram: {
               botToken: "tok",
-              allowFrom: ["123"],
             },
           },
         },
         DEFAULT_ACCOUNT_ID,
       ),
-    ).toBe(false);
+    );
+
+    expect(prepared.cfg.channels?.telegram?.groups).toEqual({
+      "*": { requireMention: true },
+    });
+  });
+
+  it("preserves an explicit wildcard group mention setting", async () => {
+    const prepared = expectPreparedResult(
+      await runPrepare(
+        {
+          channels: {
+            telegram: {
+              botToken: "tok",
+              groups: {
+                "*": { requireMention: false },
+              },
+            },
+          },
+        },
+        DEFAULT_ACCOUNT_ID,
+      ),
+    );
+
+    expect(prepared.cfg.channels?.telegram?.groups).toEqual({
+      "*": { requireMention: false },
+    });
   });
 });
 
-describe("telegramSetupDmPolicy", () => {
+describe("telegramSetupWizard.finalize", () => {
+  it("shows global config commands for the default account", async () => {
+    const note = await runFinalize(
+      {
+        channels: {
+          telegram: {
+            botToken: "tok",
+          },
+        },
+      },
+      DEFAULT_ACCOUNT_ID,
+    );
+
+    expect(note).toHaveBeenCalledWith(
+      expect.stringContaining('openclaw config set channels.telegram.dmPolicy "allowlist"'),
+      "Telegram DM access warning",
+    );
+    expect(note).toHaveBeenCalledWith(
+      expect.stringContaining(`openclaw config set channels.telegram.allowFrom '["YOUR_USER_ID"]'`),
+      "Telegram DM access warning",
+    );
+  });
+
+  it("shows account-scoped config commands for named accounts", async () => {
+    const note = await runFinalize(
+      {
+        channels: {
+          telegram: {
+            accounts: {
+              alerts: {
+                botToken: "tok",
+              },
+            },
+          },
+        },
+      },
+      "alerts",
+    );
+
+    expect(note).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'openclaw config set channels.telegram.accounts.alerts.dmPolicy "allowlist"',
+      ),
+      "Telegram DM access warning",
+    );
+    expect(note).toHaveBeenCalledWith(
+      expect.stringContaining(
+        `openclaw config set channels.telegram.accounts.alerts.allowFrom '["YOUR_USER_ID"]'`,
+      ),
+      "Telegram DM access warning",
+    );
+  });
+
+  it("skips the warning when an allowFrom entry already exists", async () => {
+    const note = await runFinalize(
+      {
+        channels: {
+          telegram: {
+            botToken: "tok",
+            allowFrom: ["123"],
+          },
+        },
+      },
+      DEFAULT_ACCOUNT_ID,
+    );
+
+    expect(note).not.toHaveBeenCalled();
+  });
+});
+
+describe("telegramSetupWizard.dmPolicy", () => {
   it("reads the named-account DM policy instead of the channel root", () => {
     expect(
-      telegramSetupDmPolicy.getCurrent?.(
+      telegramSetupWizard.dmPolicy?.getCurrent(
         {
           channels: {
             telegram: {
@@ -111,7 +185,7 @@ describe("telegramSetupDmPolicy", () => {
   });
 
   it("reports account-scoped config keys for named accounts", () => {
-    expect(telegramSetupDmPolicy.resolveConfigKeys?.({}, "alerts")).toEqual({
+    expect(telegramSetupWizard.dmPolicy?.resolveConfigKeys?.({}, "alerts")).toEqual({
       policyKey: "channels.telegram.accounts.alerts.dmPolicy",
       allowFromKey: "channels.telegram.accounts.alerts.allowFrom",
     });
@@ -134,13 +208,13 @@ describe("telegramSetupDmPolicy", () => {
       },
     };
 
-    expect(telegramSetupDmPolicy.getCurrent?.(cfg)).toBe("allowlist");
-    expect(telegramSetupDmPolicy.resolveConfigKeys?.(cfg)).toEqual({
+    expect(telegramSetupWizard.dmPolicy?.getCurrent(cfg)).toBe("allowlist");
+    expect(telegramSetupWizard.dmPolicy?.resolveConfigKeys?.(cfg)).toEqual({
       policyKey: "channels.telegram.accounts.alerts.dmPolicy",
       allowFromKey: "channels.telegram.accounts.alerts.allowFrom",
     });
 
-    const next = telegramSetupDmPolicy.setPolicy?.(cfg, "open");
+    const next = telegramSetupWizard.dmPolicy?.setPolicy(cfg, "open");
     expect(next?.channels?.telegram?.dmPolicy).toBe("disabled");
     expect(next?.channels?.telegram?.accounts?.alerts?.dmPolicy).toBe("open");
   });
@@ -159,7 +233,7 @@ describe("telegramSetupDmPolicy", () => {
       },
     };
 
-    const next = telegramSetupDmPolicy.setPolicy?.(cfg, "open", "alerts");
+    const next = telegramSetupWizard.dmPolicy?.setPolicy(cfg, "open", "alerts");
 
     expect(next?.channels?.telegram?.dmPolicy).toBeUndefined();
     expect(next?.channels?.telegram?.accounts?.alerts?.dmPolicy).toBe("open");

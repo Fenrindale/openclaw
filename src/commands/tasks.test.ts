@@ -26,14 +26,14 @@ async function withTaskCommandStateDir(run: () => Promise<void>): Promise<void> 
   await withTempDir({ prefix: "openclaw-tasks-command-" }, async (root) => {
     process.env.OPENCLAW_STATE_DIR = root;
     resetTaskRegistryDeliveryRuntimeForTests();
-    resetTaskRegistryForTests({ persist: false });
-    resetTaskFlowRegistryForTests({ persist: false });
+    resetTaskRegistryForTests();
+    resetTaskFlowRegistryForTests();
     try {
       await run();
     } finally {
       resetTaskRegistryDeliveryRuntimeForTests();
-      resetTaskRegistryForTests({ persist: false });
-      resetTaskFlowRegistryForTests({ persist: false });
+      resetTaskRegistryForTests();
+      resetTaskFlowRegistryForTests();
     }
   });
 }
@@ -51,8 +51,8 @@ describe("tasks commands", () => {
       process.env.OPENCLAW_STATE_DIR = ORIGINAL_STATE_DIR;
     }
     resetTaskRegistryDeliveryRuntimeForTests();
-    resetTaskRegistryForTests({ persist: false });
-    resetTaskFlowRegistryForTests({ persist: false });
+    resetTaskRegistryForTests();
+    resetTaskFlowRegistryForTests();
   });
 
   it("keeps tasks audit JSON stable while adding TaskFlow summary fields", async () => {

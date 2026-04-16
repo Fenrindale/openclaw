@@ -1,5 +1,4 @@
 import type { TypingMode } from "../../config/types.js";
-import { normalizeOptionalString } from "../../shared/string-coerce.js";
 import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../tokens.js";
 import type { TypingPolicy } from "../types.js";
 import type { TypingController } from "./typing.js";
@@ -68,7 +67,7 @@ export function createTypingSignaler(params: {
   let hasRenderableText = false;
 
   const isRenderableText = (text?: string): boolean => {
-    const trimmed = normalizeOptionalString(text);
+    const trimmed = text?.trim();
     if (!trimmed) {
       return false;
     }
@@ -99,7 +98,7 @@ export function createTypingSignaler(params: {
     const renderable = isRenderableText(text);
     if (renderable) {
       hasRenderableText = true;
-    } else if (normalizeOptionalString(text)) {
+    } else if (text?.trim()) {
       return;
     } else {
       return;

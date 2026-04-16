@@ -8,7 +8,7 @@
  */
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { Type } from "@sinclair/typebox";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createBaseToolHandlerState } from "./pi-tool-handler-state.test-helpers.js";
 
 const hookMocks = vi.hoisted(() => ({
@@ -79,6 +79,7 @@ let handleToolExecutionStart: typeof import("./pi-embedded-subscribe.handlers.to
 let handleToolExecutionEnd: typeof import("./pi-embedded-subscribe.handlers.tools.js").handleToolExecutionEnd;
 
 async function loadFreshAfterToolCallModulesForTest() {
+  vi.resetModules();
   vi.doMock("../plugins/hook-runner-global.js", () => ({
     getGlobalHookRunner: () => hookMocks.runner,
   }));
@@ -98,9 +99,7 @@ async function loadFreshAfterToolCallModulesForTest() {
 }
 
 describe("after_tool_call fires exactly once in embedded runs", () => {
-  beforeAll(loadFreshAfterToolCallModulesForTest);
-
-  beforeEach(() => {
+  beforeEach(async () => {
     hookMocks.runner.hasHooks.mockClear();
     hookMocks.runner.hasHooks.mockReturnValue(true);
     hookMocks.runner.runAfterToolCall.mockClear();
@@ -116,6 +115,7 @@ describe("after_tool_call fires exactly once in embedded runs", () => {
       blocked: false,
       params,
     }));
+    await loadFreshAfterToolCallModulesForTest();
   });
 
   function resolveAdapterDefinition(tool: Parameters<typeof toToolDefinitions>[0][number]) {

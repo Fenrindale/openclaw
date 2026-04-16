@@ -3,18 +3,14 @@
 
 export {
   assertOkOrThrowHttpError,
-  createProviderOperationDeadline,
   fetchWithTimeout,
   fetchWithTimeoutGuarded,
   normalizeBaseUrl,
   postJsonRequest,
   postTranscriptionRequest,
-  resolveProviderOperationTimeoutMs,
   resolveProviderHttpRequestConfig,
   requireTranscriptionText,
-  waitProviderOperationPollInterval,
 } from "../media-understanding/shared.js";
-export type { ProviderOperationDeadline } from "../media-understanding/shared.js";
 export type {
   ProviderAttributionPolicy,
   ProviderRequestCapabilities,

@@ -1,13 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { OpenClawConfig } from "../config/types.openclaw.js";
+import type { OpenClawConfig } from "../config/config.js";
 import { openBoundaryFileSync } from "../infra/boundary-file-read.js";
 import { parseFrontmatterBlock } from "../markdown/frontmatter.js";
 import { isPathInsideWithRealpath } from "../security/scan-paths.js";
-import {
-  normalizeOptionalLowercaseString,
-  normalizeOptionalString,
-} from "../shared/string-coerce.js";
 import {
   CLAUDE_BUNDLE_MANIFEST_RELATIVE_PATH,
   mergeBundlePathLists,
@@ -25,10 +21,10 @@ export type ClaudeBundleCommandSpec = {
 };
 
 function parseFrontmatterBool(value: string | undefined, fallback: boolean): boolean {
-  const normalized = normalizeOptionalLowercaseString(value);
-  if (!normalized) {
+  if (typeof value !== "string") {
     return fallback;
   }
+  const normalized = value.trim().toLowerCase();
   if (normalized === "true" || normalized === "yes" || normalized === "1") {
     return true;
   }
@@ -103,7 +99,7 @@ function listMarkdownFilesRecursive(rootDir: string): string[] {
         pending.push(fullPath);
         continue;
       }
-      if (entry.isFile() && normalizeOptionalLowercaseString(entry.name)?.endsWith(".md")) {
+      if (entry.isFile() && entry.name.toLowerCase().endsWith(".md")) {
         files.push(fullPath);
       }
     }
@@ -145,15 +141,14 @@ function loadBundleCommandsFromRoot(params: {
     if (!promptTemplate) {
       continue;
     }
-    const rawName =
-      normalizeOptionalString(frontmatter.name) ||
-      toDefaultCommandName(params.commandRoot, filePath);
+    const rawName = (
+      frontmatter.name?.trim() || toDefaultCommandName(params.commandRoot, filePath)
+    ).trim();
     if (!rawName) {
       continue;
     }
     const description =
-      normalizeOptionalString(frontmatter.description) ||
-      toDefaultDescription(rawName, promptTemplate);
+      frontmatter.description?.trim() || toDefaultDescription(rawName, promptTemplate);
     entries.push({
       pluginId: params.pluginId,
       rawName,

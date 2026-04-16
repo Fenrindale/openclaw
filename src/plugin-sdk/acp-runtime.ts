@@ -7,7 +7,6 @@ import type {
   PluginHookReplyDispatchEvent,
   PluginHookReplyDispatchResult,
 } from "../plugins/types.js";
-import { normalizeOptionalString } from "../shared/string-coerce.js";
 
 export { getAcpSessionManager };
 export { AcpRuntimeError, isAcpRuntimeError } from "../acp/runtime/errors.js";
@@ -43,12 +42,17 @@ function loadDispatchAcpRuntime() {
 }
 
 function hasExplicitCommandCandidate(ctx: PluginHookReplyDispatchEvent["ctx"]): boolean {
-  const commandBody = normalizeOptionalString(ctx.CommandBody);
-  if (commandBody) {
+  const commandBody = ctx.CommandBody;
+  if (typeof commandBody === "string" && commandBody.trim().length > 0) {
     return true;
   }
 
-  const normalized = normalizeOptionalString(ctx.BodyForCommands);
+  const bodyForCommands = ctx.BodyForCommands;
+  if (typeof bodyForCommands !== "string") {
+    return false;
+  }
+
+  const normalized = bodyForCommands.trim();
   if (!normalized) {
     return false;
   }
@@ -60,31 +64,13 @@ export async function tryDispatchAcpReplyHook(
   event: PluginHookReplyDispatchEvent,
   ctx: PluginHookReplyDispatchContext,
 ): Promise<PluginHookReplyDispatchResult | void> {
-  // Under sendPolicy: "deny", ACP-bound sessions still need their turns to flow
-  // through acpManager.runTurn so session state, tool calls, and memory stay
-  // consistent — only outbound delivery should be suppressed. The ACP delivery
-  // path (dispatch-acp-delivery.ts) honors event.suppressUserDelivery to drop
-  // user-facing sends. If suppressUserDelivery is not set under deny, we cannot
-  // safely route through ACP (delivery would leak), so fall back to the
-  // embedded reply path unless an explicit command candidate or tail dispatch
-  // warrants going through ACP anyway.
-  if (
-    event.sendPolicy === "deny" &&
-    !event.suppressUserDelivery &&
-    !hasExplicitCommandCandidate(event.ctx) &&
-    !event.isTailDispatch
-  ) {
+  if (event.sendPolicy === "deny" && !hasExplicitCommandCandidate(event.ctx)) {
     return;
   }
   const runtime = await loadDispatchAcpRuntime();
   const bypassForCommand = await runtime.shouldBypassAcpDispatchForCommand(event.ctx, ctx.cfg);
 
-  if (
-    event.sendPolicy === "deny" &&
-    !event.suppressUserDelivery &&
-    !bypassForCommand &&
-    !event.isTailDispatch
-  ) {
+  if (event.sendPolicy === "deny" && !bypassForCommand) {
     return;
   }
 

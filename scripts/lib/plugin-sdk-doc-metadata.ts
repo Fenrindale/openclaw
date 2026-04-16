@@ -62,12 +62,6 @@ export const pluginSdkDocMetadata = {
   "command-auth": {
     category: "channel",
   },
-  "command-status": {
-    category: "channel",
-  },
-  "command-status-runtime": {
-    category: "runtime",
-  },
   "secret-input": {
     category: "channel",
   },
@@ -75,9 +69,6 @@ export const pluginSdkDocMetadata = {
     category: "channel",
   },
   "provider-onboard": {
-    category: "provider",
-  },
-  opencode: {
     category: "provider",
   },
   "runtime-store": {

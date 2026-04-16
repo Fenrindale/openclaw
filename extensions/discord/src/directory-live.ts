@@ -2,7 +2,6 @@ import type {
   ChannelDirectoryEntry,
   DirectoryConfigParams,
 } from "openclaw/plugin-sdk/directory-runtime";
-import { normalizeOptionalLowercaseString } from "openclaw/plugin-sdk/text-runtime";
 import { resolveDiscordAccount } from "./accounts.js";
 import { fetchDiscord } from "./api.js";
 import { rememberDiscordDirectoryUser } from "./directory-cache.js";
@@ -16,7 +15,7 @@ type DiscordChannel = { id: string; name?: string | null };
 type DiscordDirectoryAccess = { token: string; query: string; accountId: string };
 
 function normalizeQuery(value?: string | null): string {
-  return normalizeOptionalLowercaseString(value) ?? "";
+  return value?.trim().toLowerCase() ?? "";
 }
 
 function buildUserRank(user: DiscordUser): number {

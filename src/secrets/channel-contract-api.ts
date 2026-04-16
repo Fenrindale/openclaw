@@ -1,4 +1,6 @@
-import type { OpenClawConfig } from "../config/types.openclaw.js";
+import type { OpenClawConfig } from "../config/config.js";
+import { formatErrorMessage } from "../infra/errors.js";
+import { listBundledPluginMetadata } from "../plugins/bundled-plugin-metadata.js";
 import { loadBundledPluginPublicArtifactModuleSync } from "../plugins/public-surface-loader.js";
 import type { ResolverContext, SecretDefaults } from "./runtime-shared.js";
 import type { SecretTargetRegistryEntry } from "./target-registry-types.js";
@@ -25,27 +27,33 @@ function loadBundledChannelPublicArtifact(
   channelId: string,
   artifactBasenames: readonly string[],
 ): BundledChannelContractApi | undefined {
+  const metadata = listBundledPluginMetadata({
+    includeChannelConfigs: false,
+    includeSyntheticChannelConfigs: false,
+  }).find((entry) => entry.manifest.channels?.includes(channelId));
+  if (!metadata) {
+    return undefined;
+  }
+
   for (const artifactBasename of artifactBasenames) {
+    if (!metadata.publicSurfaceArtifacts?.includes(artifactBasename)) {
+      continue;
+    }
     try {
       return loadBundledPluginPublicArtifactModuleSync<BundledChannelContractApi>({
-        dirName: channelId,
+        dirName: metadata.dirName,
         artifactBasename,
       });
     } catch (error) {
-      if (
-        error instanceof Error &&
-        error.message.startsWith("Unable to resolve bundled plugin public surface ")
-      ) {
-        continue;
-      }
       if (process.env.OPENCLAW_DEBUG_CHANNEL_CONTRACT_API === "1") {
-        const detail = error instanceof Error ? error.message : String(error);
+        const detail = formatErrorMessage(error);
         process.stderr.write(
-          `[channel-contract-api] failed to load ${channelId}/${artifactBasename}: ${detail}\n`,
+          `[channel-contract-api] failed to load ${channelId} via ${metadata.dirName}/${artifactBasename}: ${detail}\n`,
         );
       }
     }
   }
+
   return undefined;
 }
 
@@ -68,5 +76,8 @@ export type BundledChannelSecurityContractApi = Pick<
 export function loadBundledChannelSecurityContractApi(
   channelId: string,
 ): BundledChannelSecurityContractApi | undefined {
-  return loadBundledChannelPublicArtifact(channelId, ["security-contract-api.js"]);
+  return loadBundledChannelPublicArtifact(channelId, [
+    "security-contract-api.js",
+    "contract-api.js",
+  ]);
 }

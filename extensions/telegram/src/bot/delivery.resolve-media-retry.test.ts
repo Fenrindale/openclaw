@@ -332,15 +332,7 @@ describe("resolveMedia getFile retry", () => {
   it("uses caller-provided fetch impl for file downloads", async () => {
     const getFile = vi.fn().mockResolvedValue({ file_path: "documents/file_42.pdf" });
     const callerFetch = vi.fn() as unknown as typeof fetch;
-    const dispatcherAttempts = [
-      {
-        dispatcherPolicy: {
-          mode: "explicit-proxy" as const,
-          proxyUrl: "http://localhost:6152",
-          allowPrivateProxy: true,
-        },
-      },
-    ];
+    const dispatcherAttempts = [{ dispatcherPolicy: { mode: "direct" as const } }];
     const callerTransport = {
       fetch: callerFetch,
       sourceFetch: callerFetch,
@@ -365,7 +357,6 @@ describe("resolveMedia getFile retry", () => {
       expect.objectContaining({
         fetchImpl: callerFetch,
         dispatcherAttempts,
-        trustExplicitProxyDns: true,
         shouldRetryFetchError: expect.any(Function),
         readIdleTimeoutMs: 30_000,
         ssrfPolicy: {

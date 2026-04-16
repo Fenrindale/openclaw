@@ -1,5 +1,4 @@
-import type { ConfigUiHint, ConfigUiHints } from "../shared/config-ui-hints-types.js";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
+import type { ConfigUiHint, ConfigUiHints } from "./schema.hints.js";
 
 export const CONFIG_TAGS = [
   "security",
@@ -43,8 +42,6 @@ const TAG_OVERRIDES: Record<string, ConfigTag[]> = {
   "gateway.auth.token": ["security", "auth", "access", "network"],
   "gateway.auth.password": ["security", "auth", "access", "network"],
   "gateway.push.apns.relay.baseUrl": ["network", "advanced"],
-  "gateway.controlUi.embedSandbox": ["security", "access", "advanced"],
-  "gateway.controlUi.allowExternalEmbedUrls": ["security", "access", "network", "advanced"],
   "gateway.controlUi.dangerouslyAllowHostHeaderOriginFallback": [
     "security",
     "access",
@@ -89,7 +86,7 @@ const AUTOMATION_PATH_PATTERN = /(cron|heartbeat|schedule|onstart|watchdebounce)
 const AUTH_KEYWORD_PATTERN = /(token|password|secret|api[_.-]?key|credential|oauth)/i;
 
 function normalizeTag(tag: string): ConfigTag | null {
-  const normalized = normalizeLowercaseStringOrEmpty(tag) as ConfigTag;
+  const normalized = tag.trim().toLowerCase() as ConfigTag;
   return CONFIG_TAGS.includes(normalized) ? normalized : null;
 }
 
@@ -107,7 +104,7 @@ function normalizeTags(tags: ReadonlyArray<string>): ConfigTag[] {
 function collectUnknownTags(tags: ReadonlyArray<string>): string[] {
   const out = new Set<string>();
   for (const tag of tags) {
-    const normalized = normalizeLowercaseStringOrEmpty(tag);
+    const normalized = tag.trim().toLowerCase();
     if (!normalized || normalizeTag(normalized)) {
       continue;
     }
@@ -144,7 +141,7 @@ function addTags(set: Set<ConfigTag>, tags: ReadonlyArray<ConfigTag>): void {
 }
 
 export function deriveTagsForPath(path: string, hint?: ConfigUiHint): ConfigTag[] {
-  const lowerPath = normalizeLowercaseStringOrEmpty(path);
+  const lowerPath = path.toLowerCase();
   const override = resolveOverride(path);
   if (override) {
     return normalizeTags(override);

@@ -1,4 +1,3 @@
-import { normalizeOptionalString } from "../shared/string-coerce.js";
 import { listTasksForOwnerKey } from "../tasks/runtime-internal.js";
 import type { TaskRecord, TaskRuntime, TaskStatus } from "../tasks/task-registry.types.js";
 
@@ -11,13 +10,13 @@ export function findActiveSessionTask(params: {
   statuses?: ReadonlySet<TaskStatus>;
   sourceIdPrefix?: string;
 }): TaskRecord | undefined {
-  const normalizedSessionKey = normalizeOptionalString(params.sessionKey);
+  const normalizedSessionKey = params.sessionKey?.trim();
   if (!normalizedSessionKey) {
     return undefined;
   }
   const statuses = params.statuses ?? DEFAULT_ACTIVE_STATUSES;
-  const taskKind = normalizeOptionalString(params.taskKind);
-  const sourceIdPrefix = normalizeOptionalString(params.sourceIdPrefix);
+  const taskKind = params.taskKind?.trim();
+  const sourceIdPrefix = params.sourceIdPrefix?.trim();
   const matches = listTasksForOwnerKey(normalizedSessionKey).filter((task) => {
     if (task.scopeKind !== "session") {
       return false;
@@ -32,7 +31,7 @@ export function findActiveSessionTask(params: {
       return false;
     }
     if (sourceIdPrefix) {
-      const sourceId = normalizeOptionalString(task.sourceId) ?? "";
+      const sourceId = task.sourceId?.trim() ?? "";
       if (sourceId !== sourceIdPrefix && !sourceId.startsWith(`${sourceIdPrefix}:`)) {
         return false;
       }

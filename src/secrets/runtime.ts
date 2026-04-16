@@ -5,19 +5,19 @@ import {
   resolveAgentWorkspaceDir,
   resolveDefaultAgentId,
 } from "../agents/agent-scope.js";
+import type { AuthProfileStore } from "../agents/auth-profiles.js";
 import {
   clearRuntimeAuthProfileStoreSnapshots,
   loadAuthProfileStoreForSecretsRuntime,
   replaceRuntimeAuthProfileStoreSnapshots,
 } from "../agents/auth-profiles.js";
-import type { AuthProfileStore } from "../agents/auth-profiles/types.js";
 import {
   clearRuntimeConfigSnapshot,
   setRuntimeConfigSnapshotRefreshHandler,
   setRuntimeConfigSnapshot,
   type OpenClawConfig,
 } from "../config/config.js";
-import type { PluginOrigin } from "../plugins/plugin-origin.types.js";
+import type { PluginOrigin } from "../plugins/types.js";
 import { resolveUserPath } from "../utils.js";
 import { type SecretResolverWarning } from "./runtime-shared.js";
 import {
@@ -164,16 +164,6 @@ function mergeSecretsRuntimeEnv(
   return merged;
 }
 
-function hasConfiguredPluginEntries(config: OpenClawConfig): boolean {
-  const entries = config.plugins?.entries;
-  return (
-    !!entries &&
-    typeof entries === "object" &&
-    !Array.isArray(entries) &&
-    Object.keys(entries).length > 0
-  );
-}
-
 export async function prepareSecretsRuntimeSnapshot(params: {
   config: OpenClawConfig;
   env?: NodeJS.ProcessEnv;
@@ -196,9 +186,7 @@ export async function prepareSecretsRuntimeSnapshot(params: {
   const resolvedConfig = structuredClone(params.config);
   const loadablePluginOrigins =
     params.loadablePluginOrigins ??
-    (hasConfiguredPluginEntries(sourceConfig)
-      ? await resolveLoadablePluginOrigins({ config: sourceConfig, env: runtimeEnv })
-      : new Map<string, PluginOrigin>());
+    (await resolveLoadablePluginOrigins({ config: sourceConfig, env: runtimeEnv }));
   const context = createResolverContext({
     sourceConfig,
     env: runtimeEnv,

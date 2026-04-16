@@ -1,5 +1,4 @@
 import { loadCronStore, resolveCronStorePath } from "../../cron/store.js";
-import { normalizeLowercaseStringOrEmpty } from "../../shared/string-coerce.js";
 import type { ReplyPayload } from "../types.js";
 
 export const UNSCHEDULED_REMINDER_NOTE =
@@ -11,11 +10,11 @@ const REMINDER_COMMITMENT_PATTERNS: RegExp[] = [
 ];
 
 export function hasUnbackedReminderCommitment(text: string): boolean {
-  const normalized = normalizeLowercaseStringOrEmpty(text);
+  const normalized = text.toLowerCase();
   if (!normalized.trim()) {
     return false;
   }
-  if (normalized.includes(normalizeLowercaseStringOrEmpty(UNSCHEDULED_REMINDER_NOTE))) {
+  if (normalized.includes(UNSCHEDULED_REMINDER_NOTE.toLowerCase())) {
     return false;
   }
   return REMINDER_COMMITMENT_PATTERNS.some((pattern) => pattern.test(text));

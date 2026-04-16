@@ -2,11 +2,6 @@ import type { Command } from "commander";
 import { formatErrorMessage } from "../../infra/errors.js";
 import { formatTimeAgo } from "../../infra/format-time/format-relative.ts";
 import { defaultRuntime } from "../../runtime.js";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalLowercaseString,
-  normalizeOptionalString,
-} from "../../shared/string-coerce.js";
 import { getTerminalTableWidth, renderTable } from "../../terminal/table.js";
 import { shortenHomeInString } from "../../utils.js";
 import { parseDurationMs } from "../parse-duration.js";
@@ -21,7 +16,7 @@ function formatVersionLabel(raw: string) {
   if (!trimmed) {
     return raw;
   }
-  if (normalizeLowercaseStringOrEmpty(trimmed).startsWith("v")) {
+  if (trimmed.toLowerCase().startsWith("v")) {
     return trimmed;
   }
   return /^\d/.test(trimmed) ? `v${trimmed}` : trimmed;
@@ -33,8 +28,8 @@ function resolveNodeVersions(node: {
   coreVersion?: string;
   uiVersion?: string;
 }) {
-  const core = normalizeOptionalString(node.coreVersion);
-  const ui = normalizeOptionalString(node.uiVersion);
+  const core = node.coreVersion?.trim() || undefined;
+  const ui = node.uiVersion?.trim() || undefined;
   if (core || ui) {
     return { core, ui };
   }
@@ -42,7 +37,7 @@ function resolveNodeVersions(node: {
   if (!legacy) {
     return { core: undefined, ui: undefined };
   }
-  const platform = normalizeOptionalLowercaseString(node.platform) ?? "";
+  const platform = node.platform?.trim().toLowerCase() ?? "";
   const headless =
     platform === "darwin" || platform === "linux" || platform === "win32" || platform === "windows";
   return headless ? { core: legacy, ui: undefined } : { core: undefined, ui: legacy };
@@ -92,7 +87,8 @@ function parseSinceMs(raw: unknown, label: string): number | undefined {
   if (raw === undefined || raw === null) {
     return undefined;
   }
-  const value = normalizeOptionalString(raw) ?? (typeof raw === "number" ? String(raw) : null);
+  const value =
+    typeof raw === "string" ? raw.trim() : typeof raw === "number" ? String(raw).trim() : null;
   if (value === null) {
     defaultRuntime.error(`${label}: invalid duration value`);
     defaultRuntime.exit(1);
@@ -234,7 +230,7 @@ export function registerNodesStatusCommands(nodes: Command) {
       .requiredOption("--node <idOrNameOrIp>", "Node id, name, or IP")
       .action(async (opts: NodesRpcOpts) => {
         await runNodesCommand("describe", async () => {
-          const nodeId = await resolveNodeId(opts, opts.node ?? "");
+          const nodeId = await resolveNodeId(opts, String(opts.node ?? ""));
           const result = await callGatewayCli("node.describe", opts, {
             nodeId,
           });

@@ -1,6 +1,5 @@
 import { ensureAuthProfileStore } from "../../agents/auth-profiles.js";
-import type { OpenClawConfig } from "../../config/types.openclaw.js";
-import { normalizeOptionalString } from "../../shared/string-coerce.js";
+import type { OpenClawConfig } from "../../config/config.js";
 
 export function resolveProfileOverride(params: {
   rawProfile?: string;
@@ -8,7 +7,7 @@ export function resolveProfileOverride(params: {
   cfg: OpenClawConfig;
   agentDir?: string;
 }): { profileId?: string; error?: string } {
-  const raw = normalizeOptionalString(params.rawProfile);
+  const raw = params.rawProfile?.trim();
   if (!raw) {
     return {};
   }

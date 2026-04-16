@@ -7,7 +7,7 @@ import {
   buildChannelAccountSnapshot,
   buildReadOnlySourceChannelAccountSnapshot,
 } from "../../channels/plugins/status.js";
-import type { ChannelAccountSnapshot } from "../../channels/plugins/types.public.js";
+import type { ChannelAccountSnapshot } from "../../channels/plugins/types.js";
 import { resolveCommandConfigWithSecrets } from "../../cli/command-config-resolution.js";
 import { formatCliCommand } from "../../cli/command-format.js";
 import { getChannelsCommandSecretTargetIds } from "../../cli/command-secret-targets.js";
@@ -17,7 +17,6 @@ import { callGateway } from "../../gateway/call.js";
 import { collectChannelStatusIssues } from "../../infra/channels-status-issues.js";
 import { formatTimeAgo } from "../../infra/format-time/format-relative.ts";
 import { defaultRuntime, type RuntimeEnv, writeRuntimeJson } from "../../runtime.js";
-import { normalizeOptionalString } from "../../shared/string-coerce.js";
 import { formatDocsLink } from "../../terminal/links.js";
 import { theme } from "../../terminal/theme.js";
 import {
@@ -86,7 +85,7 @@ function buildChannelAccountLine(
   bits: string[],
 ): string {
   const accountId = typeof account.accountId === "string" ? account.accountId : "default";
-  const name = normalizeOptionalString(account.name) ?? "";
+  const name = typeof account.name === "string" ? account.name.trim() : "";
   const labelText = formatChannelAccountLabel({
     channel: provider,
     accountId,

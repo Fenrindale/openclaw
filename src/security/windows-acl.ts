@@ -1,6 +1,5 @@
 import os from "node:os";
 import { runExec } from "../process/exec.js";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 
 export type ExecFn = typeof runExec;
 
@@ -64,7 +63,7 @@ const STATUS_PREFIXES = [
   "no mapping between account names",
 ];
 
-const normalize = (value: string) => normalizeLowercaseStringOrEmpty(value);
+const normalize = (value: string) => value.trim().toLowerCase();
 
 function normalizeSid(value: string): string {
   const normalized = normalize(value);

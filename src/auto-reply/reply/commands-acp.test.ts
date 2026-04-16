@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AcpRuntimeError } from "../../acp/runtime/errors.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import type { SessionBindingRecord } from "../../infra/outbound/session-binding-service.js";
@@ -90,13 +90,6 @@ vi.mock("../../acp/runtime/session-meta.js", () => ({
   resolveSessionStorePathForAcp: (args: unknown) => hoisted.resolveSessionStorePathForAcpMock(args),
 }));
 
-vi.mock("../../agents/acp-spawn.js", () => ({
-  resolveAcpSpawnRuntimePolicyError: (params: { cfg?: OpenClawConfig }) =>
-    params.cfg?.agents?.defaults?.sandbox?.mode === "all"
-      ? 'Sandboxed sessions cannot spawn ACP sessions because runtime="acp" runs on the host. Use runtime="subagent" from sandboxed sessions.'
-      : undefined,
-}));
-
 vi.mock("../../config/sessions.js", async () => {
   const actual = await vi.importActual<typeof import("../../config/sessions.js")>(
     "../../config/sessions.js",
@@ -125,27 +118,7 @@ const { __testing: acpResetTargetTesting, resolveEffectiveResetTargetSessionKey 
   await import("./acp-reset-target.js");
 const { createTaskRecord, resetTaskRegistryForTests } =
   await import("../../tasks/task-registry.js");
-const { configureTaskRegistryRuntime } = await import("../../tasks/task-registry.store.js");
 const { failTaskRunByRunId } = await import("../../tasks/task-executor.js");
-
-function configureInMemoryTaskRegistryStoreForTests(): void {
-  configureTaskRegistryRuntime({
-    store: {
-      loadSnapshot: () => ({
-        tasks: new Map(),
-        deliveryStates: new Map(),
-      }),
-      saveSnapshot: () => {},
-      upsertTaskWithDeliveryState: () => {},
-      upsertTask: () => {},
-      deleteTaskWithDeliveryState: () => {},
-      deleteTask: () => {},
-      upsertDeliveryState: () => {},
-      deleteDeliveryState: () => {},
-      close: () => {},
-    },
-  });
-}
 
 function parseTelegramChatIdForTest(raw?: string | null): string | undefined {
   const trimmed = raw?.trim().replace(/^telegram:/i, "");
@@ -731,8 +704,7 @@ describe("/acp command", () => {
   beforeEach(() => {
     setMinimalAcpCommandRegistryForTests();
     acpManagerTesting.resetAcpSessionManagerForTests();
-    resetTaskRegistryForTests({ persist: false });
-    configureInMemoryTaskRegistryStoreForTests();
+    resetTaskRegistryForTests();
     acpResetTargetTesting.setDepsForTest({
       getSessionBindingService: () => createAcpCommandSessionBindingService() as never,
     });
@@ -952,10 +924,6 @@ describe("/acp command", () => {
         };
       },
     });
-  });
-
-  afterEach(() => {
-    resetTaskRegistryForTests({ persist: false });
   });
 
   it("returns null when the message is not /acp", async () => {

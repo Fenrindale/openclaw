@@ -1,10 +1,6 @@
 import { resolveMarkdownTableMode } from "openclaw/plugin-sdk/config-runtime";
 import { isPrivateNetworkOptInEnabled } from "openclaw/plugin-sdk/ssrf-runtime";
-import {
-  convertMarkdownTables,
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-} from "openclaw/plugin-sdk/text-runtime";
+import { convertMarkdownTables } from "openclaw/plugin-sdk/text-runtime";
 import { getMattermostRuntime } from "../runtime.js";
 import { resolveMattermostAccount } from "./accounts.js";
 import {
@@ -85,8 +81,8 @@ function cacheKey(baseUrl: string, token: string): string {
 }
 
 function normalizeMessage(text: string, mediaUrl?: string): string {
-  const trimmed = normalizeOptionalString(text) ?? "";
-  const media = normalizeOptionalString(mediaUrl);
+  const trimmed = text.trim();
+  const media = mediaUrl?.trim();
   return [trimmed, media].filter(Boolean).join("\n");
 }
 
@@ -98,7 +94,7 @@ export function parseMattermostTarget(raw: string): MattermostTarget {
   if (!trimmed) {
     throw new Error("Recipient is required for Mattermost sends");
   }
-  const lower = normalizeLowercaseStringOrEmpty(trimmed);
+  const lower = trimmed.toLowerCase();
   if (lower.startsWith("channel:")) {
     const id = trimmed.slice("channel:".length).trim();
     if (!id) {
@@ -173,7 +169,7 @@ async function resolveUserIdByUsername(params: {
   allowPrivateNetwork?: boolean;
 }): Promise<string> {
   const { baseUrl, token, username } = params;
-  const key = `${cacheKey(baseUrl, token)}::${normalizeLowercaseStringOrEmpty(username)}`;
+  const key = `${cacheKey(baseUrl, token)}::${username.toLowerCase()}`;
   const cached = userByNameCache.get(key);
   if (cached?.id) {
     return cached.id;
@@ -195,7 +191,7 @@ async function resolveChannelIdByName(params: {
   allowPrivateNetwork?: boolean;
 }): Promise<string> {
   const { baseUrl, token, name } = params;
-  const key = `${cacheKey(baseUrl, token)}::channel::${normalizeLowercaseStringOrEmpty(name)}`;
+  const key = `${cacheKey(baseUrl, token)}::channel::${name.toLowerCase()}`;
   const cached = channelByNameCache.get(key);
   if (cached) {
     return cached;
@@ -324,7 +320,7 @@ async function resolveMattermostSendContext(
     cfg,
     accountId: opts.accountId,
   });
-  const token = normalizeOptionalString(opts.botToken) ?? normalizeOptionalString(account.botToken);
+  const token = opts.botToken?.trim() || account.botToken?.trim();
   if (!token) {
     throw new Error(
       `Mattermost bot token missing for account "${account.accountId}" (set channels.mattermost.accounts.${account.accountId}.botToken or MATTERMOST_BOT_TOKEN for default).`,
@@ -337,7 +333,7 @@ async function resolveMattermostSendContext(
     );
   }
 
-  const trimmedTo = normalizeOptionalString(to) ?? "";
+  const trimmedTo = to?.trim() ?? "";
   const opaqueTarget = await resolveMattermostOpaqueTarget({
     input: trimmedTo,
     token,
@@ -415,7 +411,7 @@ export async function sendMessageMattermost(
       text: opts.attachmentText,
     });
   }
-  let message = normalizeOptionalString(text) ?? "";
+  let message = text?.trim() ?? "";
   let fileIds: string[] | undefined;
   let uploadError: Error | undefined;
   const mediaUrl = opts.mediaUrl?.trim();

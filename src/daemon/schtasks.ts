@@ -6,7 +6,6 @@ import { findVerifiedGatewayListenerPidsOnPortSync } from "../infra/gateway-proc
 import { inspectPortUsage } from "../infra/ports.js";
 import { getWindowsInstallRoots } from "../infra/windows-install-roots.js";
 import { killProcessTree } from "../process/kill-tree.js";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 import { sleep } from "../utils.js";
 import { parseCmdScriptCommandLine, quoteCmdScriptArg } from "./cmd-argv.js";
 import { assertNoCmdLineBreak, parseCmdSetAssignment, renderCmdSetAssignment } from "./cmd-set.js";
@@ -122,7 +121,7 @@ export async function readScheduledTaskCommand(
       if (!line) {
         continue;
       }
-      const lower = normalizeLowercaseStringOrEmpty(line);
+      const lower = line.toLowerCase();
       if (line.startsWith("@echo")) {
         continue;
       }
@@ -193,7 +192,7 @@ function normalizeTaskResultCode(value?: string): string | null {
   if (!value) {
     return null;
   }
-  const raw = normalizeLowercaseStringOrEmpty(value);
+  const raw = value.trim().toLowerCase();
   if (!raw) {
     return null;
   }
@@ -731,7 +730,7 @@ export async function uninstallScheduledTask({
 }
 
 function isTaskNotRunning(res: { stdout: string; stderr: string; code: number }): boolean {
-  const detail = normalizeLowercaseStringOrEmpty(res.stderr || res.stdout);
+  const detail = (res.stderr || res.stdout).toLowerCase();
   return detail.includes("not running");
 }
 
@@ -840,7 +839,7 @@ export async function readScheduledTaskRuntime(
       return await resolveFallbackRuntime(env);
     }
     const detail = (res.stderr || res.stdout).trim();
-    const missing = normalizeLowercaseStringOrEmpty(detail).includes("cannot find the file");
+    const missing = detail.toLowerCase().includes("cannot find the file");
     return {
       status: missing ? "stopped" : "unknown",
       detail: detail || undefined,

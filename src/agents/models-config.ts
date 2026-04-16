@@ -74,16 +74,13 @@ async function readExistingModelsFile(pathname: string): Promise<{
   }
 }
 
-export async function ensureModelsFileModeForModelsJson(pathname: string): Promise<void> {
+async function ensureModelsFileMode(pathname: string): Promise<void> {
   await fs.chmod(pathname, 0o600).catch(() => {
     // best-effort
   });
 }
 
-export async function writeModelsFileAtomicForModelsJson(
-  targetPath: string,
-  contents: string,
-): Promise<void> {
+async function writeModelsFileAtomic(targetPath: string, contents: string): Promise<void> {
   const tempPath = `${targetPath}.${process.pid}.${Date.now()}.tmp`;
   await fs.writeFile(tempPath, contents, { mode: 0o600 });
   await fs.rename(tempPath, targetPath);
@@ -152,7 +149,7 @@ export async function ensureOpenClawModelsJson(
   if (cached) {
     const settled = await cached;
     if (settled.fingerprint === fingerprint) {
-      await ensureModelsFileModeForModelsJson(targetPath);
+      await ensureModelsFileMode(targetPath);
       return settled.result;
     }
   }
@@ -176,13 +173,13 @@ export async function ensureOpenClawModelsJson(
     }
 
     if (plan.action === "noop") {
-      await ensureModelsFileModeForModelsJson(targetPath);
+      await ensureModelsFileMode(targetPath);
       return { fingerprint, result: { agentDir, wrote: false } };
     }
 
     await fs.mkdir(agentDir, { recursive: true, mode: 0o700 });
-    await writeModelsFileAtomicForModelsJson(targetPath, plan.contents);
-    await ensureModelsFileModeForModelsJson(targetPath);
+    await writeModelsFileAtomic(targetPath, plan.contents);
+    await ensureModelsFileMode(targetPath);
     return { fingerprint, result: { agentDir, wrote: true } };
   });
   MODELS_JSON_STATE.readyCache.set(targetPath, pending);

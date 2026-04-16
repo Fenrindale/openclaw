@@ -8,7 +8,6 @@ import {
   type ChannelSetupWizard,
   type OpenClawConfig,
 } from "openclaw/plugin-sdk/setup";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import { resolveBlueBubblesAccount, resolveDefaultBlueBubblesAccountId } from "./accounts.js";
 import { applyBlueBubblesConnectionConfig } from "./config-apply.js";
 import { hasConfiguredSecretInput, normalizeSecretInputString } from "./secret-input.js";
@@ -40,7 +39,7 @@ function validateBlueBubblesAllowFromEntry(value: string): string | null {
     if (parsed.kind === "handle" && !parsed.handle) {
       return null;
     }
-    return normalizeOptionalString(value) ?? null;
+    return value.trim() || null;
   } catch {
     return null;
   }
@@ -77,15 +76,13 @@ const promptBlueBubblesAllowFrom = createPromptParsedAllowFromForAccount({
 });
 
 function validateBlueBubblesServerUrlInput(value: unknown): string | undefined {
-  const trimmed = normalizeOptionalString(value) ?? "";
+  const trimmed = typeof value === "string" ? value.trim() : "";
   if (!trimmed) {
     return "Required";
   }
   try {
     const normalized = normalizeBlueBubblesServerUrl(trimmed);
-    if (!URL.canParse(normalized)) {
-      return "Invalid URL format";
-    }
+    new URL(normalized);
     return undefined;
   } catch {
     return "Invalid URL format";
@@ -110,8 +107,16 @@ function applyBlueBubblesSetupPatch(
   });
 }
 
+function resolveBlueBubblesServerUrl(cfg: OpenClawConfig, accountId: string): string | undefined {
+  return resolveBlueBubblesAccount({ cfg, accountId }).config.serverUrl?.trim() || undefined;
+}
+
+function resolveBlueBubblesWebhookPath(cfg: OpenClawConfig, accountId: string): string | undefined {
+  return resolveBlueBubblesAccount({ cfg, accountId }).config.webhookPath?.trim() || undefined;
+}
+
 function validateBlueBubblesWebhookPath(value: string): string | undefined {
-  const trimmed = value.trim();
+  const trimmed = String(value ?? "").trim();
   if (!trimmed) {
     return "Required";
   }
@@ -166,9 +171,7 @@ export const blueBubblesSetupWizard: ChannelSetupWizard = {
       configured ? "configured" : "iMessage via BlueBubbles app",
   },
   prepare: async ({ cfg, accountId, prompter, credentialValues }) => {
-    const existingWebhookPath = normalizeOptionalString(
-      resolveBlueBubblesAccount({ cfg, accountId }).config.webhookPath,
-    );
+    const existingWebhookPath = resolveBlueBubblesWebhookPath(cfg, accountId);
     const wantsCustomWebhook = await prompter.confirm({
       message: `Configure a custom webhook path? (default: ${DEFAULT_WEBHOOK_PATH})`,
       initialValue: Boolean(existingWebhookPath && existingWebhookPath !== DEFAULT_WEBHOOK_PATH),
@@ -221,10 +224,9 @@ export const blueBubblesSetupWizard: ChannelSetupWizard = {
         "Find this in the BlueBubbles Server app under Connection.",
         `Docs: ${formatDocsLink("/channels/bluebubbles", "bluebubbles")}`,
       ],
-      currentValue: ({ cfg, accountId }) =>
-        normalizeOptionalString(resolveBlueBubblesAccount({ cfg, accountId }).config.serverUrl),
+      currentValue: ({ cfg, accountId }) => resolveBlueBubblesServerUrl(cfg, accountId),
       validate: ({ value }) => validateBlueBubblesServerUrlInput(value),
-      normalizeValue: ({ value }) => value.trim(),
+      normalizeValue: ({ value }) => String(value).trim(),
       applySet: async ({ cfg, accountId, value }) =>
         applyBlueBubblesSetupPatch(cfg, accountId, {
           serverUrl: value,
@@ -235,15 +237,13 @@ export const blueBubblesSetupWizard: ChannelSetupWizard = {
       message: "Webhook path",
       placeholder: DEFAULT_WEBHOOK_PATH,
       currentValue: ({ cfg, accountId }) => {
-        const value = normalizeOptionalString(
-          resolveBlueBubblesAccount({ cfg, accountId }).config.webhookPath,
-        );
+        const value = resolveBlueBubblesWebhookPath(cfg, accountId);
         return value && value !== DEFAULT_WEBHOOK_PATH ? value : undefined;
       },
       shouldPrompt: ({ credentialValues }) =>
         credentialValues[CONFIGURE_CUSTOM_WEBHOOK_FLAG] === "1",
       validate: ({ value }) => validateBlueBubblesWebhookPath(value),
-      normalizeValue: ({ value }) => value.trim(),
+      normalizeValue: ({ value }) => String(value).trim(),
       applySet: async ({ cfg, accountId, value }) =>
         applyBlueBubblesSetupPatch(cfg, accountId, {
           webhookPath: value,

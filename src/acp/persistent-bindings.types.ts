@@ -1,9 +1,8 @@
 import { createHash } from "node:crypto";
-import type { ChannelId } from "../channels/plugins/types.public.js";
+import type { ChannelId } from "../channels/plugins/types.js";
 import type { SessionBindingRecord } from "../infra/outbound/session-binding-service.js";
 import { normalizeAccountId, resolveAgentIdFromSessionKey } from "../routing/session-key.js";
 import { sanitizeAgentId } from "../routing/session-key.js";
-import { normalizeOptionalLowercaseString } from "../shared/string-coerce.js";
 import { normalizeText } from "./normalize-text.js";
 import type { AcpRuntimeSessionMode } from "./runtime/types.js";
 
@@ -39,7 +38,7 @@ export type AcpBindingConfigShape = {
 };
 
 export function normalizeMode(value: unknown): AcpRuntimeSessionMode {
-  const raw = normalizeOptionalLowercaseString(value);
+  const raw = normalizeText(value)?.toLowerCase();
   return raw === "oneshot" ? "oneshot" : "persistent";
 }
 
@@ -118,7 +117,7 @@ export function parseConfiguredAcpSessionKey(
   if (tokens.length !== 5 || tokens[0] !== "acp" || tokens[1] !== "binding") {
     return null;
   }
-  const channel = normalizeOptionalLowercaseString(tokens[2]);
+  const channel = tokens[2]?.trim().toLowerCase();
   if (!channel) {
     return null;
   }

@@ -1,10 +1,6 @@
 import { z } from "zod";
 import { getBlockedNetworkModeReason } from "../agents/sandbox/network-mode.js";
 import { parseDurationMs } from "../cli/parse-duration.js";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-} from "../shared/string-coerce.js";
 import { AgentModelSchema } from "./zod-schema.agent-model.js";
 import {
   GroupChatSchema,
@@ -35,10 +31,8 @@ export const HeartbeatSchema = z
     to: z.string().optional(),
     accountId: z.string().optional(),
     prompt: z.string().optional(),
-    includeSystemPromptSection: z.boolean().optional(),
     ackMaxChars: z.number().int().nonnegative().optional(),
     suppressToolErrorWarnings: z.boolean().optional(),
-    timeoutSeconds: z.number().int().positive().optional(),
     lightContext: z.boolean().optional(),
     isolatedSession: z.boolean().optional(),
   })
@@ -146,7 +140,7 @@ export const SandboxDockerSchema = z
   .superRefine((data, ctx) => {
     if (data.binds) {
       for (let i = 0; i < data.binds.length; i += 1) {
-        const bind = normalizeOptionalString(data.binds[i]) ?? "";
+        const bind = data.binds[i]?.trim() ?? "";
         if (!bind) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
@@ -189,7 +183,7 @@ export const SandboxDockerSchema = z
           "Use a custom bridge network, or set dangerouslyAllowContainerNamespaceJoin=true only when you fully trust this runtime.",
       });
     }
-    if (normalizeLowercaseStringOrEmpty(data.seccompProfile ?? "") === "unconfined") {
+    if (data.seccompProfile?.trim().toLowerCase() === "unconfined") {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["seccompProfile"],
@@ -198,7 +192,7 @@ export const SandboxDockerSchema = z
           "Use a custom seccomp profile file or omit this setting.",
       });
     }
-    if (normalizeLowercaseStringOrEmpty(data.apparmorProfile ?? "") === "unconfined") {
+    if (data.apparmorProfile?.trim().toLowerCase() === "unconfined") {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["apparmorProfile"],
@@ -228,7 +222,7 @@ export const SandboxBrowserSchema = z
     binds: z.array(z.string()).optional(),
   })
   .superRefine((data, ctx) => {
-    if (normalizeLowercaseStringOrEmpty(data.network ?? "") === "host") {
+    if (data.network?.trim().toLowerCase() === "host") {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["network"],
@@ -244,23 +238,6 @@ export const SandboxPruneSchema = z
   .object({
     idleHours: z.number().int().nonnegative().optional(),
     maxAgeDays: z.number().int().nonnegative().optional(),
-  })
-  .strict()
-  .optional();
-
-export const AgentContextLimitsSchema = z
-  .object({
-    memoryGetMaxChars: z.number().int().min(1).max(250_000).optional(),
-    memoryGetDefaultLines: z.number().int().min(1).max(5_000).optional(),
-    toolResultMaxChars: z.number().int().min(1).max(250_000).optional(),
-    postCompactionMaxChars: z.number().int().min(1).max(50_000).optional(),
-  })
-  .strict()
-  .optional();
-
-export const AgentSkillsLimitsSchema = z
-  .object({
-    maxSkillsPromptChars: z.number().int().min(0).optional(),
   })
   .strict()
   .optional();
@@ -348,12 +325,6 @@ export const ToolsWebFetchSchema = z
     maxRedirects: z.number().int().nonnegative().optional(),
     userAgent: z.string().optional(),
     readability: z.boolean().optional(),
-    ssrfPolicy: z
-      .object({
-        allowRfc2544BenchmarkRange: z.boolean().optional(),
-      })
-      .strict()
-      .optional(),
     // Keep the legacy Firecrawl fetch shape loadable so existing installs can
     // start and then migrate cleanly through doctor.
     firecrawl: z
@@ -502,7 +473,6 @@ const ToolLoopDetectionSchema = z
     enabled: z.boolean().optional(),
     historySize: z.number().int().positive().optional(),
     warningThreshold: z.number().int().positive().optional(),
-    unknownToolThreshold: z.number().int().positive().optional(),
     criticalThreshold: z.number().int().positive().optional(),
     globalCircuitBreakerThreshold: z.number().int().positive().optional(),
     detectors: ToolLoopDetectionDetectorSchema,
@@ -800,14 +770,6 @@ const AgentRuntimeSchema = z
   ])
   .optional();
 
-export const AgentEmbeddedHarnessSchema = z
-  .object({
-    runtime: z.string().optional(),
-    fallback: z.enum(["pi", "none"]).optional(),
-  })
-  .strict()
-  .optional();
-
 export const AgentEntrySchema = z
   .object({
     id: z.string(),
@@ -815,8 +777,6 @@ export const AgentEntrySchema = z
     name: z.string().optional(),
     workspace: z.string().optional(),
     agentDir: z.string().optional(),
-    systemPromptOverride: z.string().optional(),
-    embeddedHarness: AgentEmbeddedHarnessSchema,
     model: AgentModelSchema.optional(),
     thinkingDefault: z
       .enum(["off", "minimal", "low", "medium", "high", "xhigh", "adaptive"])
@@ -826,8 +786,6 @@ export const AgentEntrySchema = z
     skills: z.array(z.string()).optional(),
     memorySearch: MemorySearchSchema,
     humanDelay: HumanDelaySchema.optional(),
-    skillsLimits: AgentSkillsLimitsSchema,
-    contextLimits: AgentContextLimitsSchema,
     heartbeat: HeartbeatSchema,
     identity: IdentitySchema,
     groupChat: GroupChatSchema,
@@ -847,12 +805,6 @@ export const AgentEntrySchema = z
           .optional(),
         thinking: z.string().optional(),
         requireAgentId: z.boolean().optional(),
-      })
-      .strict()
-      .optional(),
-    embeddedPi: z
-      .object({
-        executionContract: z.union([z.literal("default"), z.literal("strict-agentic")]).optional(),
       })
       .strict()
       .optional(),

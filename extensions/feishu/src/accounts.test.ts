@@ -10,6 +10,8 @@ import {
 } from "./accounts.js";
 import type { FeishuConfig } from "./types.js";
 
+const asConfig = (value: Partial<FeishuConfig>) => value as FeishuConfig;
+
 function makeDefaultAndRouterAccounts() {
   return {
     default: { appId: "cli_default", appSecret: "secret_default" }, // pragma: allowlist secret
@@ -43,10 +45,6 @@ function withEnvVar(key: string, value: string | undefined, run: () => void) {
       process.env[key] = prev;
     }
   }
-}
-
-function asConfig(config: Partial<FeishuConfig>): FeishuConfig {
-  return config as unknown as FeishuConfig;
 }
 
 function expectUnresolvedEnvSecretRefError(key: string) {

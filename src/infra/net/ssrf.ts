@@ -57,7 +57,7 @@ function normalizeHostnameSet(values?: string[]): Set<string> {
   return new Set(values.map((value) => normalizeHostname(value)).filter(Boolean));
 }
 
-export function normalizeHostnameAllowlist(values?: string[]): string[] {
+function normalizeHostnameAllowlist(values?: string[]): string[] {
   if (!values || values.length === 0) {
     return [];
   }
@@ -87,7 +87,7 @@ function resolveIpv4SpecialUseBlockOptions(policy?: SsrFPolicy): Ipv4SpecialUseB
   };
 }
 
-export function isHostnameAllowedByPattern(hostname: string, pattern: string): boolean {
+function isHostnameAllowedByPattern(hostname: string, pattern: string): boolean {
   if (pattern.startsWith("*.")) {
     const suffix = pattern.slice(2);
     if (!suffix || hostname === suffix) {
@@ -98,7 +98,7 @@ export function isHostnameAllowedByPattern(hostname: string, pattern: string): b
   return hostname === pattern;
 }
 
-export function matchesHostnameAllowlist(hostname: string, allowlist: string[]): boolean {
+function matchesHostnameAllowlist(hostname: string, allowlist: string[]): boolean {
   if (allowlist.length === 0) {
     return true;
   }
@@ -120,7 +120,10 @@ function looksLikeUnsupportedIpv4Literal(address: string): boolean {
 
 // Returns true for private/internal and special-use non-global addresses.
 export function isPrivateIpAddress(address: string, policy?: SsrFPolicy): boolean {
-  const normalized = normalizeHostname(address);
+  let normalized = address.trim().toLowerCase();
+  if (normalized.startsWith("[") && normalized.endsWith("]")) {
+    normalized = normalized.slice(1, -1);
+  }
   if (!normalized) {
     return false;
   }
@@ -189,33 +192,6 @@ function assertAllowedHostOrIpOrThrow(hostnameOrIp: string, policy?: SsrFPolicy)
   if (isBlockedHostnameOrIp(hostnameOrIp, policy)) {
     throw new SsrFBlockedError(BLOCKED_HOST_OR_IP_MESSAGE);
   }
-}
-
-function resolveHostnamePolicyChecks(
-  hostname: string,
-  policy?: SsrFPolicy,
-): {
-  normalized: string;
-  skipPrivateNetworkChecks: boolean;
-} {
-  const normalized = normalizeHostname(hostname);
-  if (!normalized) {
-    throw new Error("Invalid hostname");
-  }
-
-  const hostnameAllowlist = normalizeHostnameAllowlist(policy?.hostnameAllowlist);
-  const skipPrivateNetworkChecks = shouldSkipPrivateNetworkChecks(normalized, policy);
-
-  if (!matchesHostnameAllowlist(normalized, hostnameAllowlist)) {
-    throw new SsrFBlockedError(`Blocked hostname (not in allowlist): ${hostname}`);
-  }
-
-  if (!skipPrivateNetworkChecks) {
-    // Fail fast for literal hosts/IPs before any DNS lookup side-effects.
-    assertAllowedHostOrIpOrThrow(normalized, policy);
-  }
-
-  return { normalized, skipPrivateNetworkChecks };
 }
 
 function assertAllowedResolvedAddressesOrThrow(
@@ -350,10 +326,22 @@ export async function resolvePinnedHostnameWithPolicy(
   hostname: string,
   params: { lookupFn?: LookupFn; policy?: SsrFPolicy } = {},
 ): Promise<PinnedHostname> {
-  const { normalized, skipPrivateNetworkChecks } = resolveHostnamePolicyChecks(
-    hostname,
-    params.policy,
-  );
+  const normalized = normalizeHostname(hostname);
+  if (!normalized) {
+    throw new Error("Invalid hostname");
+  }
+
+  const hostnameAllowlist = normalizeHostnameAllowlist(params.policy?.hostnameAllowlist);
+  const skipPrivateNetworkChecks = shouldSkipPrivateNetworkChecks(normalized, params.policy);
+
+  if (!matchesHostnameAllowlist(normalized, hostnameAllowlist)) {
+    throw new SsrFBlockedError(`Blocked hostname (not in allowlist): ${hostname}`);
+  }
+
+  if (!skipPrivateNetworkChecks) {
+    // Phase 1: fail fast for literal hosts/IPs before any DNS lookup side-effects.
+    assertAllowedHostOrIpOrThrow(normalized, params.policy);
+  }
 
   const lookupFn = params.lookupFn ?? dnsLookup;
   const results = normalizeLookupResults(
@@ -380,10 +368,6 @@ export async function resolvePinnedHostnameWithPolicy(
     addresses,
     lookup: createPinnedLookup({ hostname: normalized, addresses }),
   };
-}
-
-export function assertHostnameAllowedWithPolicy(hostname: string, policy?: SsrFPolicy): string {
-  return resolveHostnamePolicyChecks(hostname, policy).normalized;
 }
 
 export async function resolvePinnedHostname(

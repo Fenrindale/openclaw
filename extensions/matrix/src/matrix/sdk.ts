@@ -8,18 +8,14 @@ import {
   type MatrixEvent,
 } from "matrix-js-sdk/lib/matrix.js";
 import { VerificationMethod } from "matrix-js-sdk/lib/types.js";
+import { KeyedAsyncQueue } from "openclaw/plugin-sdk/core";
 import type { PinnedDispatcherPolicy } from "openclaw/plugin-sdk/infra-runtime";
-import { KeyedAsyncQueue } from "openclaw/plugin-sdk/keyed-async-queue";
 import { normalizeNullableString } from "openclaw/plugin-sdk/text-runtime";
 import type { SsrFPolicy } from "../runtime-api.js";
 import { resolveMatrixRoomKeyBackupReadinessError } from "./backup-health.js";
 import { FileBackedMatrixSyncStore } from "./client/file-sync-store.js";
 import { createMatrixJsSdkClientLogger } from "./client/logging.js";
-import {
-  formatMatrixErrorMessage,
-  formatMatrixErrorReason,
-  isMatrixNotFoundError,
-} from "./errors.js";
+import { isMatrixNotFoundError } from "./errors.js";
 import type {
   MatrixCryptoBootstrapOptions,
   MatrixCryptoBootstrapResult,
@@ -44,12 +40,6 @@ import type {
   MessageEventContent,
 } from "./sdk/types.js";
 import type { MatrixVerificationSummary } from "./sdk/verification-manager.js";
-import { createMatrixStartupAbortError, throwIfMatrixStartupAborted } from "./startup-abort.js";
-import {
-  isMatrixReadySyncState,
-  isMatrixTerminalSyncState,
-  type MatrixSyncState,
-} from "./sync-state.js";
 
 export { ConsoleLogger, LogService };
 export type {
@@ -191,7 +181,7 @@ function isUnsupportedAuthenticatedMediaEndpointError(err: unknown): boolean {
   if (statusCode === 404 || statusCode === 405 || statusCode === 501) {
     return true;
   }
-  const message = formatMatrixErrorReason(err);
+  const message = (err instanceof Error ? err.message : String(err)).toLowerCase();
   return (
     message.includes("m_unrecognized") ||
     message.includes("unrecognized request") ||
@@ -227,7 +217,6 @@ export class MatrixClient {
   private readonly autoBootstrapCrypto: boolean;
   private stopPersistPromise: Promise<void> | null = null;
   private verificationSummaryListenerBound = false;
-  private currentSyncState: MatrixSyncState | null = null;
 
   readonly dms = {
     update: async (): Promise<boolean> => {
@@ -374,128 +363,25 @@ export class MatrixClient {
     }
   }
 
-  async start(opts: { abortSignal?: AbortSignal; readyTimeoutMs?: number } = {}): Promise<void> {
-    await this.startSyncSession({
-      bootstrapCrypto: true,
-      abortSignal: opts.abortSignal,
-      readyTimeoutMs: opts.readyTimeoutMs,
-    });
+  async start(): Promise<void> {
+    await this.startSyncSession({ bootstrapCrypto: true });
   }
 
-  private async waitForInitialSyncReady(
-    params: {
-      timeoutMs?: number;
-      abortSignal?: AbortSignal;
-    } = {},
-  ): Promise<void> {
-    const timeoutMs = params.timeoutMs ?? 30_000;
-    if (isMatrixReadySyncState(this.currentSyncState)) {
-      return;
-    }
-    if (isMatrixTerminalSyncState(this.currentSyncState)) {
-      throw new Error(`Matrix sync entered ${this.currentSyncState} during startup`);
-    }
-
-    await new Promise<void>((resolve, reject) => {
-      let settled = false;
-      let timeoutId: ReturnType<typeof setTimeout> | undefined;
-      const abortSignal = params.abortSignal;
-
-      const cleanup = () => {
-        this.off("sync.state", onSyncState);
-        this.off("sync.unexpected_error", onUnexpectedError);
-        abortSignal?.removeEventListener("abort", onAbort);
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-          timeoutId = undefined;
-        }
-      };
-
-      const settleResolve = () => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        cleanup();
-        resolve();
-      };
-
-      const settleReject = (error: Error) => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        cleanup();
-        reject(error);
-      };
-
-      const onSyncState = (state: MatrixSyncState, _prevState: string | null, error?: unknown) => {
-        if (isMatrixReadySyncState(state)) {
-          settleResolve();
-          return;
-        }
-        if (isMatrixTerminalSyncState(state)) {
-          settleReject(
-            new Error(
-              error instanceof Error && error.message
-                ? error.message
-                : `Matrix sync entered ${state} during startup`,
-            ),
-          );
-        }
-      };
-
-      const onUnexpectedError = (error: Error) => {
-        settleReject(error);
-      };
-
-      const onAbort = () => {
-        settleReject(createMatrixStartupAbortError());
-      };
-
-      this.on("sync.state", onSyncState);
-      this.on("sync.unexpected_error", onUnexpectedError);
-      if (abortSignal?.aborted) {
-        onAbort();
-        return;
-      }
-      abortSignal?.addEventListener("abort", onAbort, { once: true });
-      timeoutId = setTimeout(() => {
-        settleReject(
-          new Error(`Matrix client did not reach a ready sync state within ${timeoutMs}ms`),
-        );
-      }, timeoutMs);
-      timeoutId.unref?.();
-    });
-  }
-
-  private async startSyncSession(opts: {
-    bootstrapCrypto: boolean;
-    abortSignal?: AbortSignal;
-    readyTimeoutMs?: number;
-  }): Promise<void> {
+  private async startSyncSession(opts: { bootstrapCrypto: boolean }): Promise<void> {
     if (this.started) {
       return;
     }
 
-    throwIfMatrixStartupAborted(opts.abortSignal);
     await this.ensureCryptoSupportInitialized();
-    throwIfMatrixStartupAborted(opts.abortSignal);
     this.registerBridge();
-    await this.initializeCryptoIfNeeded(opts.abortSignal);
+    await this.initializeCryptoIfNeeded();
 
     await this.client.startClient({
       initialSyncLimit: this.initialSyncLimit,
     });
-    await this.waitForInitialSyncReady({
-      abortSignal: opts.abortSignal,
-      timeoutMs: opts.readyTimeoutMs,
-    });
-    throwIfMatrixStartupAborted(opts.abortSignal);
     if (opts.bootstrapCrypto && this.autoBootstrapCrypto) {
-      await this.bootstrapCryptoIfNeeded(opts.abortSignal);
+      await this.bootstrapCryptoIfNeeded();
     }
-    throwIfMatrixStartupAborted(opts.abortSignal);
     this.started = true;
     this.emitOutstandingInviteEvents();
     await this.refreshDmCache().catch(noop);
@@ -536,7 +422,6 @@ export class MatrixClient {
       clearInterval(this.idbPersistTimer);
       this.idbPersistTimer = null;
     }
-    this.currentSyncState = null;
     this.client.stopClient();
     this.started = false;
   }
@@ -580,11 +465,10 @@ export class MatrixClient {
     await this.stopPersistPromise;
   }
 
-  private async bootstrapCryptoIfNeeded(abortSignal?: AbortSignal): Promise<void> {
+  private async bootstrapCryptoIfNeeded(): Promise<void> {
     if (!this.encryptionEnabled || !this.cryptoInitialized || this.cryptoBootstrapped) {
       return;
     }
-    throwIfMatrixStartupAborted(abortSignal);
     await this.ensureCryptoSupportInitialized();
     const crypto = this.client.getCrypto() as MatrixCryptoBootstrapApi | undefined;
     if (!crypto) {
@@ -598,7 +482,6 @@ export class MatrixClient {
       crypto,
       MATRIX_INITIAL_CRYPTO_BOOTSTRAP_OPTIONS,
     );
-    throwIfMatrixStartupAborted(abortSignal);
     if (!initial.crossSigningPublished || initial.ownDeviceVerified === false) {
       const status = await this.getOwnDeviceVerificationStatus();
       if (status.signedByOwner) {
@@ -606,9 +489,7 @@ export class MatrixClient {
           "MatrixClientLite",
           "Cross-signing/bootstrap is incomplete for an already owner-signed device; skipping automatic reset and preserving the current identity. Restore the recovery key or run an explicit verification bootstrap if repair is needed.",
         );
-      } else {
-        // No password guard: passwordless token-auth bots should still attempt repair.
-        // UIA failures inside bootstrap() are caught below and logged as warnings.
+      } else if (this.password?.trim()) {
         try {
           // The repair path already force-resets cross-signing; allow secret storage
           // recreation so the new keys can be persisted. Without this, a device that
@@ -618,7 +499,6 @@ export class MatrixClient {
             crypto,
             MATRIX_AUTOMATIC_REPAIR_BOOTSTRAP_OPTIONS,
           );
-          throwIfMatrixStartupAborted(abortSignal);
           if (repaired.crossSigningPublished && repaired.ownDeviceVerified !== false) {
             LogService.info(
               "MatrixClientLite",
@@ -632,35 +512,36 @@ export class MatrixClient {
             err,
           );
         }
+      } else {
+        LogService.warn(
+          "MatrixClientLite",
+          "Cross-signing/bootstrap incomplete and no password is configured for UIA fallback",
+        );
       }
     }
     this.cryptoBootstrapped = true;
   }
 
-  private async initializeCryptoIfNeeded(abortSignal?: AbortSignal): Promise<void> {
+  private async initializeCryptoIfNeeded(): Promise<void> {
     if (!this.encryptionEnabled || this.cryptoInitialized) {
       return;
     }
-    throwIfMatrixStartupAborted(abortSignal);
     const { persistIdbToDisk, restoreIdbFromDisk } = await loadMatrixCryptoRuntime();
 
     // Restore persisted IndexedDB crypto store before initializing WASM crypto.
     await restoreIdbFromDisk(this.idbSnapshotPath);
-    throwIfMatrixStartupAborted(abortSignal);
 
     try {
       await this.client.initRustCrypto({
         cryptoDatabasePrefix: this.cryptoDatabasePrefix,
       });
       this.cryptoInitialized = true;
-      throwIfMatrixStartupAborted(abortSignal);
 
       // Persist the crypto store after successful init (captures fresh keys on first run).
       await persistIdbToDisk({
         snapshotPath: this.idbSnapshotPath,
         databasePrefix: this.cryptoDatabasePrefix,
       });
-      throwIfMatrixStartupAborted(abortSignal);
 
       // Periodically persist to capture new Olm sessions and room keys.
       this.idbPersistTimer = setInterval(() => {
@@ -1016,7 +897,7 @@ export class MatrixClient {
           try {
             await crypto.loadSessionBackupPrivateKeyFromSecretStorage(); // pragma: allowlist secret
           } catch (err) {
-            keyLoadError = formatMatrixErrorMessage(err);
+            keyLoadError = err instanceof Error ? err.message : String(err);
           }
         } else {
           keyLoadError =
@@ -1121,7 +1002,7 @@ export class MatrixClient {
         keyId: await this.resolveDefaultSecretStorageKeyId(crypto),
       });
     } catch (err) {
-      return await fail(formatMatrixErrorMessage(err));
+      return await fail(err instanceof Error ? err.message : String(err));
     }
 
     try {
@@ -1166,7 +1047,7 @@ export class MatrixClient {
       };
     } catch (err) {
       this.recoveryKeyStore.discardStagedRecoveryKey();
-      return await fail(formatMatrixErrorMessage(err));
+      return await fail(err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -1240,7 +1121,7 @@ export class MatrixClient {
       };
     } catch (err) {
       this.recoveryKeyStore.discardStagedRecoveryKey();
-      return await fail(formatMatrixErrorMessage(err));
+      return await fail(err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -1338,7 +1219,7 @@ export class MatrixClient {
         backup,
       };
     } catch (err) {
-      return await fail(formatMatrixErrorMessage(err));
+      return await fail(err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -1429,7 +1310,7 @@ export class MatrixClient {
       await this.ensureRoomKeyBackupEnabled(crypto);
     } catch (err) {
       this.recoveryKeyStore.discardStagedRecoveryKey();
-      bootstrapError = formatMatrixErrorMessage(err);
+      bootstrapError = err instanceof Error ? err.message : String(err);
     }
 
     const verification = await this.getOwnDeviceVerificationStatus();
@@ -1701,20 +1582,6 @@ export class MatrixClient {
     // Some SDK invite transitions are surfaced as room lifecycle events instead of raw timeline events.
     this.client.on(ClientEvent.Room, (room) => {
       this.emitMembershipForRoom(room);
-    });
-    this.client.on(
-      ClientEvent.Sync,
-      (state: MatrixSyncState, prevState: string | null, data?: unknown) => {
-        this.currentSyncState = state;
-        const error =
-          data && typeof data === "object" && "error" in data
-            ? (data as { error?: unknown }).error
-            : undefined;
-        this.emitter.emit("sync.state", state, prevState, error);
-      },
-    );
-    this.client.on(ClientEvent.SyncUnexpectedError, (error: Error) => {
-      this.emitter.emit("sync.unexpected_error", error);
     });
   }
 

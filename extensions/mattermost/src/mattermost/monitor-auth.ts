@@ -1,4 +1,3 @@
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 import type { ResolvedMattermostAccount } from "./accounts.js";
 import type { MattermostChannel } from "./client.js";
 import type { OpenClawConfig } from "./runtime-api.js";
@@ -21,9 +20,7 @@ export function normalizeMattermostAllowEntry(entry: string): string {
   return trimmed
     .replace(/^(mattermost|user):/i, "")
     .replace(/^@/, "")
-    .trim()
-    ? normalizeLowercaseStringOrEmpty(trimmed.replace(/^(mattermost|user):/i, "").replace(/^@/, ""))
-    : "";
+    .toLowerCase();
 }
 
 export function normalizeMattermostAllowList(entries: Array<string | number>): string[] {

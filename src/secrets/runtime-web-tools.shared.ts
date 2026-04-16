@@ -1,7 +1,6 @@
-import type { OpenClawConfig } from "../config/types.openclaw.js";
+import type { OpenClawConfig } from "../config/config.js";
 import { resolveSecretInputRef } from "../config/types.secrets.js";
-import { createLazyRuntimeNamedExport } from "../shared/lazy-runtime.js";
-import { normalizeOptionalLowercaseString } from "../shared/string-coerce.js";
+import { resolveManifestContractOwnerPluginId } from "../plugins/manifest-registry.js";
 import type {
   ResolverContext,
   SecretDefaults,
@@ -11,11 +10,6 @@ import { pushInactiveSurfaceWarning, pushWarning } from "./runtime-shared.js";
 import type { RuntimeWebDiagnostic, RuntimeWebDiagnosticCode } from "./runtime-web-tools.types.js";
 export { isRecord } from "./shared.js";
 import { isRecord } from "./shared.js";
-
-const loadResolveManifestContractOwnerPluginId = createLazyRuntimeNamedExport(
-  () => import("./runtime-web-tools-manifest.runtime.js"),
-  "resolveManifestContractOwnerPluginId",
-);
 
 type RuntimeWebWarningCode = Extract<RuntimeWebDiagnosticCode, SecretResolverWarningCode>;
 export type SecretResolutionResult<TSource extends string> = {
@@ -101,10 +95,10 @@ export function normalizeKnownProvider<TProvider extends { id: string }>(
   value: unknown,
   providers: TProvider[],
 ): string | undefined {
-  const normalized = normalizeOptionalLowercaseString(value);
-  if (!normalized) {
+  if (typeof value !== "string") {
     return undefined;
   }
+  const normalized = value.trim().toLowerCase();
   if (providers.some((provider) => provider.id === normalized)) {
     return normalized;
   }
@@ -146,7 +140,6 @@ export type ResolveRuntimeWebProviderSurfaceParams<
   invalidAutoDetectCode: RuntimeWebWarningCode;
   sourceConfig: OpenClawConfig;
   context: ResolverContext;
-  configuredBundledPluginIdHint?: string;
   resolveProviders: (params: { configuredBundledPluginId?: string }) => Promise<TProvider[]>;
   sortProviders: (providers: TProvider[]) => TProvider[];
   readConfiguredCredential: (params: {
@@ -168,45 +161,19 @@ export async function resolveRuntimeWebProviderSurface<
 >(
   params: ResolveRuntimeWebProviderSurfaceParams<TProvider, TToolConfig>,
 ): Promise<RuntimeWebProviderSurface<TProvider>> {
-  let configuredBundledPluginId = params.configuredBundledPluginIdHint;
-  if (!configuredBundledPluginId && params.rawProvider) {
-    const resolveManifestContractOwnerPluginId = await loadResolveManifestContractOwnerPluginId();
-    configuredBundledPluginId = resolveManifestContractOwnerPluginId({
-      contract: params.contract,
-      value: params.rawProvider,
-      origin: "bundled",
-      config: params.sourceConfig,
-      env: { ...process.env, ...params.context.env },
-    });
-  }
-  let allProviders = params.sortProviders(
+  const configuredBundledPluginId = resolveManifestContractOwnerPluginId({
+    contract: params.contract,
+    value: params.rawProvider,
+    origin: "bundled",
+    config: params.sourceConfig,
+    env: { ...process.env, ...params.context.env },
+  });
+
+  const allProviders = params.sortProviders(
     await params.resolveProviders({
       configuredBundledPluginId,
     }),
   );
-  if (
-    params.rawProvider &&
-    params.configuredBundledPluginIdHint &&
-    configuredBundledPluginId &&
-    !allProviders.some((provider) => provider.id === params.rawProvider)
-  ) {
-    configuredBundledPluginId = undefined;
-  }
-  if (params.rawProvider && !configuredBundledPluginId) {
-    const resolveManifestContractOwnerPluginId = await loadResolveManifestContractOwnerPluginId();
-    configuredBundledPluginId = resolveManifestContractOwnerPluginId({
-      contract: params.contract,
-      value: params.rawProvider,
-      origin: "bundled",
-      config: params.sourceConfig,
-      env: { ...process.env, ...params.context.env },
-    });
-    allProviders = params.sortProviders(
-      await params.resolveProviders({
-        configuredBundledPluginId,
-      }),
-    );
-  }
   const hasConfiguredSurface =
     Boolean(params.toolConfig) ||
     allProviders.some((provider) => {

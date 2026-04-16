@@ -1,10 +1,9 @@
 import crypto from "node:crypto";
 import { Type } from "@sinclair/typebox";
-import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import type { OpenClawConfig } from "../../config/config.js";
 import type { OperatorScope } from "../../gateway/method-scopes.js";
 import { formatErrorMessage } from "../../infra/errors.js";
 import { resolveNodePairApprovalScopes } from "../../infra/node-pairing-authz.js";
-import { normalizeLowercaseStringOrEmpty } from "../../shared/string-coerce.js";
 import type { GatewayMessageChannel } from "../../utils/message-channel.js";
 import { resolveSessionAgentId } from "../agent-scope.js";
 import { resolveImageSanitizationLimits } from "../image-sanitization.js";
@@ -14,7 +13,6 @@ import { callGatewayTool, readGatewayCallOptions } from "./gateway.js";
 import { executeNodeCommandAction, type NodeCommandAction } from "./nodes-tool-commands.js";
 import { executeNodeMediaAction, MEDIA_INVOKE_ACTIONS } from "./nodes-tool-media.js";
 import { resolveNodeId } from "./nodes-utils.js";
-import { isOpenClawOwnerOnlyCoreToolName } from "./owner-only-tools.js";
 
 const NODES_TOOL_ACTIONS = [
   "status",
@@ -53,13 +51,13 @@ async function resolveNodePairApproveScopes(
   gatewayOpts: GatewayCallOptions,
   requestId: string,
 ): Promise<OperatorScope[]> {
-  const pairing: {
+  const pairing = await callGatewayTool<{
     pending?: Array<{
       requestId?: string;
       commands?: unknown;
       requiredApproveScopes?: unknown;
     }>;
-  } = await callGatewayTool("node.pair.list", gatewayOpts, {}, { scopes: ["operator.pairing"] });
+  }>("node.pair.list", gatewayOpts, {}, { scopes: ["operator.pairing"] });
   const pending = Array.isArray(pairing?.pending) ? pairing.pending : [];
   const match = pending.find((entry) => entry?.requestId === requestId);
   if (Array.isArray(match?.requiredApproveScopes)) {
@@ -75,7 +73,7 @@ async function resolveNodePairApproveScopes(
 }
 
 function isPairingRequiredMessage(message: string): boolean {
-  const lower = normalizeLowercaseStringOrEmpty(message);
+  const lower = message.toLowerCase();
   return lower.includes("pairing required") || lower.includes("not_paired");
 }
 
@@ -150,7 +148,7 @@ export function createNodesTool(options?: {
   return {
     label: "Nodes",
     name: "nodes",
-    ownerOnly: isOpenClawOwnerOnlyCoreToolName("nodes"),
+    ownerOnly: true,
     description:
       "Discover and control paired nodes (status/describe/pairing/notify/camera/photos/screen/location/notifications/invoke).",
     parameters: NodesToolSchema,

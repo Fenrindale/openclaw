@@ -3,20 +3,12 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { getPairingAdapter } from "../channels/plugins/pairing.js";
-import type { ChannelPairingAdapter } from "../channels/plugins/pairing.types.js";
+import type { ChannelId, ChannelPairingAdapter } from "../channels/plugins/types.js";
 import { resolveOAuthDir, resolveStateDir } from "../config/paths.js";
 import { withFileLock as withPathLock } from "../infra/file-lock.js";
 import { resolveRequiredHomeDir } from "../infra/home-dir.js";
 import { readJsonFileWithFallback, writeJsonFileAtomically } from "../plugin-sdk/json-store.js";
 import { DEFAULT_ACCOUNT_ID } from "../routing/session-key.js";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeNullableString,
-  normalizeOptionalString,
-  normalizeStringifiedOptionalString,
-} from "../shared/string-coerce.js";
-import type { PairingChannel } from "./pairing-store.types.js";
-export type { PairingChannel } from "./pairing-store.types.js";
 
 const PAIRING_CODE_LENGTH = 8;
 const PAIRING_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -41,6 +33,8 @@ type AllowFromReadCacheEntry = {
 type AllowFromStatLike = { mtimeMs: number; size: number } | null;
 
 const allowFromReadCache = new Map<string, AllowFromReadCacheEntry>();
+
+export type PairingChannel = ChannelId;
 
 export type PairingRequest = {
   id: string;
@@ -67,7 +61,7 @@ function resolveCredentialsDir(env: NodeJS.ProcessEnv = process.env): string {
 
 /** Sanitize channel ID for use in filenames (prevent path traversal). */
 function safeChannelKey(channel: PairingChannel): string {
-  const raw = normalizeLowercaseStringOrEmpty(String(channel));
+  const raw = String(channel).trim().toLowerCase();
   if (!raw) {
     throw new Error("invalid pairing channel");
   }
@@ -83,7 +77,7 @@ function resolvePairingPath(channel: PairingChannel, env: NodeJS.ProcessEnv = pr
 }
 
 function safeAccountKey(accountId: string): string {
-  const raw = normalizeLowercaseStringOrEmpty(accountId);
+  const raw = String(accountId).trim().toLowerCase();
   if (!raw) {
     throw new Error("invalid pairing account id");
   }
@@ -100,7 +94,7 @@ function resolveAllowFromPath(
   accountId?: string,
 ): string {
   const base = safeChannelKey(channel);
-  const normalizedAccountId = normalizeOptionalString(accountId) ?? "";
+  const normalizedAccountId = typeof accountId === "string" ? accountId.trim() : "";
   if (!normalizedAccountId) {
     return path.join(resolveCredentialsDir(env), `${base}-allowFrom.json`);
   }
@@ -200,7 +194,7 @@ function resolveLastSeenAt(entry: PairingRequest): number {
 }
 
 function resolvePairingRequestAccountId(entry: PairingRequest): string {
-  return normalizePairingAccountId(entry.meta?.accountId) || DEFAULT_ACCOUNT_ID;
+  return normalizePairingAccountId(String(entry.meta?.accountId ?? "")) || DEFAULT_ACCOUNT_ID;
 }
 
 function pruneExcessRequestsByAccount(reqs: PairingRequest[], maxPending: number) {
@@ -260,7 +254,7 @@ function generateUniqueCode(existing: Set<string>): string {
 }
 
 function normalizePairingAccountId(accountId?: string): string {
-  return normalizeLowercaseStringOrEmpty(accountId);
+  return accountId?.trim().toLowerCase() || "";
 }
 
 function requestMatchesAccountId(entry: PairingRequest, normalizedAccountId: string): boolean {
@@ -281,7 +275,7 @@ function resolveAllowFromAccountId(accountId?: string): string {
 }
 
 function normalizeId(value: string | number): string {
-  return normalizeStringifiedOptionalString(value) ?? "";
+  return String(value).trim();
 }
 
 function normalizeAllowEntry(channel: PairingChannel, entry: string): string {
@@ -294,12 +288,14 @@ function normalizeAllowEntry(channel: PairingChannel, entry: string): string {
   }
   const adapter = getPairingAdapter(channel);
   const normalized = adapter?.normalizeAllowEntry ? adapter.normalizeAllowEntry(trimmed) : trimmed;
-  return normalizeOptionalString(normalized) ?? "";
+  return String(normalized).trim();
 }
 
 function normalizeAllowFromList(channel: PairingChannel, store: AllowFromStore): string[] {
   const list = Array.isArray(store.allowFrom) ? store.allowFrom : [];
-  return dedupePreserveOrder(list.map((v) => normalizeAllowEntry(channel, v)).filter(Boolean));
+  return dedupePreserveOrder(
+    list.map((v) => normalizeAllowEntry(channel, String(v))).filter(Boolean),
+  );
 }
 
 function normalizeAllowFromInput(channel: PairingChannel, entry: string | number): string {
@@ -310,7 +306,7 @@ function dedupePreserveOrder(entries: string[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const entry of entries) {
-    const normalized = normalizeOptionalString(entry) ?? "";
+    const normalized = String(entry).trim();
     if (!normalized || seen.has(normalized)) {
       continue;
     }
@@ -749,7 +745,7 @@ export async function upsertChannelPairingRequest(params: {
         params.meta && typeof params.meta === "object"
           ? Object.fromEntries(
               Object.entries(params.meta)
-                .map(([k, v]) => [k, normalizeOptionalString(v) ?? ""] as const)
+                .map(([k, v]) => [k, String(v ?? "").trim()] as const)
                 .filter(([_, v]) => Boolean(v)),
             )
           : undefined;
@@ -769,12 +765,17 @@ export async function upsertChannelPairingRequest(params: {
         return requestMatchesAccountId(r, normalizedMatchingAccountId);
       });
       const existingCodes = new Set(
-        reqs.map((req) => (normalizeOptionalString(req.code) ?? "").toUpperCase()),
+        reqs.map((req) =>
+          String(req.code ?? "")
+            .trim()
+            .toUpperCase(),
+        ),
       );
 
       if (existingIdx >= 0) {
         const existing = reqs[existingIdx];
-        const existingCode = normalizeOptionalString(existing?.code) ?? "";
+        const existingCode =
+          existing && typeof existing.code === "string" ? existing.code.trim() : "";
         const code = existingCode || generateUniqueCode(existingCodes);
         const next: PairingRequest = {
           id,
@@ -833,7 +834,7 @@ export async function approveChannelPairingCode(params: {
   env?: NodeJS.ProcessEnv;
 }): Promise<{ id: string; entry?: PairingRequest } | null> {
   const env = params.env ?? process.env;
-  const code = (normalizeNullableString(params.code) ?? "").toUpperCase();
+  const code = params.code.trim().toUpperCase();
   if (!code) {
     return null;
   }
@@ -846,7 +847,7 @@ export async function approveChannelPairingCode(params: {
       const { requests: pruned, removed } = await readPrunedPairingRequests(filePath);
       const normalizedAccountId = normalizePairingAccountId(params.accountId);
       const idx = pruned.findIndex((r) => {
-        if (r.code.toUpperCase() !== code) {
+        if (String(r.code ?? "").toUpperCase() !== code) {
           return false;
         }
         return requestMatchesAccountId(r, normalizedAccountId);
@@ -869,11 +870,11 @@ export async function approveChannelPairingCode(params: {
         version: 1,
         requests: pruned,
       } satisfies PairingStore);
-      const entryAccountId = normalizeOptionalString(entry.meta?.accountId);
+      const entryAccountId = String(entry.meta?.accountId ?? "").trim() || undefined;
       await addChannelAllowFromStoreEntry({
         channel: params.channel,
         entry: entry.id,
-        accountId: normalizeOptionalString(params.accountId) ?? entryAccountId,
+        accountId: params.accountId?.trim() || entryAccountId,
         env,
       });
       return { id: entry.id, entry };

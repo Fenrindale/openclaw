@@ -1,7 +1,6 @@
 import { html, nothing } from "lit";
 import { normalizeToolName } from "../../../../src/agents/tool-policy-shared.js";
 import { t } from "../../i18n/index.ts";
-import { normalizeLowercaseStringOrEmpty } from "../string-coerce.ts";
 import type {
   SkillStatusEntry,
   SkillStatusReport,
@@ -417,12 +416,10 @@ export function renderAgentSkills(params: {
   const usingAllowlist = allowlist !== undefined;
   const reportReady = Boolean(params.report && params.activeAgentId === params.agentId);
   const rawSkills = reportReady ? (params.report?.skills ?? []) : [];
-  const filter = normalizeLowercaseStringOrEmpty(params.filter);
+  const filter = params.filter.trim().toLowerCase();
   const filtered = filter
     ? rawSkills.filter((skill) =>
-        normalizeLowercaseStringOrEmpty(
-          [skill.name, skill.description, skill.source].join(" "),
-        ).includes(filter),
+        [skill.name, skill.description, skill.source].join(" ").toLowerCase().includes(filter),
       )
     : rawSkills;
   const groups = groupSkills(filtered);

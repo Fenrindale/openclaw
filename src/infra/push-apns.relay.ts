@@ -1,16 +1,11 @@
 import { URL } from "node:url";
 import type { GatewayConfig } from "../config/types.gateway.js";
 import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-} from "../shared/string-coerce.js";
-import {
   loadOrCreateDeviceIdentity,
   signDevicePayload,
   type DeviceIdentity,
 } from "./device-identity.js";
 import { formatErrorMessage } from "./errors.js";
-import { normalizeHostname } from "./net/hostname.js";
 
 export type ApnsRelayPushType = "alert" | "background";
 
@@ -51,17 +46,13 @@ const GATEWAY_SIGNATURE_HEADER = "x-openclaw-gateway-signature";
 const GATEWAY_SIGNED_AT_HEADER = "x-openclaw-gateway-signed-at-ms";
 
 function normalizeNonEmptyString(value: string | undefined): string | null {
-  const trimmed = normalizeOptionalString(value) ?? "";
+  const trimmed = value?.trim() ?? "";
   return trimmed.length > 0 ? trimmed : null;
 }
 
 function normalizeTimeoutMs(value: string | number | undefined): number {
   const raw =
-    typeof value === "number"
-      ? value
-      : typeof value === "string"
-        ? normalizeOptionalString(value)
-        : undefined;
+    typeof value === "number" ? value : typeof value === "string" ? value.trim() : undefined;
   if (raw === undefined || raw === "") {
     return DEFAULT_APNS_RELAY_TIMEOUT_MS;
   }
@@ -73,14 +64,12 @@ function normalizeTimeoutMs(value: string | number | undefined): number {
 }
 
 function readAllowHttp(value: string | undefined): boolean {
-  const normalized = normalizeOptionalString(value)
-    ? normalizeLowercaseStringOrEmpty(value)
-    : undefined;
+  const normalized = value?.trim().toLowerCase();
   return normalized === "1" || normalized === "true" || normalized === "yes";
 }
 
 function isLoopbackRelayHostname(hostname: string): boolean {
-  const normalized = normalizeHostname(hostname);
+  const normalized = hostname.trim().toLowerCase();
   return (
     normalized === "localhost" ||
     normalized === "::1" ||
@@ -90,7 +79,7 @@ function isLoopbackRelayHostname(hostname: string): boolean {
 }
 
 function parseReason(value: unknown): string | undefined {
-  return typeof value === "string" ? normalizeOptionalString(value) : undefined;
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }
 
 function buildRelayGatewaySignaturePayload(params: {

@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-let page: {
-  evaluate: ReturnType<typeof vi.fn>;
-  url: ReturnType<typeof vi.fn>;
-} | null = null;
+let page: { evaluate: ReturnType<typeof vi.fn> } | null = null;
 
 const getPageForTargetId = vi.fn(async () => {
   if (!page) {
@@ -12,7 +9,6 @@ const getPageForTargetId = vi.fn(async () => {
   return page;
 });
 const ensurePageState = vi.fn(() => {});
-const assertPageNavigationCompletedSafely = vi.fn(async () => {});
 const forceDisconnectPlaywrightForTarget = vi.fn(async () => {});
 const refLocator = vi.fn(() => {
   throw new Error("test: refLocator should not be called");
@@ -23,7 +19,6 @@ const closePageViaPlaywright = vi.fn(async () => {});
 const resizeViewportViaPlaywright = vi.fn(async () => {});
 
 vi.mock("./pw-session.js", () => ({
-  assertPageNavigationCompletedSafely,
   ensurePageState,
   forceDisconnectPlaywrightForTarget,
   getPageForTargetId,
@@ -43,7 +38,6 @@ describe("batchViaPlaywright", () => {
     vi.clearAllMocks();
     page = {
       evaluate: vi.fn(async () => "ok"),
-      url: vi.fn(() => "about:blank"),
     };
   });
 

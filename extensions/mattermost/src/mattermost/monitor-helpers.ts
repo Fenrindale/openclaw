@@ -1,8 +1,4 @@
 import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-} from "openclaw/plugin-sdk/text-runtime";
-import {
   createDedupeCache,
   formatInboundFromLabel as formatInboundFromLabelShared,
   rawDataToString,
@@ -37,7 +33,8 @@ function normalizeAgentId(value: string | undefined | null): string {
     return trimmed;
   }
   return (
-    normalizeLowercaseStringOrEmpty(trimmed)
+    trimmed
+      .toLowerCase()
       .replace(/[^a-z0-9_-]+/g, "-")
       .replace(/^-+/, "")
       .replace(/-+$/, "")
@@ -62,7 +59,7 @@ function resolveAgentEntry(cfg: OpenClawConfig, agentId: string): AgentEntry | u
 
 export function resolveIdentityName(cfg: OpenClawConfig, agentId: string): string | undefined {
   const entry = resolveAgentEntry(cfg, agentId);
-  return normalizeOptionalString(entry?.identity?.name);
+  return entry?.identity?.name?.trim() || undefined;
 }
 
 export function resolveThreadSessionKeys(params: {

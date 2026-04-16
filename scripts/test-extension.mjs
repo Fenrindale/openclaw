@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import { formatErrorMessage } from "./lib/error-format.mjs";
 import { resolveExtensionTestPlan } from "./lib/extension-test-plan.mjs";
 import { isDirectScriptRun, runVitestBatch } from "./lib/vitest-batch-runner.mjs";
 
@@ -32,7 +31,7 @@ async function run() {
     plan = resolveExtensionTestPlan({ cwd: process.cwd(), targetArg });
   } catch (error) {
     printUsage();
-    console.error(formatErrorMessage(error));
+    console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);
   }
 

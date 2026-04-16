@@ -7,7 +7,6 @@
  * - m.poll.end - Closes a poll
  */
 
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import { normalizePollInput, type PollInput } from "../runtime-api.js";
 
 export const M_POLL_START = "m.poll.start" as const;
@@ -296,7 +295,7 @@ export function buildPollResultsSummary(params: {
     if (!isPollResponseType(typeof event.type === "string" ? event.type : "")) {
       continue;
     }
-    const senderId = normalizeOptionalString(event.sender) ?? "";
+    const senderId = typeof event.sender === "string" ? event.sender.trim() : "";
     if (!senderId) {
       continue;
     }
@@ -311,7 +310,7 @@ export function buildPollResultsSummary(params: {
     const normalizedAnswers = Array.from(
       new Set(
         rawAnswers
-          .map((answerId) => normalizeOptionalString(answerId) ?? "")
+          .map((answerId) => answerId.trim())
           .filter((answerId) => answerIds.has(answerId))
           .slice(0, parsed.maxSelections),
       ),

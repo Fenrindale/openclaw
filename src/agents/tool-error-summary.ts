@@ -1,5 +1,3 @@
-import { normalizeOptionalLowercaseString } from "../shared/string-coerce.js";
-
 export type ToolErrorSummary = {
   toolName: string;
   meta?: string;
@@ -12,5 +10,5 @@ export type ToolErrorSummary = {
 const EXEC_LIKE_TOOL_NAMES = new Set(["exec", "bash"]);
 
 export function isExecLikeToolName(toolName: string): boolean {
-  return EXEC_LIKE_TOOL_NAMES.has(normalizeOptionalLowercaseString(toolName) ?? "");
+  return EXEC_LIKE_TOOL_NAMES.has(toolName.trim().toLowerCase());
 }

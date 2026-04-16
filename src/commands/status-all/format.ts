@@ -7,7 +7,6 @@ import {
   resolveUpdateChannelDisplay,
 } from "../../infra/update-channels.js";
 import { formatGitInstallLabel, type UpdateCheckResult } from "../../infra/update-check.js";
-import { normalizeOptionalString } from "../../shared/string-coerce.js";
 import { formatUpdateOneLiner, resolveUpdateAvailability } from "../status.update.js";
 
 export { formatDurationPrecise } from "../../infra/format-time/format-duration.ts";
@@ -93,7 +92,7 @@ export function buildStatusUpdateSurface(params: {
 }
 
 export function formatStatusDashboardValue(value: string | null | undefined): string {
-  const trimmed = normalizeOptionalString(value);
+  const trimmed = value?.trim();
   return trimmed && trimmed.length > 0 ? trimmed : "disabled";
 }
 

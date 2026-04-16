@@ -1,5 +1,3 @@
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
-
 type MatrixTarget = { kind: "room"; id: string } | { kind: "user"; id: string };
 const MATRIX_PREFIX = "matrix:";
 const ROOM_PREFIX = "room:";
@@ -9,7 +7,7 @@ const USER_PREFIX = "user:";
 function stripKnownPrefixes(raw: string, prefixes: readonly string[]): string {
   let normalized = raw.trim();
   while (normalized) {
-    const lowered = normalizeLowercaseStringOrEmpty(normalized);
+    const lowered = normalized.toLowerCase();
     const matched = prefixes.find((prefix) => lowered.startsWith(prefix));
     if (!matched) {
       return normalized;
@@ -24,7 +22,7 @@ export function resolveMatrixTargetIdentity(raw: string): MatrixTarget | null {
   if (!normalized) {
     return null;
   }
-  const lowered = normalizeLowercaseStringOrEmpty(normalized);
+  const lowered = normalized.toLowerCase();
   if (lowered.startsWith(USER_PREFIX)) {
     const id = normalized.slice(USER_PREFIX.length).trim();
     return id ? { kind: "user", id } : null;
@@ -75,7 +73,7 @@ export function normalizeMatrixDirectoryGroupId(raw: string): string | undefined
   if (!normalized || normalized === "*") {
     return undefined;
   }
-  const lowered = normalizeLowercaseStringOrEmpty(normalized);
+  const lowered = normalized.toLowerCase();
   if (lowered.startsWith(ROOM_PREFIX) || lowered.startsWith(CHANNEL_PREFIX)) {
     return normalized;
   }

@@ -1,10 +1,6 @@
 import { createHmac } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { safeEqualSecret } from "openclaw/plugin-sdk/browser-security-runtime";
-import {
-  normalizeOptionalString,
-  normalizeStringifiedOptionalString,
-} from "openclaw/plugin-sdk/text-runtime";
 import { getMattermostRuntime } from "../runtime.js";
 import { updateMattermostPost, type MattermostClient, type MattermostPost } from "./client.js";
 import { isTrustedProxyAddress, resolveClientIp, type OpenClawConfig } from "./runtime-api.js";
@@ -89,9 +85,9 @@ function normalizeCallbackBaseUrl(baseUrl: string): string {
 
 function headerValue(value: string | string[] | undefined): string | undefined {
   if (Array.isArray(value)) {
-    return normalizeOptionalString(value[0]);
+    return value[0]?.trim() || undefined;
   }
-  return normalizeOptionalString(value);
+  return value?.trim() || undefined;
 }
 
 function isAllowedInteractionSource(params: {
@@ -127,8 +123,8 @@ export function computeInteractionCallbackUrl(
   // Prefer merged per-account config when available, but keep the top-level path for
   // callers/tests that still pass the root Mattermost config shape directly.
   const callbackBaseUrl =
-    normalizeOptionalString(cfg?.interactions?.callbackBaseUrl) ??
-    normalizeOptionalString(cfg?.channels?.mattermost?.interactions?.callbackBaseUrl);
+    cfg?.interactions?.callbackBaseUrl?.trim() ??
+    cfg?.channels?.mattermost?.interactions?.callbackBaseUrl?.trim();
   if (callbackBaseUrl) {
     return `${normalizeCallbackBaseUrl(callbackBaseUrl)}${path}`;
   }
@@ -323,8 +319,8 @@ export function buildButtonProps(params: {
 
   const buttons = rawButtons
     .map((btn) => ({
-      id: normalizeStringifiedOptionalString(btn.id ?? btn.callback_data) ?? "",
-      name: normalizeStringifiedOptionalString(btn.text ?? btn.name ?? btn.label) ?? "",
+      id: String(btn.id ?? btn.callback_data ?? "").trim(),
+      name: String(btn.text ?? btn.name ?? btn.label ?? "").trim(),
       style: btn.style ?? "default",
       context:
         typeof btn.context === "object" && btn.context !== null

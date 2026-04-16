@@ -190,8 +190,6 @@ function setMinimalAcpContextRegistryForTests(): void {
               threadId,
               threadParentId,
               parentSessionKey,
-              from,
-              chatType,
               originatingTo,
               commandTo,
               fallbackTo,
@@ -199,8 +197,6 @@ function setMinimalAcpContextRegistryForTests(): void {
               threadId?: string;
               threadParentId?: string;
               parentSessionKey?: string;
-              from?: string;
-              chatType?: string;
               originatingTo?: string;
               commandTo?: string;
               fallbackTo?: string;
@@ -218,15 +214,6 @@ function setMinimalAcpContextRegistryForTests(): void {
                     ? { parentConversationId }
                     : {}),
                 };
-              }
-              if (chatType === "direct") {
-                const directSenderId = from
-                  ?.trim()
-                  .replace(/^discord:/i, "")
-                  .replace(/^user:/i, "");
-                if (directSenderId) {
-                  return { conversationId: `user:${directSenderId}` };
-                }
               }
               const conversationId = parseDiscordConversationIdForTest([
                 originatingTo,
@@ -458,25 +445,6 @@ describe("commands-acp context", () => {
       threadId: "thread-42",
       conversationId: "thread-42",
       parentConversationId: "channel:parent-1",
-    });
-  });
-
-  it("resolves discord DM current conversation ids from direct sender context", () => {
-    const params = buildCommandTestParams("/acp sessions", baseCfg, {
-      Provider: "discord",
-      Surface: "discord",
-      OriginatingChannel: "discord",
-      From: "discord:U1",
-      To: "channel:dm-1",
-      OriginatingTo: "channel:dm-1",
-      ChatType: "direct",
-      AccountId: "work",
-    });
-
-    expect(resolveAcpCommandBindingContext(params)).toEqual({
-      channel: "discord",
-      accountId: "work",
-      conversationId: "user:U1",
     });
   });
 

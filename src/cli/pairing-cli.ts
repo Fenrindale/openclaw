@@ -3,13 +3,12 @@ import { normalizeChannelId } from "../channels/plugins/index.js";
 import { listPairingChannels, notifyPairingApproved } from "../channels/plugins/pairing.js";
 import { loadConfig } from "../config/config.js";
 import { resolvePairingIdLabel } from "../pairing/pairing-labels.js";
-import { approveChannelPairingCode, listChannelPairingRequests } from "../pairing/pairing-store.js";
-import type { PairingChannel } from "../pairing/pairing-store.types.js";
-import { defaultRuntime } from "../runtime.js";
 import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeStringifiedOptionalString,
-} from "../shared/string-coerce.js";
+  approveChannelPairingCode,
+  listChannelPairingRequests,
+  type PairingChannel,
+} from "../pairing/pairing-store.js";
+import { defaultRuntime } from "../runtime.js";
 import { formatDocsLink } from "../terminal/links.js";
 import { getTerminalTableWidth, renderTable } from "../terminal/table.js";
 import { theme } from "../terminal/theme.js";
@@ -17,7 +16,15 @@ import { formatCliCommand } from "./command-format.js";
 
 /** Parse channel, allowing extension channels not in core registry. */
 function parseChannel(raw: unknown, channels: PairingChannel[]): PairingChannel {
-  const value = normalizeLowercaseStringOrEmpty(normalizeStringifiedOptionalString(raw) ?? "");
+  const value = (
+    typeof raw === "string"
+      ? raw
+      : typeof raw === "number" || typeof raw === "boolean"
+        ? String(raw)
+        : ""
+  )
+    .trim()
+    .toLowerCase();
   if (!value) {
     throw new Error("Channel required");
   }
@@ -68,7 +75,7 @@ export function registerPairingCli(program: Command) {
         );
       }
       const channel = parseChannel(channelRaw, channels);
-      const accountId = normalizeStringifiedOptionalString(opts.account) ?? "";
+      const accountId = String(opts.account ?? "").trim();
       const requests = accountId
         ? await listChannelPairingRequests(channel, process.env, accountId)
         : await listChannelPairingRequests(channel);
@@ -137,7 +144,7 @@ export function registerPairingCli(program: Command) {
         );
       }
       const channel = parseChannel(channelRaw, channels);
-      const accountId = normalizeStringifiedOptionalString(opts.account) ?? "";
+      const accountId = String(opts.account ?? "").trim();
       const approved = accountId
         ? await approveChannelPairingCode({
             channel,

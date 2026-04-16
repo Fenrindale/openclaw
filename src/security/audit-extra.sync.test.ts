@@ -3,7 +3,7 @@ import type { OpenClawConfig } from "../config/config.js";
 import {
   collectAttackSurfaceSummaryFindings,
   collectSmallModelRiskFindings,
-} from "./audit-extra.summary.js";
+} from "./audit-extra.sync.js";
 import { safeEqualSecret } from "./secret-equal.js";
 
 describe("collectAttackSurfaceSummaryFindings", () => {

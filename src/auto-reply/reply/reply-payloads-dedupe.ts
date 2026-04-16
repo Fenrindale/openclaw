@@ -1,13 +1,8 @@
 import { isMessagingToolDuplicate } from "../../agents/pi-embedded-helpers.js";
-import type { MessagingToolSend } from "../../agents/pi-embedded-messaging.types.js";
-import { getChannelPlugin } from "../../channels/plugins/index.js";
-import { normalizeAnyChannelId } from "../../channels/registry.js";
+import type { MessagingToolSend } from "../../agents/pi-embedded-runner.js";
+import { getChannelPlugin, normalizeChannelId } from "../../channels/plugins/index.js";
 import { normalizeTargetForProvider } from "../../infra/outbound/target-normalization.js";
 import { normalizeOptionalAccountId } from "../../routing/account-id.js";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-} from "../../shared/string-coerce.js";
 import type { ReplyPayload } from "../types.js";
 
 export function filterMessagingToolDuplicates(params: {
@@ -30,7 +25,7 @@ export function filterMessagingToolMediaDuplicates(params: {
     if (!trimmed) {
       return "";
     }
-    if (!normalizeLowercaseStringOrEmpty(trimmed).startsWith("file://")) {
+    if (!trimmed.toLowerCase().startsWith("file://")) {
       return trimmed;
     }
     try {
@@ -66,12 +61,12 @@ export function filterMessagingToolMediaDuplicates(params: {
 }
 
 function normalizeProviderForComparison(value?: string): string | undefined {
-  const trimmed = normalizeOptionalString(value);
+  const trimmed = value?.trim();
   if (!trimmed) {
     return undefined;
   }
-  const lowered = normalizeLowercaseStringOrEmpty(trimmed);
-  const normalizedChannel = normalizeAnyChannelId(trimmed);
+  const lowered = trimmed.toLowerCase();
+  const normalizedChannel = normalizeChannelId(trimmed);
   if (normalizedChannel) {
     return normalizedChannel;
   }
@@ -79,14 +74,14 @@ function normalizeProviderForComparison(value?: string): string | undefined {
 }
 
 function normalizeThreadIdForComparison(value?: string): string | undefined {
-  const trimmed = normalizeOptionalString(value);
+  const trimmed = value?.trim();
   if (!trimmed) {
     return undefined;
   }
   if (/^-?\d+$/.test(trimmed)) {
     return String(Number.parseInt(trimmed, 10));
   }
-  return normalizeLowercaseStringOrEmpty(trimmed);
+  return trimmed.toLowerCase();
 }
 
 function resolveTargetProviderForComparison(params: {
@@ -127,7 +122,10 @@ export function shouldSuppressMessagingToolReplies(params: {
   if (!provider) {
     return false;
   }
-  const originRawTarget = normalizeOptionalString(params.originatingTo);
+  const originTarget = normalizeTargetForProvider(provider, params.originatingTo);
+  if (!originTarget) {
+    return false;
+  }
   const originAccount = normalizeOptionalAccountId(params.accountId);
   const sentTargets = params.messagingToolSentTargets ?? [];
   if (sentTargets.length === 0) {
@@ -141,20 +139,12 @@ export function shouldSuppressMessagingToolReplies(params: {
     if (targetProvider !== provider) {
       return false;
     }
+    const targetKey = normalizeTargetForProvider(targetProvider, target.to);
+    if (!targetKey) {
+      return false;
+    }
     const targetAccount = normalizeOptionalAccountId(target.accountId);
     if (originAccount && targetAccount && originAccount !== targetAccount) {
-      return false;
-    }
-    const targetRaw = normalizeOptionalString(target.to);
-    if (originRawTarget && targetRaw === originRawTarget && !target.threadId) {
-      return true;
-    }
-    const originTarget = normalizeTargetForProvider(provider, originRawTarget);
-    if (!originTarget) {
-      return false;
-    }
-    const targetKey = normalizeTargetForProvider(targetProvider, targetRaw);
-    if (!targetKey) {
       return false;
     }
     return targetsMatchForSuppression({

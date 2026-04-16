@@ -1,23 +1,16 @@
 import {
   coerceSecretRef,
+  ensureAuthProfileStore,
   resolveNonEnvSecretRefApiKeyMarker,
 } from "openclaw/plugin-sdk/provider-auth";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
+import type { ModelProviderConfig } from "openclaw/plugin-sdk/provider-model-shared";
 import {
   buildCloudflareAiGatewayModelDefinition,
   resolveCloudflareAiGatewayBaseUrl,
 } from "./models.js";
 
 export type CloudflareAiGatewayCredential =
-  | {
-      type?: string;
-      keyRef?: unknown;
-      key?: unknown;
-      metadata?: {
-        accountId?: unknown;
-        gatewayId?: unknown;
-      };
-    }
+  | ReturnType<typeof ensureAuthProfileStore>["profiles"][string]
   | undefined;
 
 export function resolveCloudflareAiGatewayApiKey(
@@ -28,11 +21,12 @@ export function resolveCloudflareAiGatewayApiKey(
   }
 
   const keyRef = coerceSecretRef(cred.keyRef);
-  const keyRefId = normalizeOptionalString(keyRef?.id);
-  if (keyRef && keyRefId) {
-    return keyRef.source === "env" ? keyRefId : resolveNonEnvSecretRefApiKeyMarker(keyRef.source);
+  if (keyRef && keyRef.id.trim()) {
+    return keyRef.source === "env"
+      ? keyRef.id.trim()
+      : resolveNonEnvSecretRefApiKeyMarker(keyRef.source);
   }
-  return normalizeOptionalString(cred.key);
+  return cred.key?.trim() || undefined;
 }
 
 export function resolveCloudflareAiGatewayMetadata(cred: CloudflareAiGatewayCredential): {
@@ -43,18 +37,16 @@ export function resolveCloudflareAiGatewayMetadata(cred: CloudflareAiGatewayCred
     return {};
   }
   return {
-    accountId: normalizeOptionalString(cred.metadata?.accountId),
-    gatewayId: normalizeOptionalString(cred.metadata?.gatewayId),
+    accountId: cred.metadata?.accountId?.trim() || undefined,
+    gatewayId: cred.metadata?.gatewayId?.trim() || undefined,
   };
 }
 
 export function buildCloudflareAiGatewayCatalogProvider(params: {
   credential: CloudflareAiGatewayCredential;
   envApiKey?: string;
-}) {
-  const apiKey =
-    normalizeOptionalString(params.envApiKey) ??
-    resolveCloudflareAiGatewayApiKey(params.credential);
+}): ModelProviderConfig | null {
+  const apiKey = params.envApiKey?.trim() || resolveCloudflareAiGatewayApiKey(params.credential);
   if (!apiKey) {
     return null;
   }
@@ -68,7 +60,7 @@ export function buildCloudflareAiGatewayCatalogProvider(params: {
   }
   return {
     baseUrl,
-    api: "anthropic-messages" as const,
+    api: "anthropic-messages",
     apiKey,
     models: [buildCloudflareAiGatewayModelDefinition()],
   };

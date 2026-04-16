@@ -1,10 +1,6 @@
 import { readFileSync } from "node:fs";
 import { homedir, platform } from "node:os";
 import { join } from "node:path";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-} from "../shared/string-coerce.js";
 import { normalizeOptionalSecretInput } from "../utils/normalize-secret-input.js";
 
 const GCLOUD_DEFAULT_ADC_PATH = join(
@@ -16,10 +12,15 @@ const GCLOUD_DEFAULT_ADC_PATH = join(
 
 function hasAnthropicVertexMetadataServerAdc(env: NodeJS.ProcessEnv = process.env): boolean {
   const explicitMetadataOptIn = normalizeOptionalSecretInput(env.ANTHROPIC_VERTEX_USE_GCP_METADATA);
-  return (
-    explicitMetadataOptIn === "1" ||
-    normalizeLowercaseStringOrEmpty(explicitMetadataOptIn) === "true"
-  );
+  return explicitMetadataOptIn === "1" || explicitMetadataOptIn?.toLowerCase() === "true";
+}
+
+function normalizeOptionalPathInput(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed || undefined;
 }
 
 function resolveAnthropicVertexDefaultAdcPath(env: NodeJS.ProcessEnv = process.env): string {
@@ -35,7 +36,7 @@ function resolveAnthropicVertexDefaultAdcPath(env: NodeJS.ProcessEnv = process.e
 function resolveAnthropicVertexAdcCredentialsPathCandidate(
   env: NodeJS.ProcessEnv = process.env,
 ): string | undefined {
-  const explicit = normalizeOptionalString(env.GOOGLE_APPLICATION_CREDENTIALS);
+  const explicit = normalizeOptionalPathInput(env.GOOGLE_APPLICATION_CREDENTIALS);
   if (explicit) {
     return explicit;
   }

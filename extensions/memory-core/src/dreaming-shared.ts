@@ -8,15 +8,3 @@ export function normalizeTrimmedString(value: unknown): string | undefined {
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
 }
-
-export function includesSystemEventToken(cleanedBody: string, eventText: string): boolean {
-  const normalizedBody = normalizeTrimmedString(cleanedBody);
-  const normalizedEventText = normalizeTrimmedString(eventText);
-  if (!normalizedBody || !normalizedEventText) {
-    return false;
-  }
-  if (normalizedBody === normalizedEventText) {
-    return true;
-  }
-  return normalizedBody.split(/\r?\n/).some((line) => line.trim() === normalizedEventText);
-}

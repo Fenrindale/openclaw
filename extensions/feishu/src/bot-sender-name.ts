@@ -1,4 +1,3 @@
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 import { createFeishuClient } from "./client.js";
 import type { ResolvedFeishuAccount } from "./types.js";
 
@@ -38,7 +37,7 @@ function correctFeishuScopeInUrl(url: string): string {
 }
 
 function shouldSuppressPermissionErrorNotice(permissionError: FeishuPermissionError): boolean {
-  const message = normalizeLowercaseStringOrEmpty(permissionError.message);
+  const message = permissionError.message.toLowerCase();
   return IGNORED_PERMISSION_SCOPE_TOKENS.some((token) => message.includes(token));
 }
 

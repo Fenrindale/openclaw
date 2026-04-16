@@ -204,10 +204,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     prefs.setGatewayPassword(value)
   }
 
-  fun resetGatewaySetupAuth() {
-    ensureRuntime().resetGatewaySetupAuth()
-  }
-
   fun setOnboardingCompleted(value: Boolean) {
     if (value) {
       ensureRuntime()

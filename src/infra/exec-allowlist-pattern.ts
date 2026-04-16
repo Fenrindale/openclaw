@@ -1,5 +1,4 @@
 import fs from "node:fs";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 import { expandHomePrefix } from "./home-dir.js";
 
 const GLOB_REGEX_CACHE_LIMIT = 512;
@@ -8,7 +7,7 @@ const globRegexCache = new Map<string, RegExp>();
 function normalizeMatchTarget(value: string): string {
   if (process.platform === "win32") {
     const stripped = value.replace(/^\\\\[?.]\\/, "");
-    return normalizeLowercaseStringOrEmpty(stripped.replace(/\\/g, "/"));
+    return stripped.replace(/\\/g, "/").toLowerCase();
   }
   return value.replace(/\\\\/g, "/");
 }

@@ -24,13 +24,8 @@ import type { OpenClawConfig, ConfigFileSnapshot } from "../config/config.js";
 import { collectIncludePathsRecursive } from "../config/includes-scan.js";
 import { resolveOAuthDir } from "../config/paths.js";
 import type { AgentToolsConfig } from "../config/types.tools.js";
-import { readInstalledPackageVersion } from "../infra/package-update-utils.js";
 import { normalizePluginsConfig } from "../plugins/config-state.js";
 import { normalizeAgentId } from "../routing/session-key.js";
-import {
-  normalizeOptionalLowercaseString,
-  normalizeOptionalString,
-} from "../shared/string-coerce.js";
 import {
   formatPermissionDetail,
   formatPermissionRemediation,
@@ -80,7 +75,7 @@ function expandTilde(p: string, env: NodeJS.ProcessEnv): string | null {
   if (!p.startsWith("~")) {
     return p;
   }
-  const home = normalizeOptionalString(env.HOME) ?? null;
+  const home = typeof env.HOME === "string" && env.HOME.trim() ? env.HOME.trim() : null;
   if (!home) {
     return null;
   }
@@ -107,7 +102,7 @@ async function readPluginManifestExtensions(pluginPath: string): Promise<string[
   if (!Array.isArray(extensions)) {
     return [];
   }
-  return extensions.map((entry) => normalizeOptionalString(entry) ?? "").filter(Boolean);
+  return extensions.map((entry) => (typeof entry === "string" ? entry.trim() : "")).filter(Boolean);
 }
 
 function formatCodeSafetyDetails(findings: SkillScanFinding[], rootDir: string): string {
@@ -243,11 +238,7 @@ function resolveToolPolicies(params: {
 }
 
 function normalizePluginIdSet(entries: string[]): Set<string> {
-  return new Set(
-    entries
-      .map((entry) => normalizeOptionalLowercaseString(entry))
-      .filter((entry): entry is string => Boolean(entry)),
-  );
+  return new Set(entries.map((entry) => entry.trim().toLowerCase()).filter(Boolean));
 }
 
 function resolveEnabledExtensionPluginIds(params: {
@@ -263,16 +254,12 @@ function resolveEnabledExtensionPluginIds(params: {
   const denySet = normalizePluginIdSet(normalized.deny);
   const entryById = new Map<string, { enabled?: boolean }>();
   for (const [id, entry] of Object.entries(normalized.entries)) {
-    const normalizedId = normalizeOptionalLowercaseString(id);
-    if (!normalizedId) {
-      continue;
-    }
-    entryById.set(normalizedId, entry);
+    entryById.set(id.trim().toLowerCase(), entry);
   }
 
   const enabled: string[] = [];
   for (const id of params.pluginDirs) {
-    const normalizedId = normalizeOptionalLowercaseString(id);
+    const normalizedId = id.trim().toLowerCase();
     if (!normalizedId) {
       continue;
     }
@@ -298,9 +285,7 @@ function collectAllowEntries(config?: { allow?: string[]; alsoAllow?: string[] }
   if (Array.isArray(config?.alsoAllow)) {
     out.push(...config.alsoAllow);
   }
-  return out
-    .map((entry) => normalizeOptionalLowercaseString(entry))
-    .filter((entry): entry is string => Boolean(entry));
+  return out.map((entry) => entry.trim().toLowerCase()).filter(Boolean);
 }
 
 function hasExplicitPluginAllow(params: {
@@ -343,6 +328,16 @@ function isPinnedRegistrySpec(spec: string): boolean {
   }
   const version = value.slice(at + 1).trim();
   return /^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(version);
+}
+
+async function readInstalledPackageVersion(dir: string): Promise<string | undefined> {
+  try {
+    const raw = await fs.readFile(path.join(dir, "package.json"), "utf-8");
+    const parsed = JSON.parse(raw) as { version?: unknown };
+    return typeof parsed.version === "string" ? parsed.version : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function buildCodeSafetySummaryCacheKey(params: {
@@ -437,7 +432,7 @@ async function listWorkspaceSkillMarkdownFiles(workspaceDir: string): Promise<st
 // --------------------------------------------------------------------------
 
 function normalizeDockerLabelValue(raw: string | undefined): string | null {
-  const trimmed = normalizeOptionalString(raw) ?? "";
+  const trimmed = raw?.trim() ?? "";
   if (!trimmed || trimmed === "<no value>") {
     return null;
   }
@@ -493,10 +488,8 @@ async function readSandboxBrowserHashLabels(params: {
 }
 
 function parsePublishedHostFromDockerPortLine(line: string): string | null {
-  const trimmed = normalizeOptionalString(line) ?? "";
-  const rhs = trimmed.includes("->")
-    ? (normalizeOptionalString(trimmed.split("->").at(-1)) ?? "")
-    : trimmed;
+  const trimmed = line.trim();
+  const rhs = trimmed.includes("->") ? (trimmed.split("->").at(-1)?.trim() ?? "") : trimmed;
   if (!rhs) {
     return null;
   }
@@ -512,7 +505,7 @@ function parsePublishedHostFromDockerPortLine(line: string): string | null {
 }
 
 function isLoopbackPublishHost(host: string): boolean {
-  const normalized = normalizeOptionalLowercaseString(host);
+  const normalized = host.trim().toLowerCase();
   return normalized === "127.0.0.1" || normalized === "::1" || normalized === "localhost";
 }
 
@@ -1066,12 +1059,7 @@ export async function collectStateDeepFilesystemFindings(params: {
 
   const agentIds = Array.isArray(params.cfg.agents?.list)
     ? params.cfg.agents?.list
-        .map(
-          (a) =>
-            normalizeOptionalString(
-              a && typeof a === "object" ? (a as { id?: unknown }).id : undefined,
-            ) ?? "",
-        )
+        .map((a) => (a && typeof a === "object" && typeof a.id === "string" ? a.id.trim() : ""))
         .filter(Boolean)
     : [];
   const defaultAgentId = resolveDefaultAgentId(params.cfg);
@@ -1142,7 +1130,8 @@ export async function collectStateDeepFilesystemFindings(params: {
     }
   }
 
-  const logFile = normalizeOptionalString(params.cfg.logging?.file) ?? "";
+  const logFile =
+    typeof params.cfg.logging?.file === "string" ? params.cfg.logging.file.trim() : "";
   if (logFile) {
     const expanded = logFile.startsWith("~") ? expandTilde(logFile, params.env) : logFile;
     if (expanded) {

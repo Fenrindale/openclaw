@@ -27,13 +27,11 @@ const LEGACY_ENV_API_KEY_MARKERS = [
   "MINIMAX_CODE_PLAN_KEY",
 ];
 
-function listKnownEnvApiKeyMarkers(): Set<string> {
-  return new Set([
-    ...listKnownProviderEnvApiKeyNames(),
-    ...LEGACY_ENV_API_KEY_MARKERS,
-    ...AWS_SDK_ENV_MARKERS,
-  ]);
-}
+const KNOWN_ENV_API_KEY_MARKERS = new Set([
+  ...listKnownProviderEnvApiKeyNames(),
+  ...LEGACY_ENV_API_KEY_MARKERS,
+  ...AWS_SDK_ENV_MARKERS,
+]);
 
 export function isAwsSdkAuthMarker(value: string): boolean {
   return AWS_SDK_ENV_MARKERS.has(value.trim());
@@ -41,7 +39,7 @@ export function isAwsSdkAuthMarker(value: string): boolean {
 
 export function isKnownEnvApiKeyMarker(value: string): boolean {
   const trimmed = value.trim();
-  return listKnownEnvApiKeyMarkers().has(trimmed) && !isAwsSdkAuthMarker(trimmed);
+  return KNOWN_ENV_API_KEY_MARKERS.has(trimmed) && !isAwsSdkAuthMarker(trimmed);
 }
 
 export function resolveOAuthApiKeyMarker(providerId: string): string {
@@ -95,5 +93,5 @@ export function isNonSecretApiKeyMarker(
   }
   // Do not treat arbitrary ALL_CAPS values as markers; only recognize the
   // known env-var markers we intentionally persist for compatibility.
-  return listKnownEnvApiKeyMarkers().has(trimmed);
+  return KNOWN_ENV_API_KEY_MARKERS.has(trimmed);
 }

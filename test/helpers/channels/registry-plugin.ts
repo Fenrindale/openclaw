@@ -9,12 +9,6 @@ type PluginContractEntry = {
 export function getPluginContractRegistry(): PluginContractEntry[] {
   return listBundledChannelPlugins().map((plugin) => ({
     id: plugin.id,
-    plugin: {
-      ...plugin,
-      meta: {
-        ...plugin.meta,
-        id: plugin.id,
-      },
-    },
+    plugin,
   }));
 }

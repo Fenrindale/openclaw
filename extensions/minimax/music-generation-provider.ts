@@ -1,4 +1,4 @@
-import { extensionForMime } from "openclaw/plugin-sdk/media-mime";
+import { extensionForMime } from "openclaw/plugin-sdk/msteams";
 import type {
   GeneratedMusicAsset,
   MusicGenerationProvider,
@@ -12,7 +12,6 @@ import {
   postJsonRequest,
   resolveProviderHttpRequestConfig,
 } from "openclaw/plugin-sdk/provider-http";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 
 const DEFAULT_MINIMAX_MUSIC_BASE_URL = "https://api.minimax.io";
 const DEFAULT_MINIMAX_MUSIC_MODEL = "music-2.5+";
@@ -39,7 +38,7 @@ type MinimaxMusicCreateResponse = {
 function resolveMinimaxMusicBaseUrl(
   cfg: Parameters<typeof resolveApiKeyForProvider>[0]["cfg"],
 ): string {
-  const direct = normalizeOptionalString(cfg?.models?.providers?.minimax?.baseUrl);
+  const direct = cfg?.models?.providers?.minimax?.baseUrl?.trim();
   if (!direct) {
     return DEFAULT_MINIMAX_MUSIC_BASE_URL;
   }
@@ -79,7 +78,7 @@ function decodePossibleText(data: string): string {
 }
 
 function isLikelyRemoteUrl(value: string | undefined): boolean {
-  const trimmed = normalizeOptionalString(value);
+  const trimmed = value?.trim();
   return Boolean(trimmed && /^https?:\/\//iu.test(trimmed));
 }
 
@@ -95,7 +94,7 @@ async function downloadTrackFromUrl(params: {
     params.fetchFn,
   );
   await assertOkOrThrowHttpError(response, "MiniMax generated music download failed");
-  const mimeType = normalizeOptionalString(response.headers.get("content-type")) ?? "audio/mpeg";
+  const mimeType = response.headers.get("content-type")?.trim() || "audio/mpeg";
   const ext = extensionForMime(mimeType)?.replace(/^\./u, "") || "mp3";
   return {
     buffer: Buffer.from(await response.arrayBuffer()),
@@ -113,7 +112,7 @@ function buildPrompt(req: MusicGenerationRequest): string {
 }
 
 function resolveMinimaxMusicModel(model: string | undefined): string {
-  const trimmed = normalizeOptionalString(model);
+  const trimmed = model?.trim();
   if (!trimmed) {
     return DEFAULT_MINIMAX_MUSIC_MODEL;
   }
@@ -148,7 +147,7 @@ export function buildMinimaxMusicGenerationProvider(): MusicGenerationProvider {
       if ((req.inputImages?.length ?? 0) > 0) {
         throw new Error("MiniMax music generation does not support image reference inputs.");
       }
-      if (req.instrumental === true && normalizeOptionalString(req.lyrics)) {
+      if (req.instrumental === true && req.lyrics?.trim()) {
         throw new Error("MiniMax music generation cannot use lyrics when instrumental=true.");
       }
       if (req.format && req.format !== "mp3") {
@@ -179,7 +178,7 @@ export function buildMinimaxMusicGenerationProvider(): MusicGenerationProvider {
       jsonHeaders.set("Content-Type", "application/json");
 
       const model = resolveMinimaxMusicModel(req.model);
-      const lyrics = normalizeOptionalString(req.lyrics);
+      const lyrics = req.lyrics?.trim();
       const body = {
         model,
         prompt: buildPrompt(req),
@@ -209,11 +208,10 @@ export function buildMinimaxMusicGenerationProvider(): MusicGenerationProvider {
         const payload = (await res.json()) as MinimaxMusicCreateResponse;
         assertMinimaxBaseResp(payload.base_resp, "MiniMax music generation failed");
 
-        const audioCandidate =
-          normalizeOptionalString(payload.audio) ?? normalizeOptionalString(payload.data?.audio);
+        const audioCandidate = payload.audio?.trim() || payload.data?.audio?.trim();
         const audioUrl =
-          normalizeOptionalString(payload.audio_url) ||
-          normalizeOptionalString(payload.data?.audio_url) ||
+          payload.audio_url?.trim() ||
+          payload.data?.audio_url?.trim() ||
           (isLikelyRemoteUrl(audioCandidate) ? audioCandidate : undefined);
         const inlineAudio = isLikelyRemoteUrl(audioCandidate) ? undefined : audioCandidate;
         const lyrics = decodePossibleText(payload.lyrics ?? payload.data?.lyrics ?? "");
@@ -240,9 +238,7 @@ export function buildMinimaxMusicGenerationProvider(): MusicGenerationProvider {
           ...(lyrics ? { lyrics: [lyrics] } : {}),
           model,
           metadata: {
-            ...(normalizeOptionalString(payload.task_id)
-              ? { taskId: normalizeOptionalString(payload.task_id) }
-              : {}),
+            ...(payload.task_id?.trim() ? { taskId: payload.task_id.trim() } : {}),
             ...(audioUrl ? { audioUrl } : {}),
             instrumental: req.instrumental === true,
             ...(lyrics ? { requestedLyrics: true } : {}),

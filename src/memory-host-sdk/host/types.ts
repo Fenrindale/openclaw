@@ -21,22 +21,6 @@ export type MemorySyncProgressUpdate = {
   label?: string;
 };
 
-export type MemorySearchRuntimeDebug = {
-  backend: "builtin" | "qmd";
-  configuredMode?: string;
-  effectiveMode?: string;
-  fallback?: string;
-};
-
-export type MemoryReadResult = {
-  text: string;
-  path: string;
-  truncated?: boolean;
-  from?: number;
-  lines?: number;
-  nextFrom?: number;
-};
-
 export type MemoryProviderStatus = {
   backend: "builtin" | "qmd";
   provider: string;
@@ -77,19 +61,13 @@ export type MemoryProviderStatus = {
 export interface MemorySearchManager {
   search(
     query: string,
-    opts?: {
-      maxResults?: number;
-      minScore?: number;
-      sessionKey?: string;
-      qmdSearchModeOverride?: "query" | "search" | "vsearch";
-      onDebug?: (debug: MemorySearchRuntimeDebug) => void;
-    },
+    opts?: { maxResults?: number; minScore?: number; sessionKey?: string },
   ): Promise<MemorySearchResult[]>;
   readFile(params: {
     relPath: string;
     from?: number;
     lines?: number;
-  }): Promise<MemoryReadResult>;
+  }): Promise<{ text: string; path: string }>;
   status(): MemoryProviderStatus;
   sync?(params?: {
     reason?: string;

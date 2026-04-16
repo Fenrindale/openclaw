@@ -1,5 +1,4 @@
-import type { ModelDefinitionConfig } from "openclaw/plugin-sdk/provider-model-types";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
+import type { ModelDefinitionConfig } from "openclaw/plugin-sdk/provider-model-shared";
 
 export const HUGGINGFACE_BASE_URL = "https://router.huggingface.co/v1";
 export const HUGGINGFACE_POLICY_SUFFIXES = ["cheapest", "fastest"] as const;
@@ -73,7 +72,7 @@ export const HUGGINGFACE_MODEL_CATALOG: ModelDefinitionConfig[] = [
 ];
 
 export function isHuggingfacePolicyLocked(modelRef: string): boolean {
-  const ref = modelRef.trim();
+  const ref = String(modelRef).trim();
   return HUGGINGFACE_POLICY_SUFFIXES.some((suffix) => ref.endsWith(`:${suffix}`) || ref === suffix);
 }
 
@@ -92,7 +91,7 @@ export function buildHuggingfaceModelDefinition(
 }
 
 function isReasoningModelHeuristic(modelId: string): boolean {
-  const lower = normalizeLowercaseStringOrEmpty(modelId);
+  const lower = modelId.toLowerCase();
   return (
     lower.includes("r1") ||
     lower.includes("reason") ||

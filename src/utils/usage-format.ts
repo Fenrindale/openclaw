@@ -3,10 +3,9 @@ import path from "node:path";
 import { resolveOpenClawAgentDir } from "../agents/agent-paths.js";
 import { modelKey, normalizeModelRef, normalizeProviderId } from "../agents/model-selection.js";
 import type { NormalizedUsage } from "../agents/usage.js";
+import type { OpenClawConfig } from "../config/config.js";
 import type { ModelProviderConfig } from "../config/types.models.js";
-import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { getCachedGatewayModelPricing } from "../gateway/model-pricing-cache.js";
-import { normalizeOptionalString } from "../shared/string-coerce.js";
 
 export type ModelCostConfig = {
   input: number;
@@ -70,8 +69,8 @@ function toResolvedModelKey(params: {
   model?: string;
   allowPluginNormalization?: boolean;
 }): string | null {
-  const provider = normalizeOptionalString(params.provider);
-  const model = normalizeOptionalString(params.model);
+  const provider = params.provider?.trim();
+  const model = params.model?.trim();
   if (!provider || !model) {
     return null;
   }
@@ -82,8 +81,8 @@ function toResolvedModelKey(params: {
 }
 
 function toDirectModelKey(params: { provider?: string; model?: string }): string | null {
-  const provider = normalizeProviderId(normalizeOptionalString(params.provider) ?? "");
-  const model = normalizeOptionalString(params.model);
+  const provider = normalizeProviderId(params.provider?.trim() ?? "");
+  const model = params.model?.trim();
   if (!provider || !model) {
     return null;
   }
@@ -91,8 +90,8 @@ function toDirectModelKey(params: { provider?: string; model?: string }): string
 }
 
 function shouldUseNormalizedCostLookup(params: { provider?: string; model?: string }): boolean {
-  const provider = normalizeProviderId(normalizeOptionalString(params.provider) ?? "");
-  const model = normalizeOptionalString(params.model) ?? "";
+  const provider = normalizeProviderId(params.provider?.trim() ?? "");
+  const model = params.model?.trim() ?? "";
   if (!provider || !model) {
     return false;
   }

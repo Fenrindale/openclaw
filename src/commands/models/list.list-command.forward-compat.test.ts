@@ -19,12 +19,6 @@ const OPENAI_CODEX_MINI_MODEL = {
   contextWindow: 272_000,
 };
 
-const OPENAI_CODEX_PRO_MODEL = {
-  ...OPENAI_CODEX_MODEL,
-  id: "gpt-5.4-pro",
-  name: "GPT-5.4 Pro",
-};
-
 const OPENAI_CODEX_53_MODEL = {
   ...OPENAI_CODEX_MODEL,
   id: "gpt-5.4",
@@ -106,23 +100,27 @@ function lastPrintedRows<T>() {
   return (mocks.printModelTable.mock.calls.at(-1)?.[0] ?? []) as T[];
 }
 
+function mockDiscoveredCodex53Registry() {
+  mocks.resolveConfiguredEntries.mockReturnValueOnce({ entries: [] });
+  mocks.loadModelRegistry.mockResolvedValueOnce({
+    models: [{ ...OPENAI_CODEX_53_MODEL }],
+    availableKeys: new Set(["openai-codex/gpt-5.4"]),
+    registry: {
+      getAll: () => [{ ...OPENAI_CODEX_53_MODEL }],
+    },
+  });
+}
+
+async function runAllOpenAiCodexCommand() {
+  const runtime = createRuntime();
+  await modelsListCommand({ all: true, provider: "openai-codex", json: true }, runtime as never);
+  expect(mocks.printModelTable).toHaveBeenCalled();
+}
+
 let modelsListCommand: typeof import("./list.list-command.js").modelsListCommand;
-let listRowsModule: typeof import("./list.rows.js");
 let listRegistryModule: typeof import("./list.registry.js");
 
 function installModelsListCommandForwardCompatMocks() {
-  vi.doMock("../../agents/model-suppression.js", () => ({
-    shouldSuppressBuiltInModel: ({
-      provider,
-      id,
-    }: {
-      provider?: string | null;
-      id?: string | null;
-    }) =>
-      (provider === "openai" || provider === "azure-openai-responses") &&
-      id === "gpt-5.3-codex-spark",
-  }));
-
   vi.doMock("./load-config.js", () => ({
     loadModelsConfigWithSource: mocks.loadModelsConfigWithSource,
   }));
@@ -149,42 +147,10 @@ function installModelsListCommandForwardCompatMocks() {
 
 beforeAll(async () => {
   installModelsListCommandForwardCompatMocks();
-  listRowsModule = await import("./list.rows.js");
   listRegistryModule = await import("./list.registry.js");
   vi.spyOn(listRegistryModule, "loadModelRegistry").mockImplementation(mocks.loadModelRegistry);
   ({ modelsListCommand } = await import("./list.list-command.js"));
 });
-
-async function buildAllOpenAiCodexRows(opts: { supplementCatalog?: boolean } = {}) {
-  const loaded = await mocks.loadModelRegistry();
-  const rows: unknown[] = [];
-  const context = {
-    cfg: mocks.resolvedConfig,
-    authStore: mocks.ensureAuthProfileStore(),
-    availableKeys: loaded.availableKeys,
-    configuredByKey: new Map(),
-    discoveredKeys: new Set(
-      loaded.models.map(
-        (model: { provider: string; id: string }) => `${model.provider}/${model.id}`,
-      ),
-    ),
-    filter: { provider: "openai-codex" },
-  };
-  const seenKeys = listRowsModule.appendDiscoveredRows({
-    rows: rows as never,
-    models: loaded.models as never,
-    context: context as never,
-  });
-  if (opts.supplementCatalog !== false) {
-    await listRowsModule.appendCatalogSupplementRows({
-      rows: rows as never,
-      modelRegistry: loaded.registry as never,
-      context: context as never,
-      seenKeys,
-    });
-  }
-  return rows;
-}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -238,35 +204,6 @@ describe("modelsListCommand forward-compat", () => {
       expect(codexMini).toBeTruthy();
       expect(codexMini?.missing).toBe(false);
       expect(codexMini?.tags).not.toContain("missing");
-    });
-
-    it("does not mark configured codex gpt-5.4-pro as missing when forward-compat can build a fallback", async () => {
-      mocks.resolveConfiguredEntries.mockReturnValueOnce({
-        entries: [
-          {
-            key: "openai-codex/gpt-5.4-pro",
-            ref: { provider: "openai-codex", model: "gpt-5.4-pro" },
-            tags: new Set(["configured"]),
-            aliases: [],
-          },
-        ],
-      });
-      mocks.resolveModelWithRegistry.mockReturnValueOnce({ ...OPENAI_CODEX_PRO_MODEL });
-      const runtime = createRuntime();
-
-      await modelsListCommand({ json: true }, runtime as never);
-
-      expect(mocks.printModelTable).toHaveBeenCalled();
-      const rows = lastPrintedRows<{
-        key: string;
-        tags: string[];
-        missing: boolean;
-      }>();
-
-      const codexPro = rows.find((row) => row.key === "openai-codex/gpt-5.4-pro");
-      expect(codexPro).toBeTruthy();
-      expect(codexPro?.missing).toBe(false);
-      expect(codexPro?.tags).not.toContain("missing");
     });
 
     it("passes source config to model registry loading for persistence safety", async () => {
@@ -360,14 +297,7 @@ describe("modelsListCommand forward-compat", () => {
 
   describe("--all catalog supplementation", () => {
     it("includes synthetic codex gpt-5.4 in --all output when catalog supports it", async () => {
-      mocks.resolveConfiguredEntries.mockReturnValueOnce({ entries: [] });
-      mocks.loadModelRegistry.mockResolvedValueOnce({
-        models: [],
-        availableKeys: new Set(["openai-codex/gpt-5.4"]),
-        registry: {
-          getAll: () => [],
-        },
-      });
+      mockDiscoveredCodex53Registry();
       mocks.loadModelCatalog.mockResolvedValueOnce([
         {
           provider: "openai-codex",
@@ -393,14 +323,8 @@ describe("modelsListCommand forward-compat", () => {
           return undefined;
         },
       );
-      mocks.resolveModelWithRegistry.mockImplementationOnce(
-        ({ provider, modelId }: { provider: string; modelId: string }) =>
-          provider === "openai-codex" && modelId === "gpt-5.4"
-            ? { ...OPENAI_CODEX_53_MODEL }
-            : undefined,
-      );
-      const rows = await buildAllOpenAiCodexRows();
-      expect(rows).toEqual([
+      await runAllOpenAiCodexCommand();
+      expect(lastPrintedRows<{ key: string; available: boolean }>()).toEqual([
         expect.objectContaining({
           key: "openai-codex/gpt-5.4",
           available: true,
@@ -408,11 +332,20 @@ describe("modelsListCommand forward-compat", () => {
       ]);
     });
 
+    it("keeps discovered rows in --all output when catalog lookup is empty", async () => {
+      mockDiscoveredCodex53Registry();
+      mocks.loadModelCatalog.mockResolvedValueOnce([]);
+      await runAllOpenAiCodexCommand();
+      expect(lastPrintedRows<{ key: string }>()).toEqual([
+        expect.objectContaining({
+          key: "openai-codex/gpt-5.4",
+        }),
+      ]);
+    });
+
     it("suppresses direct openai gpt-5.3-codex-spark rows in --all output", async () => {
       mocks.resolveConfiguredEntries.mockReturnValueOnce({ entries: [] });
-      const rows: unknown[] = [];
-      listRowsModule.appendDiscoveredRows({
-        rows: rows as never,
+      mocks.loadModelRegistry.mockResolvedValueOnce({
         models: [
           {
             provider: "openai",
@@ -437,18 +370,23 @@ describe("modelsListCommand forward-compat", () => {
             cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
           },
           { ...OPENAI_CODEX_53_MODEL },
-        ] as never,
-        context: {
-          cfg: mocks.resolvedConfig,
-          authStore: mocks.ensureAuthProfileStore(),
-          availableKeys: new Set(["openai-codex/gpt-5.4"]),
-          configuredByKey: new Map(),
-          discoveredKeys: new Set(),
-          filter: {},
-        } as never,
+        ],
+        availableKeys: new Set([
+          "openai/gpt-5.3-codex-spark",
+          "azure-openai-responses/gpt-5.3-codex-spark",
+          "openai-codex/gpt-5.4",
+        ]),
+        registry: {
+          getAll: () => [{ ...OPENAI_CODEX_53_MODEL }],
+        },
       });
+      mocks.loadModelCatalog.mockResolvedValueOnce([]);
+      const runtime = createRuntime();
 
-      expect(rows).toEqual([
+      await modelsListCommand({ all: true, json: true }, runtime as never);
+
+      expect(mocks.printModelTable).toHaveBeenCalled();
+      expect(lastPrintedRows<{ key: string }>()).toEqual([
         expect.objectContaining({
           key: "openai-codex/gpt-5.4",
         }),

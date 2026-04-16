@@ -1,7 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../runtime-api.js";
 import { createFeishuCardInteractionEnvelope } from "./card-interaction.js";
-import { feishuPlugin } from "./channel.js";
 import { looksLikeFeishuId, normalizeFeishuTarget, resolveReceiveIdType } from "./targets.js";
 
 const probeFeishuMock = vi.hoisted(() => vi.fn());
@@ -61,6 +60,8 @@ vi.mock("../../../src/channels/plugins/bundled.js", () => ({
   bundledChannelSetupPlugins: [],
 }));
 
+let feishuPlugin: typeof import("./channel.js").feishuPlugin;
+
 function getDescribedActions(cfg: OpenClawConfig, accountId?: string): string[] {
   return [...(feishuPlugin.actions?.describeMessageTool?.({ cfg, accountId })?.actions ?? [])];
 }
@@ -99,6 +100,10 @@ async function expectLegacyFeishuCardPayloadRejected(cfg: OpenClawConfig, card: 
   );
   expect(sendCardFeishuMock).not.toHaveBeenCalled();
 }
+
+beforeAll(async () => {
+  ({ feishuPlugin } = await import("./channel.js"));
+});
 
 describe("feishuPlugin.status.probeAccount", () => {
   it("uses current account credentials for multi-account config", async () => {

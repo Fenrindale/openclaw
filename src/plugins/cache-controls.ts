@@ -1,20 +1,18 @@
-import { normalizeOptionalString } from "../shared/string-coerce.js";
-
 export const DEFAULT_PLUGIN_DISCOVERY_CACHE_MS = 1000;
 export const DEFAULT_PLUGIN_MANIFEST_CACHE_MS = 1000;
 
 export function shouldUsePluginSnapshotCache(env: NodeJS.ProcessEnv): boolean {
-  if (normalizeOptionalString(env.OPENCLAW_DISABLE_PLUGIN_DISCOVERY_CACHE)) {
+  if (env.OPENCLAW_DISABLE_PLUGIN_DISCOVERY_CACHE?.trim()) {
     return false;
   }
-  if (normalizeOptionalString(env.OPENCLAW_DISABLE_PLUGIN_MANIFEST_CACHE)) {
+  if (env.OPENCLAW_DISABLE_PLUGIN_MANIFEST_CACHE?.trim()) {
     return false;
   }
-  const discoveryCacheMs = normalizeOptionalString(env.OPENCLAW_PLUGIN_DISCOVERY_CACHE_MS);
+  const discoveryCacheMs = env.OPENCLAW_PLUGIN_DISCOVERY_CACHE_MS?.trim();
   if (discoveryCacheMs === "0") {
     return false;
   }
-  const manifestCacheMs = normalizeOptionalString(env.OPENCLAW_PLUGIN_MANIFEST_CACHE_MS);
+  const manifestCacheMs = env.OPENCLAW_PLUGIN_MANIFEST_CACHE_MS?.trim();
   if (manifestCacheMs === "0") {
     return false;
   }
@@ -22,7 +20,7 @@ export function shouldUsePluginSnapshotCache(env: NodeJS.ProcessEnv): boolean {
 }
 
 export function resolvePluginCacheMs(rawValue: string | undefined, defaultMs: number): number {
-  const raw = normalizeOptionalString(rawValue);
+  const raw = rawValue?.trim();
   if (raw === "" || raw === "0") {
     return 0;
   }

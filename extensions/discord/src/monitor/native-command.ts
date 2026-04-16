@@ -18,7 +18,6 @@ import {
   resolveCommandAuthorizedFromAuthorizers,
   resolveNativeCommandSessionTargets,
 } from "openclaw/plugin-sdk/command-auth-native";
-import { resolveDirectStatusReplyForSession } from "openclaw/plugin-sdk/command-status-runtime";
 import type { OpenClawConfig, loadConfig } from "openclaw/plugin-sdk/config-runtime";
 import { buildPairingReply } from "openclaw/plugin-sdk/conversation-runtime";
 import { isDangerousNameMatchingEnabled } from "openclaw/plugin-sdk/dangerous-name-runtime";
@@ -48,10 +47,6 @@ import {
 } from "openclaw/plugin-sdk/reply-payload";
 import { createSubsystemLogger, logVerbose } from "openclaw/plugin-sdk/runtime-env";
 import { resolveOpenProviderRuntimeGroupPolicy } from "openclaw/plugin-sdk/runtime-group-policy";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-} from "openclaw/plugin-sdk/text-runtime";
 import { loadWebMedia } from "openclaw/plugin-sdk/web-media";
 import { resolveDiscordMaxLinesPerMessage } from "../accounts.js";
 import { chunkDiscordTextWithMode } from "../chunk.js";
@@ -164,10 +159,10 @@ function resolveDiscordNativeCommandAllowlistAccess(params: {
     return { configured: false, allowed: false } as const;
   }
   // Check guild-level entries (e.g. "guild:123456") before user matching.
-  const guildId = normalizeOptionalString(params.guildId);
+  const guildId = params.guildId?.trim();
   if (guildId) {
     for (const entry of rawAllowList) {
-      const text = normalizeOptionalString(String(entry)) ?? "";
+      const text = String(entry).trim();
       if (text.startsWith("guild:") && text.slice("guild:".length) === guildId) {
         return { configured: true, allowed: true } as const;
       }
@@ -303,7 +298,8 @@ function buildDiscordCommandOptions(params: {
             return;
           }
           const focused = interaction.options.getFocused();
-          const focusValue = normalizeLowercaseStringOrEmpty(focused?.value);
+          const focusValue =
+            typeof focused?.value === "string" ? focused.value.trim().toLowerCase() : "";
           const context =
             typeof arg.choices === "function" && resolveChoiceContext
               ? await resolveChoiceContext(interaction)
@@ -316,9 +312,7 @@ function buildDiscordCommandOptions(params: {
             model: context?.model,
           });
           const filtered = focusValue
-            ? choices.filter((choice) =>
-                normalizeLowercaseStringOrEmpty(choice.label).includes(focusValue),
-              )
+            ? choices.filter((choice) => choice.label.toLowerCase().includes(focusValue))
             : choices;
           await interaction.respond(
             filtered.slice(0, 25).map((choice) => ({ name: choice.label, value: choice.value })),
@@ -346,14 +340,14 @@ function buildDiscordCommandOptions(params: {
 }
 
 function shouldBypassConfiguredAcpEnsure(commandName: string): boolean {
-  const normalized = normalizeLowercaseStringOrEmpty(commandName);
+  const normalized = commandName.trim().toLowerCase();
   // Recovery slash commands still need configured ACP readiness so stale dead
   // bindings are recreated before /new or /reset dispatches through them.
   return normalized === "acp";
 }
 
 function shouldBypassConfiguredAcpGuildGuards(commandName: string): boolean {
-  const normalized = normalizeLowercaseStringOrEmpty(commandName);
+  const normalized = commandName.trim().toLowerCase();
   return normalized === "new" || normalized === "reset";
 }
 
@@ -408,7 +402,7 @@ async function resolveDiscordNativeAutocompleteAuthorized(params: {
   const channelSlug = channelName ? normalizeDiscordSlug(channelName) : "";
   const rawChannelId = channel?.id ?? "";
   const memberRoleIds = Array.isArray(interaction.rawData.member?.roles)
-    ? interaction.rawData.member.roles.map((roleId: string) => roleId)
+    ? interaction.rawData.member.roles.map((roleId: string) => String(roleId))
     : [];
   const allowNameMatching = isDangerousNameMatchingEnabled(discordConfig);
   const useAccessGroups = cfg.commands?.useAccessGroups !== false;
@@ -721,9 +715,7 @@ export function createDiscordNativeCommand(params: {
         discordConfig,
         accountId,
         sessionPrefix,
-        // Slash commands are deferred up front, so all later responses must use
-        // follow-up/edit semantics instead of the initial reply endpoint.
-        preferFollowUp: true,
+        preferFollowUp: false,
         threadBindings,
       });
     }
@@ -756,7 +748,6 @@ async function dispatchDiscordCommandInteraction(params: {
     threadBindings,
     suppressReplies,
   } = params;
-  const commandName = command.nativeName ?? command.key;
   const respond = async (content: string, options?: { ephemeral?: boolean }) => {
     const payload = {
       content,
@@ -789,7 +780,7 @@ async function dispatchDiscordCommandInteraction(params: {
   const channelSlug = channelName ? normalizeDiscordSlug(channelName) : "";
   const rawChannelId = channel?.id ?? "";
   const memberRoleIds = Array.isArray(interaction.rawData.member?.roles)
-    ? interaction.rawData.member.roles.map((roleId: string) => roleId)
+    ? interaction.rawData.member.roles.map((roleId: string) => String(roleId))
     : [];
   const allowNameMatching = isDangerousNameMatchingEnabled(discordConfig);
   const { ownerAllowList, ownerAllowed: ownerOk } = resolveDiscordOwnerAccess({
@@ -871,10 +862,15 @@ async function dispatchDiscordCommandInteraction(params: {
       conversationId: rawChannelId || "unknown",
       parentConversationId: threadParentId,
       threadBinding: isThreadChannel ? threadBindings.getByThreadId(rawChannelId) : undefined,
-      enforceConfiguredBindingReadiness: !shouldBypassConfiguredAcpEnsure(commandName),
+      enforceConfiguredBindingReadiness: !shouldBypassConfiguredAcpEnsure(
+        command.nativeName ?? command.key,
+      ),
     }));
   const canBypassConfiguredAcpGuildGuards = async () => {
-    if (!interaction.guild || !shouldBypassConfiguredAcpGuildGuards(commandName)) {
+    if (
+      !interaction.guild ||
+      !shouldBypassConfiguredAcpGuildGuards(command.nativeName ?? command.key)
+    ) {
       return false;
     }
     const routeState = await getNativeRouteState();
@@ -1128,36 +1124,6 @@ async function dispatchDiscordCommandInteraction(params: {
     targetSessionKey: effectiveRoute.sessionKey,
     boundSessionKey,
   });
-  const mediaLocalRoots = getAgentScopedMediaLocalRoots(cfg, effectiveRoute.agentId);
-  if (!suppressReplies && commandName === "status") {
-    const statusReply = await resolveDirectStatusReplyForSession({
-      cfg,
-      sessionKey: commandTargetSessionKey?.trim() || sessionKey,
-      channel: "discord",
-      senderId: sender.id,
-      senderIsOwner: ownerOk,
-      isAuthorizedSender: commandAuthorized,
-      isGroup: isGuild || isGroupDm,
-      defaultGroupActivation: () =>
-        !isGuild ? "always" : channelConfig?.requireMention === false ? "always" : "mention",
-    });
-    if (statusReply && hasRenderableReplyPayload(statusReply)) {
-      await deliverDiscordInteractionReply({
-        interaction,
-        payload: statusReply,
-        mediaLocalRoots,
-        textLimit: resolveTextChunkLimit(cfg, "discord", accountId, {
-          fallbackLimit: 2000,
-        }),
-        maxLinesPerMessage: resolveDiscordMaxLinesPerMessage({ cfg, discordConfig, accountId }),
-        preferFollowUp,
-        chunkMode: resolveChunkMode(cfg, "discord", accountId),
-      });
-      return;
-    }
-    await respond("Status unavailable.");
-    return;
-  }
   const ctxPayload = buildDiscordNativeCommandContext({
     prompt,
     commandArgs: commandArgs ?? {},
@@ -1191,6 +1157,7 @@ async function dispatchDiscordCommandInteraction(params: {
     channel: "discord",
     accountId: effectiveRoute.accountId,
   });
+  const mediaLocalRoots = getAgentScopedMediaLocalRoots(cfg, effectiveRoute.agentId);
   const blockStreamingEnabled = resolveChannelStreamingBlockEnabled(discordConfig);
 
   let didReply = false;

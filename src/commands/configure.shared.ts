@@ -5,7 +5,6 @@ import {
   select as clackSelect,
   text as clackText,
 } from "@clack/prompts";
-import { normalizeStringEntries } from "../shared/string-normalization.js";
 import { stylePromptHint, stylePromptMessage, stylePromptTitle } from "../terminal/prompt-style.js";
 
 export const CONFIGURE_WIZARD_SECTIONS = [
@@ -26,7 +25,9 @@ export function parseConfigureWizardSections(raw: unknown): {
   sections: WizardSection[];
   invalid: string[];
 } {
-  const sectionsRaw: string[] = Array.isArray(raw) ? normalizeStringEntries(raw) : [];
+  const sectionsRaw: string[] = Array.isArray(raw)
+    ? raw.map((value: unknown) => (typeof value === "string" ? value.trim() : "")).filter(Boolean)
+    : [];
   if (sectionsRaw.length === 0) {
     return { sections: [], invalid: [] };
   }

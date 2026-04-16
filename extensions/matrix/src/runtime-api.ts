@@ -10,7 +10,6 @@ export {
   readReactionParams,
   readStringArrayParam,
   readStringParam,
-  ToolAuthorizationError,
 } from "openclaw/plugin-sdk/channel-actions";
 export { buildChannelConfigSchema } from "openclaw/plugin-sdk/channel-config-primitives";
 export type { ChannelPlugin } from "openclaw/plugin-sdk/channel-core";
@@ -58,7 +57,6 @@ export {
   moveSingleAccountChannelSectionToDefaultAccount,
   promptAccountId,
   promptChannelAccessConfig,
-  splitSetupEntries,
 } from "openclaw/plugin-sdk/setup";
 export type { RuntimeEnv } from "openclaw/plugin-sdk/runtime";
 export {

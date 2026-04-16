@@ -1,8 +1,8 @@
 import type { Api, Model } from "@mariozechner/pi-ai";
 import type { ModelRegistry } from "@mariozechner/pi-coding-agent";
-import type { AuthProfileStore } from "../../agents/auth-profiles/types.js";
+import type { AuthProfileStore } from "../../agents/auth-profiles.js";
 import { shouldSuppressBuiltInModel } from "../../agents/model-suppression.js";
-import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import type { OpenClawConfig } from "../../config/config.js";
 import {
   formatErrorWithStack,
   MODEL_AVAILABILITY_UNAVAILABLE_CODE,
@@ -81,7 +81,7 @@ function validateAvailableModels(availableModels: unknown): Model<Api>[] {
   return availableModels as Model<Api>[];
 }
 
-function loadAvailableModels(registry: ModelRegistry, cfg: OpenClawConfig): Model<Api>[] {
+function loadAvailableModels(registry: ModelRegistry): Model<Api>[] {
   let availableModels: unknown;
   try {
     availableModels = registry.getAvailable();
@@ -90,13 +90,7 @@ function loadAvailableModels(registry: ModelRegistry, cfg: OpenClawConfig): Mode
   }
   try {
     return validateAvailableModels(availableModels).filter(
-      (model) =>
-        !shouldSuppressBuiltInModel({
-          provider: model.provider,
-          id: model.id,
-          baseUrl: model.baseUrl,
-          config: cfg,
-        }),
+      (model) => !shouldSuppressBuiltInModel({ provider: model.provider, id: model.id }),
     );
   } catch (err) {
     throw normalizeAvailabilityError(err);
@@ -104,26 +98,20 @@ function loadAvailableModels(registry: ModelRegistry, cfg: OpenClawConfig): Mode
 }
 
 export async function loadModelRegistry(
-  cfg: OpenClawConfig,
+  _cfg: OpenClawConfig,
   _opts?: { sourceConfig?: OpenClawConfig },
 ) {
   const agentDir = resolveOpenClawAgentDir();
   const authStorage = discoverAuthStorage(agentDir);
   const registry = discoverModels(authStorage, agentDir);
-  const models = registry.getAll().filter(
-    (model) =>
-      !shouldSuppressBuiltInModel({
-        provider: model.provider,
-        id: model.id,
-        baseUrl: model.baseUrl,
-        config: cfg,
-      }),
-  );
+  const models = registry
+    .getAll()
+    .filter((model) => !shouldSuppressBuiltInModel({ provider: model.provider, id: model.id }));
   let availableKeys: Set<string> | undefined;
   let availabilityErrorMessage: string | undefined;
 
   try {
-    const availableModels = loadAvailableModels(registry, cfg);
+    const availableModels = loadAvailableModels(registry);
     availableKeys = new Set(availableModels.map((model) => modelKey(model.provider, model.id)));
   } catch (err) {
     if (!shouldFallbackToAuthHeuristics(err)) {

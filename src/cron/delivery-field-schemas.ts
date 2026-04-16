@@ -1,10 +1,9 @@
 import { z, type ZodType } from "zod";
-import { normalizeOptionalLowercaseString } from "../shared/string-coerce.js";
 
 const trimStringPreprocess = (value: unknown) => (typeof value === "string" ? value.trim() : value);
 
 const trimLowercaseStringPreprocess = (value: unknown) =>
-  normalizeOptionalLowercaseString(value) ?? value;
+  typeof value === "string" ? value.trim().toLowerCase() : value;
 
 export const DeliveryModeFieldSchema = z
   .preprocess(trimLowercaseStringPreprocess, z.enum(["deliver", "announce", "none", "webhook"]))
@@ -28,7 +27,7 @@ export const DeliveryThreadIdFieldSchema = z.union([
 export const TimeoutSecondsFieldSchema = z
   .number()
   .finite()
-  .transform((value) => Math.max(0, value));
+  .transform((value) => Math.max(0, Math.floor(value)));
 
 export type ParsedDeliveryInput = {
   mode?: "announce" | "none" | "webhook";

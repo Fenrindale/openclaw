@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import { extractHandleFromChatGuid, normalizeBlueBubblesHandle } from "./targets.js";
 
 type SelfChatCacheKeyParts = {
@@ -40,6 +39,11 @@ function digestText(text: string): string {
   return createHash("sha256").update(text).digest("base64url");
 }
 
+function trimOrUndefined(value?: string | null): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
 function resolveCanonicalChatTarget(parts: SelfChatCacheKeyParts): string | null {
   const handleFromGuid = parts.chatGuid ? extractHandleFromChatGuid(parts.chatGuid) : null;
   if (handleFromGuid) {
@@ -52,8 +56,8 @@ function resolveCanonicalChatTarget(parts: SelfChatCacheKeyParts): string | null
   }
 
   return (
-    normalizeOptionalString(parts.chatGuid) ??
-    normalizeOptionalString(parts.chatIdentifier) ??
+    trimOrUndefined(parts.chatGuid) ??
+    trimOrUndefined(parts.chatIdentifier) ??
     (typeof parts.chatId === "number" ? String(parts.chatId) : null)
   );
 }

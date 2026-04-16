@@ -3,7 +3,6 @@ import { loadConfig } from "openclaw/plugin-sdk/config-runtime";
 import type { RetryConfig, RetryRunner } from "openclaw/plugin-sdk/retry-runtime";
 import { normalizeAccountId } from "openclaw/plugin-sdk/routing";
 import type { RuntimeEnv } from "openclaw/plugin-sdk/runtime-env";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import {
   mergeDiscordAccountConfig,
   resolveDiscordAccount,
@@ -97,7 +96,7 @@ function resolveAccountWithoutToken(params: {
   return {
     accountId,
     enabled: baseEnabled && accountEnabled,
-    name: normalizeOptionalString(merged.name),
+    name: merged.name?.trim() || undefined,
     token: "",
     tokenSource: "none",
     config: merged,

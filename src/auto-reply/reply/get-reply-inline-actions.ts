@@ -3,15 +3,11 @@ import type { BlockReplyChunking } from "../../agents/pi-embedded-block-chunker.
 import type { SkillCommandSpec } from "../../agents/skills.js";
 import { applyOwnerOnlyToolPolicy } from "../../agents/tool-policy.js";
 import { getChannelPlugin } from "../../channels/plugins/index.js";
+import type { OpenClawConfig } from "../../config/config.js";
 import type { SessionEntry } from "../../config/sessions.js";
-import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { logVerbose } from "../../globals.js";
 import { formatErrorMessage } from "../../infra/errors.js";
 import { generateSecureToken } from "../../infra/secure-random.js";
-import {
-  normalizeOptionalLowercaseString,
-  normalizeOptionalString,
-} from "../../shared/string-coerce.js";
 import { resolveGatewayMessageChannel } from "../../utils/message-channel.js";
 import {
   listReservedChatSlashCommandNames,
@@ -27,8 +23,8 @@ import {
 } from "./abort-cutoff.js";
 import { getAbortMemory, isAbortRequestText } from "./abort-primitives.js";
 import type { buildStatusReply, handleCommands } from "./commands.runtime.js";
-import { isDirectiveOnly } from "./directive-handling.directive-only.js";
 import type { InlineDirectives } from "./directive-handling.parse.js";
+import { isDirectiveOnly } from "./directive-handling.parse.js";
 import { extractExplicitGroupId } from "./group-id.js";
 import { stripMentions, stripStructuralPrefixes } from "./mentions.js";
 import type { createModelSelectionState } from "./model-selection.js";
@@ -61,12 +57,12 @@ function resolveSlashCommandName(commandBodyNormalized: string): string | null {
     return null;
   }
   const match = trimmed.match(/^\/([^\s:]+)(?::|\s|$)/);
-  const name = normalizeOptionalLowercaseString(match?.[1]) ?? "";
+  const name = match?.[1]?.trim().toLowerCase() ?? "";
   return name ? name : null;
 }
 
 function expandBundleCommandPromptTemplate(template: string, args?: string): string {
-  const normalizedArgs = normalizeOptionalString(args) || "";
+  const normalizedArgs = args?.trim() || "";
   const rendered = template.includes("$ARGUMENTS")
     ? template.replaceAll("$ARGUMENTS", normalizedArgs)
     : template;
@@ -74,17 +70,6 @@ function expandBundleCommandPromptTemplate(template: string, args?: string): str
     return rendered.trim();
   }
   return `${rendered.trim()}\n\nUser input:\n${normalizedArgs}`;
-}
-
-function isMentionOnlyResidualText(text: string, wasMentioned: boolean | undefined): boolean {
-  if (wasMentioned !== true) {
-    return false;
-  }
-  const trimmed = text.trim();
-  if (!trimmed) {
-    return false;
-  }
-  return /^(?:<@[!&]?[A-Za-z0-9._:-]+>|<!(?:here|channel|everyone)>|[:,.!?-]|\s)+$/u.test(trimmed);
 }
 
 export type InlineActionResult =
@@ -250,7 +235,6 @@ export async function handleInlineActions(params: {
         workspaceDir,
         config: cfg,
         allowGatewaySubagentBinding: true,
-        senderIsOwner: command.senderIsOwner,
       });
       const authorizedTools = applyOwnerOnlyToolPolicy(tools, command.senderIsOwner);
 
@@ -308,9 +292,8 @@ export async function handleInlineActions(params: {
   };
 
   const isStopLikeInbound = isAbortRequestText(command.rawBodyNormalized);
-  const targetSessionEntry = sessionStore?.[sessionKey] ?? sessionEntry;
-  if (!isStopLikeInbound && targetSessionEntry) {
-    const cutoff = readAbortCutoffFromSessionEntry(targetSessionEntry);
+  if (!isStopLikeInbound && sessionEntry) {
+    const cutoff = readAbortCutoffFromSessionEntry(sessionEntry);
     const incoming = resolveAbortCutoffFromContext(ctx);
     const shouldSkip = cutoff
       ? shouldSkipMessageByAbortCutoff({
@@ -328,7 +311,7 @@ export async function handleInlineActions(params: {
       await (
         await import("./abort-cutoff.runtime.js")
       ).clearAbortCutoffInSessionRuntime({
-        sessionEntry: targetSessionEntry,
+        sessionEntry,
         sessionStore,
         sessionKey,
         storePath,
@@ -362,11 +345,10 @@ export async function handleInlineActions(params: {
     const inlineStatusReply = await buildStatusReply({
       cfg,
       command,
-      sessionEntry: targetSessionEntry,
+      sessionEntry,
       sessionKey,
-      parentSessionKey: targetSessionEntry?.parentSessionKey ?? ctx.ParentSessionKey,
+      parentSessionKey: ctx.ParentSessionKey,
       sessionScope,
-      storePath,
       provider,
       model,
       contextTokens,
@@ -401,7 +383,7 @@ export async function handleInlineActions(params: {
         allowed: elevatedAllowed,
         failures: elevatedFailures,
       },
-      sessionEntry: targetSessionEntry,
+      sessionEntry,
       previousSessionEntry,
       sessionStore,
       sessionKey,
@@ -485,11 +467,7 @@ export async function handleInlineActions(params: {
     }
     return stripMentions(stripped, ctx, cfg, agentId).trim();
   })();
-  if (
-    didSendInlineStatus &&
-    (remainingBodyAfterInlineStatus.length === 0 ||
-      isMentionOnlyResidualText(remainingBodyAfterInlineStatus, ctx.WasMentioned))
-  ) {
+  if (didSendInlineStatus && remainingBodyAfterInlineStatus.length === 0) {
     typing.cleanup();
     return { kind: "reply", reply: undefined };
   }

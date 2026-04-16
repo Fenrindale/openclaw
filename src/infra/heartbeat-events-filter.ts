@@ -1,5 +1,4 @@
 import { HEARTBEAT_TOKEN } from "../auto-reply/tokens.js";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 
 // Build a dynamic prompt for cron events by embedding the actual event content.
 // This ensures the model sees the reminder text directly instead of relying on
@@ -53,7 +52,7 @@ export function buildExecEventPrompt(opts?: { deliverToUser?: boolean }): string
   );
 }
 
-const HEARTBEAT_OK_PREFIX = normalizeLowercaseStringOrEmpty(HEARTBEAT_TOKEN);
+const HEARTBEAT_OK_PREFIX = HEARTBEAT_TOKEN.toLowerCase();
 
 // Detect heartbeat-specific noise so cron reminders don't trigger on non-reminder events.
 function isHeartbeatAckEvent(evt: string): boolean {
@@ -61,7 +60,7 @@ function isHeartbeatAckEvent(evt: string): boolean {
   if (!trimmed) {
     return false;
   }
-  const lower = normalizeLowercaseStringOrEmpty(trimmed);
+  const lower = trimmed.toLowerCase();
   if (!lower.startsWith(HEARTBEAT_OK_PREFIX)) {
     return false;
   }
@@ -73,7 +72,7 @@ function isHeartbeatAckEvent(evt: string): boolean {
 }
 
 function isHeartbeatNoiseEvent(evt: string): boolean {
-  const lower = normalizeLowercaseStringOrEmpty(evt);
+  const lower = evt.trim().toLowerCase();
   if (!lower) {
     return false;
   }
@@ -85,13 +84,7 @@ function isHeartbeatNoiseEvent(evt: string): boolean {
 }
 
 export function isExecCompletionEvent(evt: string): boolean {
-  const normalized = normalizeLowercaseStringOrEmpty(evt).trimStart();
-  return (
-    /^exec finished(?::|\s*\()/.test(normalized) ||
-    /^exec (completed|failed) \([a-z0-9_-]{1,64}, (code -?\d+|signal [^)]+)\)( :: .*)?$/.test(
-      normalized,
-    )
-  );
+  return evt.toLowerCase().includes("exec finished");
 }
 
 // Returns true when a system event should be treated as real cron reminder content.

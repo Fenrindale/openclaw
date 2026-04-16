@@ -5,18 +5,7 @@ import {
   runSetupWizardFinalize,
   type WizardPrompter,
 } from "../../../test/helpers/plugins/setup-wizard.js";
-import { createSlackSetupWizardBase } from "./setup-core.js";
-
-const slackSetupWizard = createSlackSetupWizardBase({
-  promptAllowFrom: async ({ cfg }) => cfg,
-  resolveAllowFromEntries: async ({ entries }) =>
-    entries.map((entry) => ({
-      input: entry,
-      resolved: false,
-      id: null,
-    })),
-  resolveGroupAllowlist: async ({ entries }) => entries,
-});
+import { slackSetupWizard } from "./setup-surface.js";
 
 describe("slackSetupWizard.finalize", () => {
   const baseCfg = {

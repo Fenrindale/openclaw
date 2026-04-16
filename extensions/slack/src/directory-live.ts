@@ -2,11 +2,6 @@ import type {
   ChannelDirectoryEntry,
   DirectoryConfigParams,
 } from "openclaw/plugin-sdk/directory-runtime";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-  normalizeOptionalLowercaseString,
-} from "openclaw/plugin-sdk/text-runtime";
 import { resolveSlackAccount } from "./accounts.js";
 import { createSlackWebClient } from "./client.js";
 
@@ -47,7 +42,7 @@ function resolveReadToken(params: DirectoryConfigParams): string | undefined {
 }
 
 function normalizeQuery(value?: string | null): string {
-  return normalizeLowercaseStringOrEmpty(value);
+  return value?.trim().toLowerCase() ?? "";
 }
 
 function buildUserRank(user: SlackUser): number {
@@ -94,7 +89,7 @@ export async function listSlackDirectoryPeersLive(
     const handle = member.name;
     const email = member.profile?.email;
     const candidates = [name, handle, email]
-      .map((item) => normalizeOptionalLowercaseString(item))
+      .map((item) => item?.trim().toLowerCase())
       .filter(Boolean);
     if (!query) {
       return true;
@@ -108,11 +103,11 @@ export async function listSlackDirectoryPeersLive(
       if (!id) {
         return null;
       }
-      const handle = normalizeOptionalString(member.name);
+      const handle = member.name?.trim();
       const display =
-        normalizeOptionalString(member.profile?.display_name) ||
-        normalizeOptionalString(member.profile?.real_name) ||
-        normalizeOptionalString(member.real_name) ||
+        member.profile?.display_name?.trim() ||
+        member.profile?.real_name?.trim() ||
+        member.real_name?.trim() ||
         handle;
       return {
         kind: "user",
@@ -158,7 +153,7 @@ export async function listSlackDirectoryGroupsLive(
   } while (cursor);
 
   const filtered = channels.filter((channel) => {
-    const name = normalizeOptionalLowercaseString(channel.name);
+    const name = channel.name?.trim().toLowerCase();
     if (!query) {
       return true;
     }

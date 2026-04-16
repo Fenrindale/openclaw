@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { normalizeTestText } from "../../../test/helpers/normalize-text.js";
 import { ChatLog } from "./chat-log.js";
 
 describe("ChatLog", () => {
@@ -62,7 +61,7 @@ describe("ChatLog", () => {
 
     chatLog.addUser("hello");
 
-    const rendered = normalizeTestText(chatLog.render(120).join("\n"));
+    const rendered = chatLog.render(120).join("\n");
     expect(rendered).not.toMatch(/\bsystem-1\b/);
     expect(rendered).toMatch(/\bsystem-2\b/);
     expect(rendered).toMatch(/\bsystem-20\b/);

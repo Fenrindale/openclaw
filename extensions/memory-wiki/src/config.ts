@@ -26,7 +26,7 @@ export type MemoryWikiPluginConfig = {
   };
   bridge?: {
     enabled?: boolean;
-    readMemoryArtifacts?: boolean;
+    readMemoryCore?: boolean;
     indexDreamReports?: boolean;
     indexDailyNotes?: boolean;
     indexMemoryRoot?: boolean;
@@ -44,9 +44,6 @@ export type MemoryWikiPluginConfig = {
   search?: {
     backend?: WikiSearchBackend;
     corpus?: WikiSearchCorpus;
-  };
-  context?: {
-    includeCompiledDigestPrompt?: boolean;
   };
   render?: {
     preserveHumanBlocks?: boolean;
@@ -69,7 +66,7 @@ export type ResolvedMemoryWikiConfig = {
   };
   bridge: {
     enabled: boolean;
-    readMemoryArtifacts: boolean;
+    readMemoryCore: boolean;
     indexDreamReports: boolean;
     indexDailyNotes: boolean;
     indexMemoryRoot: boolean;
@@ -87,9 +84,6 @@ export type ResolvedMemoryWikiConfig = {
   search: {
     backend: WikiSearchBackend;
     corpus: WikiSearchCorpus;
-  };
-  context: {
-    includeCompiledDigestPrompt: boolean;
   };
   render: {
     preserveHumanBlocks: boolean;
@@ -122,7 +116,7 @@ const MemoryWikiConfigSource = z.strictObject({
   bridge: z
     .strictObject({
       enabled: z.boolean().optional(),
-      readMemoryArtifacts: z.boolean().optional(),
+      readMemoryCore: z.boolean().optional(),
       indexDreamReports: z.boolean().optional(),
       indexDailyNotes: z.boolean().optional(),
       indexMemoryRoot: z.boolean().optional(),
@@ -146,11 +140,6 @@ const MemoryWikiConfigSource = z.strictObject({
     .strictObject({
       backend: z.enum(WIKI_SEARCH_BACKENDS).optional(),
       corpus: z.enum(WIKI_SEARCH_CORPORA).optional(),
-    })
-    .optional(),
-  context: z
-    .strictObject({
-      includeCompiledDigestPrompt: z.boolean().optional(),
     })
     .optional(),
   render: z
@@ -227,7 +216,7 @@ export function resolveMemoryWikiConfig(
     },
     bridge: {
       enabled: safeConfig.bridge?.enabled ?? false,
-      readMemoryArtifacts: safeConfig.bridge?.readMemoryArtifacts ?? true,
+      readMemoryCore: safeConfig.bridge?.readMemoryCore ?? true,
       indexDreamReports: safeConfig.bridge?.indexDreamReports ?? true,
       indexDailyNotes: safeConfig.bridge?.indexDailyNotes ?? true,
       indexMemoryRoot: safeConfig.bridge?.indexMemoryRoot ?? true,
@@ -245,9 +234,6 @@ export function resolveMemoryWikiConfig(
     search: {
       backend: safeConfig.search?.backend ?? DEFAULT_WIKI_SEARCH_BACKEND,
       corpus: safeConfig.search?.corpus ?? DEFAULT_WIKI_SEARCH_CORPUS,
-    },
-    context: {
-      includeCompiledDigestPrompt: safeConfig.context?.includeCompiledDigestPrompt ?? false,
     },
     render: {
       preserveHumanBlocks: safeConfig.render?.preserveHumanBlocks ?? true,

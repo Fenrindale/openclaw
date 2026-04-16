@@ -6,7 +6,6 @@ import {
   sendMediaWithLeadingCaption,
 } from "openclaw/plugin-sdk/reply-payload";
 import { logVerbose, shouldLogVerbose } from "openclaw/plugin-sdk/runtime-env";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 import { loadWebMedia } from "../media.js";
 import { newConnectionId } from "../reconnect.js";
 import { formatError } from "../session.js";
@@ -26,7 +25,7 @@ function shouldSuppressReasoningReply(payload: ReplyPayload): boolean {
   if (typeof text !== "string") {
     return false;
   }
-  return normalizeLowercaseStringOrEmpty(text.trimStart()).startsWith(REASONING_PREFIX);
+  return text.trimStart().toLowerCase().startsWith(REASONING_PREFIX);
 }
 
 export async function deliverWebReply(params: {

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
 type NormalizeProviderSpecificConfig =
   typeof import("./models-config.providers.policy.js").normalizeProviderSpecificConfig;
@@ -46,8 +46,7 @@ vi.mock("../plugins/provider-runtime.js", () => ({
   },
 }));
 
-beforeEach(async () => {
-  vi.resetModules();
+beforeAll(async () => {
   ({ normalizeProviderSpecificConfig, resolveProviderConfigApiKeyResolver } =
     await import("./models-config.providers.policy.js"));
 });

@@ -1,5 +1,3 @@
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
-
 export const MATRIX_ANNOTATION_RELATION_TYPE = "m.annotation";
 export const MATRIX_REACTION_EVENT_TYPE = "m.reaction";
 
@@ -85,11 +83,11 @@ export function extractMatrixReactionAnnotation(
   ) {
     return undefined;
   }
-  const key = normalizeOptionalString(relatesTo.key) ?? "";
+  const key = typeof relatesTo.key === "string" ? relatesTo.key.trim() : "";
   if (!key) {
     return undefined;
   }
-  const eventId = normalizeOptionalString(relatesTo.event_id) ?? "";
+  const eventId = typeof relatesTo.event_id === "string" ? relatesTo.event_id.trim() : "";
   return {
     key,
     eventId: eventId || undefined,
@@ -109,7 +107,7 @@ export function summarizeMatrixReactionEvents(
     if (!key) {
       continue;
     }
-    const sender = normalizeOptionalString(event.sender) ?? "";
+    const sender = event.sender?.trim() ?? "";
     const entry = summaries.get(key) ?? { key, count: 0, users: [] };
     entry.count += 1;
     if (sender && !entry.users.includes(sender)) {
@@ -125,20 +123,20 @@ export function selectOwnMatrixReactionEventIds(
   userId: string,
   emoji?: string,
 ): string[] {
-  const senderId = normalizeOptionalString(userId) ?? "";
+  const senderId = userId.trim();
   if (!senderId) {
     return [];
   }
-  const targetEmoji = normalizeOptionalString(emoji);
+  const targetEmoji = emoji?.trim();
   const ids: string[] = [];
   for (const event of events) {
-    if ((normalizeOptionalString(event.sender) ?? "") !== senderId) {
+    if ((event.sender?.trim() ?? "") !== senderId) {
       continue;
     }
     if (targetEmoji && extractMatrixReactionKey(event.content) !== targetEmoji) {
       continue;
     }
-    const eventId = normalizeOptionalString(event.event_id);
+    const eventId = event.event_id?.trim();
     if (eventId) {
       ids.push(eventId);
     }

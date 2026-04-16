@@ -1,14 +1,9 @@
 import { logVerbose } from "../globals.js";
 import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalLowercaseString,
-} from "../shared/string-coerce.js";
-import {
   clearPluginCommands,
   clearPluginCommandsForPlugin,
   getPluginCommandSpecs,
   isPluginCommandRegistryLocked,
-  listProviderPluginCommandSpecs,
   pluginCommands,
   type RegisteredPluginCommand,
 } from "./command-registry-state.js";
@@ -30,7 +25,7 @@ export type CommandRegistrationResult = {
 };
 
 export function validateCommandName(name: string): string | null {
-  const trimmed = normalizeOptionalLowercaseString(name) ?? "";
+  const trimmed = name.trim().toLowerCase();
 
   if (!trimmed) {
     return "Command name cannot be empty";
@@ -130,7 +125,7 @@ export function validatePluginCommandDefinition(
 export function listPluginInvocationKeys(command: OpenClawPluginCommandDefinition): string[] {
   const keys = new Set<string>();
   const push = (value: string | undefined) => {
-    const normalized = normalizeOptionalLowercaseString(value);
+    const normalized = value?.trim().toLowerCase();
     if (!normalized) {
       return;
     }
@@ -170,7 +165,7 @@ export function registerPluginCommand(
     description,
   };
   const invocationKeys = listPluginInvocationKeys(normalizedCommand);
-  const key = `/${normalizeLowercaseStringOrEmpty(name)}`;
+  const key = `/${name.toLowerCase()}`;
 
   // Check for duplicate registration
   for (const invocationKey of invocationKeys) {
@@ -197,10 +192,5 @@ export function registerPluginCommand(
   return { ok: true };
 }
 
-export {
-  clearPluginCommands,
-  clearPluginCommandsForPlugin,
-  getPluginCommandSpecs,
-  listProviderPluginCommandSpecs,
-};
+export { clearPluginCommands, clearPluginCommandsForPlugin, getPluginCommandSpecs };
 export type { RegisteredPluginCommand };

@@ -1,5 +1,3 @@
-import { normalizeOptionalLowercaseString } from "../shared/string-coerce.js";
-
 export type ParsedLogLine = {
   time?: string;
   level?: string;
@@ -53,7 +51,7 @@ export function parseLogLine(raw: string): ParsedLogLine | null {
           : typeof meta?.date === "string"
             ? meta.date
             : undefined,
-      level: normalizeOptionalLowercaseString(levelRaw),
+      level: levelRaw ? levelRaw.toLowerCase() : undefined,
       subsystem: nameMeta.subsystem,
       module: nameMeta.module,
       message: extractMessage(parsed),

@@ -6,11 +6,10 @@ import {
   resolveModelRefFromString,
   type ModelAliasIndex,
 } from "../../agents/model-selection.js";
+import type { OpenClawConfig } from "../../config/config.js";
 import type { SessionEntry } from "../../config/sessions.js";
 import { updateSessionStore } from "../../config/sessions.js";
-import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { applyModelOverrideToSessionEntry } from "../../sessions/model-overrides.js";
-import { normalizeOptionalString } from "../../shared/string-coerce.js";
 import type { MsgContext, TemplateContext } from "../templating.js";
 import { resolveModelDirectiveSelection, type ModelDirectiveSelection } from "./model-selection.js";
 
@@ -105,7 +104,7 @@ export async function applyResetModelOverride(params: {
   if (!params.resetTriggered) {
     return {};
   }
-  const rawBody = normalizeOptionalString(params.bodyStripped);
+  const rawBody = params.bodyStripped?.trim();
   if (!rawBody) {
     return {};
   }

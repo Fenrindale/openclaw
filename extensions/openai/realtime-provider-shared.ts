@@ -1,6 +1,6 @@
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
-
-export const trimToUndefined = normalizeOptionalString;
+export function trimToUndefined(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
 
 export function asFiniteNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;

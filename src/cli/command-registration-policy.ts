@@ -2,8 +2,7 @@ import { isTruthyEnvValue } from "../infra/env.js";
 import { resolveCliArgvInvocation } from "./argv-invocation.js";
 
 export function shouldRegisterPrimaryCommandOnly(argv: string[]): boolean {
-  const invocation = resolveCliArgvInvocation(argv);
-  return invocation.primary !== null || !invocation.hasHelpOrVersion;
+  return !resolveCliArgvInvocation(argv).hasHelpOrVersion;
 }
 
 export function shouldSkipPluginCommandRegistration(params: {

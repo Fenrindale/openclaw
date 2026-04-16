@@ -20,7 +20,7 @@ vi.mock("./onboard.js", () => ({
 
 import plugin from "./index.js";
 
-function registerProvider() {
+function _registerProvider() {
   return registerProviderWithPluginConfig({});
 }
 
@@ -45,20 +45,10 @@ function registerProviderWithPluginConfig(pluginConfig: Record<string, unknown>)
 
 describe("huggingface plugin", () => {
   it("skips catalog discovery when plugin discovery is disabled", async () => {
-    const provider = registerProvider();
+    const provider = registerProviderWithPluginConfig({ discovery: { enabled: false } });
 
     const result = await provider.catalog.run({
-      config: {
-        plugins: {
-          entries: {
-            huggingface: {
-              config: {
-                discovery: { enabled: false },
-              },
-            },
-          },
-        },
-      },
+      config: {},
       resolveProviderApiKey: () => ({
         apiKey: "hf_test_token",
         discoveryApiKey: "hf_test_token",

@@ -11,7 +11,6 @@ import {
   signDevicePayload,
 } from "../infra/device-identity.js";
 import { rawDataToString } from "../infra/ws.js";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 import { getDeterministicFreePortBlock } from "../test-utils/ports.js";
 import {
   GATEWAY_CLIENT_MODES,
@@ -57,12 +56,10 @@ export async function connectGatewayClient(params: {
     params.deviceIdentity ??
     loadOrCreateDeviceIdentity(
       (() => {
-        const safe = normalizeLowercaseStringOrEmpty(
-          `${params.clientName ?? GATEWAY_CLIENT_NAMES.TEST}-${params.mode ?? GATEWAY_CLIENT_MODES.TEST}-${platform}-${params.deviceFamily ?? "none"}-${role}`.replace(
-            /[^a-zA-Z0-9._-]+/g,
-            "_",
-          ),
-        );
+        const safe =
+          `${params.clientName ?? GATEWAY_CLIENT_NAMES.TEST}-${params.mode ?? GATEWAY_CLIENT_MODES.TEST}-${platform}-${params.deviceFamily ?? "none"}-${role}`
+            .replace(/[^a-zA-Z0-9._-]+/g, "_")
+            .toLowerCase();
         return path.join(identityRoot, "test-device-identities", `${safe}.json`);
       })(),
     );

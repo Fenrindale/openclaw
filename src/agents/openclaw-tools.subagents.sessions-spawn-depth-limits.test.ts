@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPerSenderSessionConfig } from "./test-helpers/session-config.js";
 
 const callGatewayMock = vi.fn();
@@ -16,7 +16,6 @@ let configOverride: Record<string, unknown> = {
 };
 let addSubagentRunForTests: typeof import("./subagent-registry.js").addSubagentRunForTests;
 let resetSubagentRegistryForTests: typeof import("./subagent-registry.js").resetSubagentRegistryForTests;
-let subagentRegistryTesting: typeof import("./subagent-registry.js").__testing;
 let createSessionsSpawnTool: typeof import("./tools/sessions-spawn-tool.js").createSessionsSpawnTool;
 
 vi.mock("../config/config.js", async () => {
@@ -62,27 +61,28 @@ function seedDepthTwoAncestryStore(params?: { sessionIds?: boolean }) {
   return { depth1, callerKey };
 }
 
-beforeAll(async () => {
-  ({
-    __testing: subagentRegistryTesting,
-    addSubagentRunForTests,
-    resetSubagentRegistryForTests,
-  } = await import("./subagent-registry.js"));
+async function loadFreshSessionsSpawnModulesForTest() {
+  vi.resetModules();
+  vi.doMock("../gateway/call.js", () => ({
+    callGateway: (opts: unknown) => callGatewayMock(opts),
+  }));
+  vi.doMock("../config/config.js", async () => {
+    const actual =
+      await vi.importActual<typeof import("../config/config.js")>("../config/config.js");
+    return {
+      ...actual,
+      loadConfig: () => configOverride,
+    };
+  });
+  ({ addSubagentRunForTests, resetSubagentRegistryForTests } =
+    await import("./subagent-registry.js"));
   ({ createSessionsSpawnTool } = await import("./tools/sessions-spawn-tool.js"));
-});
+}
 
 describe("sessions_spawn depth + child limits", () => {
-  beforeEach(() => {
-    subagentRegistryTesting.setDepsForTest({
-      captureSubagentCompletionReply: () => Promise.resolve(undefined),
-      cleanupBrowserSessionsForLifecycleEnd: () => Promise.resolve(),
-      ensureRuntimePluginsLoaded: () => {},
-      onAgentEvent: () => () => {},
-      persistSubagentRunsToDisk: () => {},
-      resolveAgentTimeoutMs: () => 1,
-      runSubagentAnnounceFlow: () => Promise.resolve(true),
-    });
-    resetSubagentRegistryForTests({ persist: false });
+  beforeEach(async () => {
+    await loadFreshSessionsSpawnModulesForTest();
+    resetSubagentRegistryForTests();
     callGatewayMock.mockClear();
     storeTemplatePath = path.join(
       os.tmpdir(),
@@ -332,7 +332,7 @@ describe("sessions_spawn depth + child limits", () => {
     expect(result.details).toMatchObject({
       status: "error",
     });
-    expect((result.details as { error?: string }).error ?? "").toContain("invalid model");
+    expect(String((result.details as { error?: string }).error ?? "")).toContain("invalid model");
     expect(
       callGatewayMock.mock.calls.some(
         (call) => (call[0] as { method?: string }).method === "agent",

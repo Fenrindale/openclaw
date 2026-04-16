@@ -1,3 +1,4 @@
+import type { OpenClawConfig } from "../../config/config.js";
 import { loadConfig } from "../../config/config.js";
 import { resolveStorePath } from "../../config/sessions/paths.js";
 import { loadSessionStore } from "../../config/sessions/store-load.js";
@@ -7,9 +8,7 @@ import {
   type SessionAcpMeta,
   type SessionEntry,
 } from "../../config/sessions/types.js";
-import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { parseAgentSessionKey } from "../../routing/session-key.js";
-import { normalizeLowercaseStringOrEmpty } from "../../shared/string-coerce.js";
 
 let sessionStoreRuntimePromise:
   | Promise<typeof import("../../config/sessions/store.runtime.js")>
@@ -38,12 +37,12 @@ function resolveStoreSessionKey(store: Record<string, SessionEntry>, sessionKey:
   if (store[normalized]) {
     return normalized;
   }
-  const lower = normalizeLowercaseStringOrEmpty(normalized);
+  const lower = normalized.toLowerCase();
   if (store[lower]) {
     return lower;
   }
   for (const key of Object.keys(store)) {
-    if (normalizeLowercaseStringOrEmpty(key) === lower) {
+    if (key.toLowerCase() === lower) {
       return key;
     }
   }
@@ -172,7 +171,7 @@ export async function upsertAcpSessionMeta(params: {
       return nextEntry;
     },
     {
-      activeSessionKey: normalizeLowercaseStringOrEmpty(sessionKey),
+      activeSessionKey: sessionKey.toLowerCase(),
       allowDropAcpMetaSessionKeys: [sessionKey],
     },
   );

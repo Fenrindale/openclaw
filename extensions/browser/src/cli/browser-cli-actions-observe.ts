@@ -1,5 +1,4 @@
 import type { Command } from "commander";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import { runCommandWithRuntime } from "../core-api.js";
 import { callBrowserRequest, type BrowserParentOpts } from "./browser-cli-shared.js";
 import { danger, defaultRuntime, shortenHomePath } from "./core-api.js";
@@ -30,8 +29,8 @@ export function registerBrowserActionObserveCommands(
             method: "GET",
             path: "/console",
             query: {
-              level: normalizeOptionalString(opts.level),
-              targetId: normalizeOptionalString(opts.targetId),
+              level: opts.level?.trim() || undefined,
+              targetId: opts.targetId?.trim() || undefined,
               profile,
             },
           },
@@ -59,7 +58,7 @@ export function registerBrowserActionObserveCommands(
             method: "POST",
             path: "/pdf",
             query: profile ? { profile } : undefined,
-            body: { targetId: normalizeOptionalString(opts.targetId) },
+            body: { targetId: opts.targetId?.trim() || undefined },
           },
           { timeoutMs: 20000 },
         );
@@ -98,7 +97,7 @@ export function registerBrowserActionObserveCommands(
             query: profile ? { profile } : undefined,
             body: {
               url,
-              targetId: normalizeOptionalString(opts.targetId),
+              targetId: opts.targetId?.trim() || undefined,
               timeoutMs,
               maxChars,
             },

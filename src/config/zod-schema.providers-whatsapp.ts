@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { normalizeStringEntries } from "../shared/string-normalization.js";
 import { ToolPolicySchema } from "./zod-schema.agent-runtime.js";
 import {
   ChannelHealthMonitorSchema,
@@ -76,7 +75,9 @@ function enforceOpenDmPolicyAllowFromStar(params: {
   if (params.dmPolicy !== "open") {
     return;
   }
-  const allow = normalizeStringEntries(Array.isArray(params.allowFrom) ? params.allowFrom : []);
+  const allow = (Array.isArray(params.allowFrom) ? params.allowFrom : [])
+    .map((v) => String(v).trim())
+    .filter(Boolean);
   if (allow.includes("*")) {
     return;
   }
@@ -97,7 +98,9 @@ function enforceAllowlistDmPolicyAllowFrom(params: {
   if (params.dmPolicy !== "allowlist") {
     return;
   }
-  const allow = normalizeStringEntries(Array.isArray(params.allowFrom) ? params.allowFrom : []);
+  const allow = (Array.isArray(params.allowFrom) ? params.allowFrom : [])
+    .map((v) => String(v).trim())
+    .filter(Boolean);
   if (allow.length > 0) {
     return;
   }

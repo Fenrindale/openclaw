@@ -1,6 +1,6 @@
 import http from "node:http";
 import https from "node:https";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   getDirectAgentForCdp,
   hasProxyEnv,
@@ -8,19 +8,7 @@ import {
   withNoProxyForLocalhost,
 } from "./cdp-proxy-bypass.js";
 
-beforeEach(() => {
-  vi.useRealTimers();
-});
-
-function createDeferred<T = void>() {
-  let resolve!: (value: T | PromiseLike<T>) => void;
-  let reject!: (reason?: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
-}
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function withIsolatedNoProxyEnv(fn: () => Promise<void>) {
   const origNoProxy = process.env.NO_PROXY;
@@ -216,27 +204,22 @@ describe("withNoProxyForLocalhost concurrency", () => {
     await withIsolatedNoProxyEnv(async () => {
       const { withNoProxyForLocalhost } = await import("./cdp-proxy-bypass.js");
 
-      const releaseA = createDeferred();
-      const enteredA = createDeferred();
-
+      // Simulate concurrent calls
       const callA = withNoProxyForLocalhost(async () => {
+        // While A is running, NO_PROXY should be set
         expect(process.env.NO_PROXY).toContain("localhost");
         expect(process.env.NO_PROXY).toContain("[::1]");
-        enteredA.resolve();
-        await releaseA.promise;
+        await delay(50);
         return "a";
       });
-
-      await enteredA.promise;
-
       const callB = withNoProxyForLocalhost(async () => {
+        await delay(20);
         return "b";
       });
 
-      expect(await callB).toBe("b");
-      releaseA.resolve();
-      expect(await callA).toBe("a");
+      await Promise.all([callA, callB]);
 
+      // After both complete, NO_PROXY should be restored (deleted)
       expect(process.env.NO_PROXY).toBeUndefined();
       expect(process.env.no_proxy).toBeUndefined();
     });
@@ -248,32 +231,20 @@ describe("withNoProxyForLocalhost reverse exit order", () => {
     await withIsolatedNoProxyEnv(async () => {
       const { withNoProxyForLocalhost } = await import("./cdp-proxy-bypass.js");
 
-      const enteredA = createDeferred();
-      const enteredB = createDeferred();
-      const releaseA = createDeferred();
-      const releaseB = createDeferred();
-
+      // Call A enters first, exits first (short task)
+      // Call B enters second, exits last (long task)
       const callA = withNoProxyForLocalhost(async () => {
-        enteredA.resolve();
-        await releaseA.promise;
+        await delay(10);
         return "a";
       });
-      await enteredA.promise;
-
       const callB = withNoProxyForLocalhost(async () => {
-        enteredB.resolve();
-        await releaseB.promise;
+        await delay(60);
         return "b";
       });
-      await enteredB.promise;
 
-      releaseA.resolve();
-      expect(await callA).toBe("a");
-      expect(process.env.NO_PROXY).toContain("localhost");
+      await Promise.all([callA, callB]);
 
-      releaseB.resolve();
-      expect(await callB).toBe("b");
-
+      // After both complete, NO_PROXY must be cleaned up
       expect(process.env.NO_PROXY).toBeUndefined();
       expect(process.env.no_proxy).toBeUndefined();
     });

@@ -11,10 +11,6 @@ import {
   type ChannelSetupDmPolicy,
   type ChannelSetupWizard,
 } from "openclaw/plugin-sdk/setup";
-import {
-  normalizeOptionalString,
-  normalizeStringifiedOptionalString,
-} from "openclaw/plugin-sdk/text-runtime";
 import { resolveDefaultGoogleChatAccountId, resolveGoogleChatAccount } from "./accounts.js";
 
 const channel = "googlechat" as const;
@@ -149,7 +145,7 @@ export const googlechatSetupWizard: ChannelSetupWizard = {
       credentialValues: {
         ...credentialValues,
         [USE_ENV_FLAG]: "0",
-        [AUTH_METHOD_FLAG]: method,
+        [AUTH_METHOD_FLAG]: String(method),
       },
     };
   },
@@ -161,8 +157,8 @@ export const googlechatSetupWizard: ChannelSetupWizard = {
       placeholder: "/path/to/service-account.json",
       shouldPrompt: ({ credentialValues }) =>
         credentialValues[USE_ENV_FLAG] !== "1" && credentialValues[AUTH_METHOD_FLAG] === "file",
-      validate: ({ value }) => (normalizeStringifiedOptionalString(value) ? undefined : "Required"),
-      normalizeValue: ({ value }) => normalizeStringifiedOptionalString(value) ?? "",
+      validate: ({ value }) => (String(value ?? "").trim() ? undefined : "Required"),
+      normalizeValue: ({ value }) => String(value).trim(),
       applySet: async ({ cfg, accountId, value }) =>
         applySetupAccountConfigPatch({
           cfg,
@@ -177,8 +173,8 @@ export const googlechatSetupWizard: ChannelSetupWizard = {
       placeholder: '{"type":"service_account", ... }',
       shouldPrompt: ({ credentialValues }) =>
         credentialValues[USE_ENV_FLAG] !== "1" && credentialValues[AUTH_METHOD_FLAG] === "inline",
-      validate: ({ value }) => (normalizeStringifiedOptionalString(value) ? undefined : "Required"),
-      normalizeValue: ({ value }) => normalizeStringifiedOptionalString(value) ?? "",
+      validate: ({ value }) => (String(value ?? "").trim() ? undefined : "Required"),
+      normalizeValue: ({ value }) => String(value).trim(),
       applySet: async ({ cfg, accountId, value }) =>
         applySetupAccountConfigPatch({
           cfg,
@@ -206,7 +202,7 @@ export const googlechatSetupWizard: ChannelSetupWizard = {
       placeholder:
         audienceType === "project-number" ? "1234567890" : "https://your.host/googlechat",
       initialValue: account.config.audience || undefined,
-      validate: (value) => (normalizeStringifiedOptionalString(value) ? undefined : "Required"),
+      validate: (value) => (String(value ?? "").trim() ? undefined : "Required"),
     });
     return {
       cfg: migrateBaseNameToDefaultAccount({
@@ -216,7 +212,7 @@ export const googlechatSetupWizard: ChannelSetupWizard = {
           accountId,
           patch: {
             audienceType,
-            audience: normalizeOptionalString(audience) ?? "",
+            audience: String(audience).trim(),
           },
         }),
         channelKey: channel,

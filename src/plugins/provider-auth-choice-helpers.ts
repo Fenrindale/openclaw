@@ -1,17 +1,12 @@
 import { normalizeProviderId } from "../agents/model-selection.js";
-import type { OpenClawConfig } from "../config/types.openclaw.js";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalLowercaseString,
-  normalizeOptionalString,
-} from "../shared/string-coerce.js";
+import type { OpenClawConfig } from "../config/config.js";
 import type { ProviderAuthMethod, ProviderPlugin } from "./types.js";
 
 export function resolveProviderMatch(
   providers: ProviderPlugin[],
   rawProvider?: string,
 ): ProviderPlugin | null {
-  const raw = normalizeOptionalString(rawProvider);
+  const raw = rawProvider?.trim();
   if (!raw) {
     return null;
   }
@@ -30,14 +25,14 @@ export function pickAuthMethod(
   provider: ProviderPlugin,
   rawMethod?: string,
 ): ProviderAuthMethod | null {
-  const raw = normalizeOptionalString(rawMethod);
+  const raw = rawMethod?.trim();
   if (!raw) {
     return null;
   }
-  const normalized = normalizeOptionalLowercaseString(raw);
+  const normalized = raw.toLowerCase();
   return (
-    provider.auth.find((method) => normalizeLowercaseStringOrEmpty(method.id) === normalized) ??
-    provider.auth.find((method) => normalizeLowercaseStringOrEmpty(method.label) === normalized) ??
+    provider.auth.find((method) => method.id.toLowerCase() === normalized) ??
+    provider.auth.find((method) => method.label.toLowerCase() === normalized) ??
     null
   );
 }

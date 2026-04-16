@@ -1,4 +1,3 @@
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 import { resolveBlueBubblesServerAccount } from "./account-resolve.js";
 import { getCachedBlueBubblesPrivateApiStatus } from "./probe.js";
 import type { OpenClawConfig } from "./runtime-api.js";
@@ -121,7 +120,7 @@ export function normalizeBlueBubblesReactionInput(emoji: string, remove?: boolea
   if (!trimmed) {
     throw new Error("BlueBubbles reaction requires an emoji or name.");
   }
-  let raw = normalizeLowercaseStringOrEmpty(trimmed);
+  let raw = trimmed.toLowerCase();
   if (raw.startsWith("-")) {
     raw = raw.slice(1);
   }

@@ -1,6 +1,6 @@
-import type { OpenClawConfig } from "../config/types.openclaw.js";
+import type { OpenClawConfig } from "../config/config.js";
 import { resolveSecretInputRef } from "../config/types.secrets.js";
-import { trimToUndefined } from "./credentials.js";
+import { readGatewayTokenEnv, trimToUndefined } from "./credentials.js";
 import {
   resolveConfiguredSecretInputString,
   type SecretInputUnresolvedReasonStyle,
@@ -36,7 +36,7 @@ export async function resolveGatewayAuthToken(params: {
     defaults: params.cfg.secrets?.defaults,
   }).ref;
   const envFallback = params.envFallback ?? "always";
-  const envToken = trimToUndefined(params.env.OPENCLAW_GATEWAY_TOKEN);
+  const envToken = readGatewayTokenEnv(params.env);
 
   if (!tokenRef) {
     const configToken = trimToUndefined(tokenInput);

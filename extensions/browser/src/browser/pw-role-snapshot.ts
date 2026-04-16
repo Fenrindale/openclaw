@@ -1,4 +1,3 @@
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 import { CONTENT_ROLES, INTERACTIVE_ROLES, STRUCTURAL_ROLES } from "./snapshot-roles.js";
 
 export type RoleRef = {
@@ -57,7 +56,7 @@ function matchInteractiveSnapshotLine(
   if (roleRaw.startsWith("/")) {
     return null;
   }
-  const role = normalizeLowercaseStringOrEmpty(roleRaw);
+  const role = roleRaw.toLowerCase();
   return {
     roleRaw,
     role,
@@ -175,7 +174,7 @@ function processLine(
     return options.interactive ? null : line;
   }
 
-  const role = normalizeLowercaseStringOrEmpty(roleRaw);
+  const role = roleRaw.toLowerCase();
   const isInteractive = INTERACTIVE_ROLES.has(role);
   const isContent = CONTENT_ROLES.has(role);
   const isStructural = STRUCTURAL_ROLES.has(role);
@@ -340,7 +339,7 @@ export function buildRoleSnapshotFromAiSnapshot(
   aiSnapshot: string,
   options: RoleSnapshotOptions = {},
 ): { snapshot: string; refs: RoleRefMap } {
-  const lines = aiSnapshot.split("\n");
+  const lines = String(aiSnapshot ?? "").split("\n");
   const refs: RoleRefMap = {};
 
   if (options.interactive) {
@@ -380,7 +379,7 @@ export function buildRoleSnapshotFromAiSnapshot(
       continue;
     }
 
-    const role = normalizeLowercaseStringOrEmpty(roleRaw);
+    const role = roleRaw.toLowerCase();
     const isStructural = STRUCTURAL_ROLES.has(role);
 
     if (options.compact && isStructural && !name) {

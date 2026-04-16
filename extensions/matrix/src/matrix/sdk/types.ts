@@ -1,4 +1,3 @@
-import type { MatrixSyncState } from "../sync-state.js";
 import type {
   MatrixVerificationRequestLike,
   MatrixVerificationSummary,
@@ -32,8 +31,6 @@ export type MatrixClientEventMap = {
   "room.failed_decryption": [roomId: string, event: MatrixRawEvent, error: Error];
   "room.invite": [roomId: string, event: MatrixRawEvent];
   "room.join": [roomId: string, event: MatrixRawEvent];
-  "sync.state": [state: MatrixSyncState, prevState: string | null, error?: unknown];
-  "sync.unexpected_error": [error: Error];
   "verification.summary": [summary: MatrixVerificationSummary];
 };
 

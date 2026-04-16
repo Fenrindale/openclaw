@@ -2,13 +2,9 @@ import { bumpSkillsSnapshotVersion } from "../agents/skills/refresh-state.js";
 import type { SkillEligibilityContext, SkillEntry } from "../agents/skills/types.js";
 import { loadWorkspaceSkillEntries } from "../agents/skills/workspace.js";
 import { listAgentWorkspaceDirs } from "../agents/workspace-dirs.js";
-import type { OpenClawConfig } from "../config/types.openclaw.js";
+import type { OpenClawConfig } from "../config/config.js";
 import type { NodeRegistry } from "../gateway/node-registry.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-} from "../shared/string-coerce.js";
 import { listNodePairing, updatePairedNodeMetadata } from "./node-pairing.js";
 
 type RemoteNodeRecord = {
@@ -79,8 +75,12 @@ function logRemoteBinProbeFailure(nodeId: string, err: unknown) {
 }
 
 function isMacPlatform(platform?: string, deviceFamily?: string): boolean {
-  const platformNorm = normalizeLowercaseStringOrEmpty(platform);
-  const familyNorm = normalizeLowercaseStringOrEmpty(deviceFamily);
+  const platformNorm = String(platform ?? "")
+    .trim()
+    .toLowerCase();
+  const familyNorm = String(deviceFamily ?? "")
+    .trim()
+    .toLowerCase();
   if (platformNorm.includes("mac")) {
     return true;
   }
@@ -217,12 +217,12 @@ function parseBinProbePayload(payloadJSON: string | null | undefined, payload?: 
       ? (JSON.parse(payloadJSON) as { stdout?: unknown; bins?: unknown })
       : (payload as { stdout?: unknown; bins?: unknown });
     if (Array.isArray(parsed.bins)) {
-      return parsed.bins.map((bin) => normalizeOptionalString(String(bin)) ?? "").filter(Boolean);
+      return parsed.bins.map((bin) => String(bin).trim()).filter(Boolean);
     }
     if (typeof parsed.stdout === "string") {
       return parsed.stdout
         .split(/\r?\n/)
-        .map((line) => normalizeOptionalString(line) ?? "")
+        .map((line) => line.trim())
         .filter(Boolean);
     }
   } catch {

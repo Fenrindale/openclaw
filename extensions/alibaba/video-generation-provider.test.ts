@@ -1,32 +1,71 @@
-import { beforeAll, describe, expect, it } from "vitest";
-import {
-  expectDashscopeVideoTaskPoll,
-  expectSuccessfulDashscopeVideoResult,
-  mockSuccessfulDashscopeVideoTask,
-} from "../../test/helpers/media-generation/dashscope-video-provider.js";
-import { expectExplicitVideoGenerationCapabilities } from "../../test/helpers/media-generation/provider-capability-assertions.js";
-import {
-  getProviderHttpMocks,
-  installProviderHttpMockCleanup,
-} from "../../test/helpers/media-generation/provider-http-mocks.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { buildAlibabaVideoGenerationProvider } from "./video-generation-provider.js";
 
-const { postJsonRequestMock, fetchWithTimeoutMock } = getProviderHttpMocks();
+const {
+  resolveApiKeyForProviderMock,
+  postJsonRequestMock,
+  fetchWithTimeoutMock,
+  assertOkOrThrowHttpErrorMock,
+  resolveProviderHttpRequestConfigMock,
+} = vi.hoisted(() => ({
+  resolveApiKeyForProviderMock: vi.fn(async () => ({ apiKey: "alibaba-key" })),
+  postJsonRequestMock: vi.fn(),
+  fetchWithTimeoutMock: vi.fn(),
+  assertOkOrThrowHttpErrorMock: vi.fn(async () => {}),
+  resolveProviderHttpRequestConfigMock: vi.fn((params) => ({
+    baseUrl: params.baseUrl ?? params.defaultBaseUrl,
+    allowPrivateNetwork: false,
+    headers: new Headers(params.defaultHeaders),
+    dispatcherPolicy: undefined,
+  })),
+}));
 
-let buildAlibabaVideoGenerationProvider: typeof import("./video-generation-provider.js").buildAlibabaVideoGenerationProvider;
+vi.mock("openclaw/plugin-sdk/provider-auth-runtime", () => ({
+  resolveApiKeyForProvider: resolveApiKeyForProviderMock,
+}));
 
-beforeAll(async () => {
-  ({ buildAlibabaVideoGenerationProvider } = await import("./video-generation-provider.js"));
-});
-
-installProviderHttpMockCleanup();
+vi.mock("openclaw/plugin-sdk/provider-http", () => ({
+  assertOkOrThrowHttpError: assertOkOrThrowHttpErrorMock,
+  fetchWithTimeout: fetchWithTimeoutMock,
+  postJsonRequest: postJsonRequestMock,
+  resolveProviderHttpRequestConfig: resolveProviderHttpRequestConfigMock,
+}));
 
 describe("alibaba video generation provider", () => {
-  it("declares explicit mode capabilities", () => {
-    expectExplicitVideoGenerationCapabilities(buildAlibabaVideoGenerationProvider());
+  afterEach(() => {
+    resolveApiKeyForProviderMock.mockClear();
+    postJsonRequestMock.mockReset();
+    fetchWithTimeoutMock.mockReset();
+    assertOkOrThrowHttpErrorMock.mockClear();
+    resolveProviderHttpRequestConfigMock.mockClear();
   });
 
   it("submits async Wan generation, polls task status, and downloads the resulting video", async () => {
-    mockSuccessfulDashscopeVideoTask({ postJsonRequestMock, fetchWithTimeoutMock });
+    postJsonRequestMock.mockResolvedValue({
+      response: {
+        json: async () => ({
+          request_id: "req-1",
+          output: {
+            task_id: "task-1",
+          },
+        }),
+      },
+      release: vi.fn(async () => {}),
+    });
+    fetchWithTimeoutMock
+      .mockResolvedValueOnce({
+        json: async () => ({
+          output: {
+            task_status: "SUCCEEDED",
+            results: [{ video_url: "https://example.com/out.mp4" }],
+          },
+        }),
+        headers: new Headers(),
+      })
+      .mockResolvedValueOnce({
+        arrayBuffer: async () => Buffer.from("mp4-bytes"),
+        headers: new Headers({ "content-type": "video/mp4" }),
+      });
 
     const provider = buildAlibabaVideoGenerationProvider();
     const result = await provider.generateVideo({
@@ -57,8 +96,22 @@ describe("alibaba video generation provider", () => {
         }),
       }),
     );
-    expectDashscopeVideoTaskPoll(fetchWithTimeoutMock);
-    expectSuccessfulDashscopeVideoResult(result);
+    expect(fetchWithTimeoutMock).toHaveBeenNthCalledWith(
+      1,
+      "https://dashscope-intl.aliyuncs.com/api/v1/tasks/task-1",
+      expect.objectContaining({ method: "GET" }),
+      120000,
+      fetch,
+    );
+    expect(result.videos).toHaveLength(1);
+    expect(result.videos[0]?.mimeType).toBe("video/mp4");
+    expect(result.metadata).toEqual(
+      expect.objectContaining({
+        requestId: "req-1",
+        taskId: "task-1",
+        taskStatus: "SUCCEEDED",
+      }),
+    );
   });
 
   it("fails fast when reference inputs are local buffers instead of remote URLs", async () => {

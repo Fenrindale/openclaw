@@ -9,8 +9,8 @@ import {
   waitForEmbeddedPiRunEnd,
 } from "../../agents/pi-embedded-runner/runs.js";
 import { compactEmbeddedPiSession } from "../../agents/pi-embedded.js";
-import { clearSessionQueues } from "../../auto-reply/reply/queue/cleanup.js";
 import { normalizeReasoningLevel, normalizeThinkLevel } from "../../auto-reply/thinking.js";
+import { clearSessionQueues } from "../../auto-reply/reply/queue/cleanup.js";
 import { loadConfig } from "../../config/config.js";
 import {
   loadSessionStore,
@@ -33,11 +33,6 @@ import {
   resolveAgentIdFromSessionKey,
   toAgentStoreSessionKey,
 } from "../../routing/session-key.js";
-import {
-  normalizeOptionalLowercaseString,
-  normalizeOptionalString,
-  readStringValue,
-} from "../../shared/string-coerce.js";
 import { GATEWAY_CLIENT_IDS } from "../protocol/client-info.js";
 import {
   ErrorCodes,
@@ -102,7 +97,7 @@ function requireSessionKey(key: unknown, respond: RespondFn): string | null {
         : typeof key === "bigint"
           ? String(key)
           : "";
-  const normalized = normalizeOptionalString(raw) ?? "";
+  const normalized = raw.trim();
   if (!normalized) {
     respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "key required"));
     return null;
@@ -179,7 +174,6 @@ function emitSessionsChanged(
             thinkingLevel: sessionRow.thinkingLevel,
             fastMode: sessionRow.fastMode,
             verboseLevel: sessionRow.verboseLevel,
-            traceLevel: sessionRow.traceLevel,
             reasoningLevel: sessionRow.reasoningLevel,
             elevatedLevel: sessionRow.elevatedLevel,
             sendPolicy: sessionRow.sendPolicy,
@@ -635,8 +629,8 @@ export const sessionsHandlers: GatewayRequestHandlers = {
     const p = params;
     const keysRaw = Array.isArray(p.keys) ? p.keys : [];
     const keys = keysRaw
-      .map((key) => normalizeOptionalString(key ?? ""))
-      .filter((key): key is string => Boolean(key))
+      .map((key) => String(key ?? "").trim())
+      .filter(Boolean)
       .slice(0, 64);
     const limit =
       typeof p.limit === "number" && Number.isFinite(p.limit) ? Math.max(1, p.limit) : 12;
@@ -746,7 +740,8 @@ export const sessionsHandlers: GatewayRequestHandlers = {
     if (!key) {
       return;
     }
-    const checkpointId = normalizeOptionalString(p.checkpointId) ?? "";
+    const checkpointId =
+      typeof p.checkpointId === "string" && p.checkpointId.trim() ? p.checkpointId.trim() : "";
     if (!checkpointId) {
       respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "checkpointId required"));
       return;
@@ -777,13 +772,18 @@ export const sessionsHandlers: GatewayRequestHandlers = {
     }
     const p = params;
     const cfg = loadConfig();
-    const requestedKey = normalizeOptionalString(p.key);
+    const requestedKey = typeof p.key === "string" && p.key.trim() ? p.key.trim() : undefined;
     const agentId = normalizeAgentId(
-      normalizeOptionalString(p.agentId) ?? resolveDefaultAgentId(cfg),
+      typeof p.agentId === "string" && p.agentId.trim() ? p.agentId : resolveDefaultAgentId(cfg),
     );
     if (requestedKey) {
       const requestedAgentId = parseAgentSessionKey(requestedKey)?.agentId;
-      if (requestedAgentId && requestedAgentId !== agentId && normalizeOptionalString(p.agentId)) {
+      if (
+        requestedAgentId &&
+        requestedAgentId !== agentId &&
+        typeof p.agentId === "string" &&
+        p.agentId.trim()
+      ) {
         respond(
           false,
           undefined,
@@ -795,7 +795,10 @@ export const sessionsHandlers: GatewayRequestHandlers = {
         return;
       }
     }
-    const parentSessionKey = normalizeOptionalString(p.parentSessionKey);
+    const parentSessionKey =
+      typeof p.parentSessionKey === "string" && p.parentSessionKey.trim()
+        ? p.parentSessionKey.trim()
+        : undefined;
     let canonicalParentSessionKey: string | undefined;
     if (parentSessionKey) {
       const parent = loadSessionEntry(parentSessionKey);
@@ -809,7 +812,7 @@ export const sessionsHandlers: GatewayRequestHandlers = {
       }
       canonicalParentSessionKey = parent.canonicalKey;
     }
-    const loweredRequestedKey = normalizeOptionalLowercaseString(requestedKey);
+    const loweredRequestedKey = requestedKey?.toLowerCase();
     const key = requestedKey
       ? loweredRequestedKey === "global" || loweredRequestedKey === "unknown"
         ? loweredRequestedKey
@@ -828,8 +831,8 @@ export const sessionsHandlers: GatewayRequestHandlers = {
         storeKey: target.canonicalKey,
         patch: {
           key: target.canonicalKey,
-          label: normalizeOptionalString(p.label),
-          model: normalizeOptionalString(p.model),
+          label: typeof p.label === "string" ? p.label.trim() : undefined,
+          model: typeof p.model === "string" ? p.model.trim() : undefined,
         },
         loadGatewayModelCatalog: context.loadGatewayModelCatalog,
       });
@@ -1210,14 +1213,14 @@ export const sessionsHandlers: GatewayRequestHandlers = {
       context,
       requestedKey: key,
       canonicalKey,
-      runId: readStringValue(p.runId),
+      runId: typeof p.runId === "string" ? p.runId : undefined,
     });
     let abortedRunId: string | null = null;
     await chatHandlers["chat.abort"]({
       req,
       params: {
         sessionKey: abortSessionKey,
-        runId: readStringValue(p.runId),
+        runId: typeof p.runId === "string" ? p.runId : undefined,
       },
       respond: (ok, payload, error, meta) => {
         if (!ok) {
@@ -1228,8 +1231,8 @@ export const sessionsHandlers: GatewayRequestHandlers = {
           payload &&
           typeof payload === "object" &&
           Array.isArray((payload as { runIds?: unknown[] }).runIds)
-            ? (payload as { runIds: unknown[] }).runIds.filter((value): value is string =>
-                Boolean(normalizeOptionalString(value)),
+            ? (payload as { runIds: unknown[] }).runIds.filter(
+                (value): value is string => typeof value === "string" && value.trim().length > 0,
               )
             : [];
         abortedRunId = runIds[0] ?? null;
@@ -1537,8 +1540,7 @@ export const sessionsHandlers: GatewayRequestHandlers = {
 
       const resolvedModel = resolveSessionModelRef(cfg, entry, target.agentId);
       const workspaceDir =
-        normalizeOptionalString(entry?.spawnedWorkspaceDir) ||
-        resolveAgentWorkspaceDir(cfg, target.agentId);
+        entry?.spawnedWorkspaceDir?.trim() || resolveAgentWorkspaceDir(cfg, target.agentId);
       const result = await compactEmbeddedPiSession({
         sessionId,
         sessionKey: target.canonicalKey,
@@ -1604,7 +1606,7 @@ export const sessionsHandlers: GatewayRequestHandlers = {
     }
 
     const raw = fs.readFileSync(filePath, "utf-8");
-    const lines = raw.split(/\r?\n/).filter((l) => Boolean(normalizeOptionalString(l)));
+    const lines = raw.split(/\r?\n/).filter((l) => l.trim().length > 0);
     if (lines.length <= maxLines) {
       respond(
         true,

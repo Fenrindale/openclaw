@@ -1,9 +1,5 @@
 import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-} from "../shared/string-coerce.js";
 
 export type WindowsSpawnResolution =
   | "direct"
@@ -85,9 +81,7 @@ export function resolveWindowsExecutablePath(command: string, env: NodeJS.Proces
 
   for (const dir of pathEntries) {
     for (const ext of pathExt) {
-      const normalizedExt = normalizeLowercaseStringOrEmpty(ext);
-      const uppercaseExt = ext.toUpperCase();
-      for (const candidateExt of [ext, normalizedExt, uppercaseExt]) {
+      for (const candidateExt of [ext, ext.toLowerCase(), ext.toUpperCase()]) {
         const candidate = path.join(dir, `${command}${candidateExt}`);
         if (isFilePath(candidate)) {
           return candidate;
@@ -121,7 +115,7 @@ function resolveEntrypointFromCmdShim(wrapperPath: string): string | null {
       }
     }
     const nonNode = candidates.find((candidate) => {
-      const base = normalizeLowercaseStringOrEmpty(path.basename(candidate));
+      const base = path.basename(candidate).toLowerCase();
       return base !== "node.exe" && base !== "node";
     });
     return nonNode ?? null;
@@ -135,7 +129,7 @@ function resolveBinEntry(
   binField: string | Record<string, string> | undefined,
 ): string | null {
   if (typeof binField === "string") {
-    const trimmed = normalizeOptionalString(binField);
+    const trimmed = binField.trim();
     return trimmed || null;
   }
   if (!binField || typeof binField !== "object") {
@@ -144,17 +138,14 @@ function resolveBinEntry(
 
   if (packageName) {
     const preferred = binField[packageName];
-    const normalizedPreferred =
-      typeof preferred === "string" ? normalizeOptionalString(preferred) : undefined;
-    if (normalizedPreferred) {
-      return normalizedPreferred;
+    if (typeof preferred === "string" && preferred.trim()) {
+      return preferred.trim();
     }
   }
 
   for (const value of Object.values(binField)) {
-    const normalizedValue = typeof value === "string" ? normalizeOptionalString(value) : undefined;
-    if (normalizedValue) {
-      return normalizedValue;
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
     }
   }
   return null;
@@ -216,7 +207,7 @@ export function resolveWindowsSpawnProgramCandidate(
   }
 
   const resolvedCommand = resolveWindowsExecutablePath(params.command, env);
-  const ext = normalizeLowercaseStringOrEmpty(path.extname(resolvedCommand));
+  const ext = path.extname(resolvedCommand).toLowerCase();
   if (ext === ".js" || ext === ".cjs" || ext === ".mjs") {
     return {
       command: execPath,
@@ -231,7 +222,7 @@ export function resolveWindowsSpawnProgramCandidate(
       resolveEntrypointFromCmdShim(resolvedCommand) ??
       resolveEntrypointFromPackageJson(resolvedCommand, params.packageName);
     if (entrypoint) {
-      const entryExt = normalizeLowercaseStringOrEmpty(path.extname(entrypoint));
+      const entryExt = path.extname(entrypoint).toLowerCase();
       if (entryExt === ".exe") {
         return {
           command: entrypoint,

@@ -1,5 +1,3 @@
-import { normalizeOptionalString } from "../../shared/string-coerce.js";
-
 export const ConnectErrorDetailCodes = {
   AUTH_REQUIRED: "AUTH_REQUIRED",
   AUTH_UNAUTHORIZED: "AUTH_UNAUTHORIZED",
@@ -128,7 +126,8 @@ export function readConnectErrorRecoveryAdvice(details: unknown): ConnectErrorRe
   };
   const canRetryWithDeviceToken =
     typeof raw.canRetryWithDeviceToken === "boolean" ? raw.canRetryWithDeviceToken : undefined;
-  const normalizedNextStep = normalizeOptionalString(raw.recommendedNextStep) ?? "";
+  const normalizedNextStep =
+    typeof raw.recommendedNextStep === "string" ? raw.recommendedNextStep.trim() : "";
   const recommendedNextStep = CONNECT_RECOVERY_NEXT_STEP_VALUES.has(
     normalizedNextStep as ConnectRecoveryNextStep,
   )

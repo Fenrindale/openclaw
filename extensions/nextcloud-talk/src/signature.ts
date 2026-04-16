@@ -1,5 +1,4 @@
 import { createHmac, randomBytes } from "node:crypto";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 import type { NextcloudTalkWebhookHeaders } from "./types.js";
 
 const SIGNATURE_HEADER = "x-nextcloud-talk-signature";
@@ -42,7 +41,7 @@ export function extractNextcloudTalkHeaders(
   headers: Record<string, string | string[] | undefined>,
 ): NextcloudTalkWebhookHeaders | null {
   const getHeader = (name: string): string | undefined => {
-    const value = headers[name] ?? headers[normalizeLowercaseStringOrEmpty(name)];
+    const value = headers[name] ?? headers[name.toLowerCase()];
     return Array.isArray(value) ? value[0] : value;
   };
 

@@ -1,7 +1,3 @@
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-} from "openclaw/plugin-sdk/text-runtime";
 import type { ResolvedIrcAccount } from "./accounts.js";
 import { normalizeIrcAllowlist, resolveIrcAllowlistMatch } from "./normalize.js";
 import {
@@ -212,7 +208,7 @@ export async function handleIrcInbound(params: {
       if (!dmAllowed) {
         if (dmPolicy === "pairing") {
           await pairing.issueChallenge({
-            senderId: normalizeLowercaseStringOrEmpty(senderDisplay),
+            senderId: senderDisplay.toLowerCase(),
             senderIdLine: `Your IRC id: ${senderDisplay}`,
             meta: { name: message.senderNick || undefined },
             sendPairingReply: async (text) => {
@@ -303,7 +299,7 @@ export async function handleIrcInbound(params: {
     body: rawBody,
   });
 
-  const groupSystemPrompt = normalizeOptionalString(groupMatch.groupConfig?.systemPrompt);
+  const groupSystemPrompt = groupMatch.groupConfig?.systemPrompt?.trim() || undefined;
 
   const ctxPayload = core.channel.reply.finalizeInboundContext({
     Body: body,

@@ -4,7 +4,6 @@ import {
   sleepWithAbort,
   type BackoffPolicy,
 } from "openclaw/plugin-sdk/runtime-env";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 
 export type TelegramSendChatActionLogger = (message: string) => void;
 
@@ -61,9 +60,7 @@ function is401Error(error: unknown): boolean {
     return false;
   }
   const message = error instanceof Error ? error.message : JSON.stringify(error);
-  return (
-    message.includes("401") || normalizeLowercaseStringOrEmpty(message).includes("unauthorized")
-  );
+  return message.includes("401") || message.toLowerCase().includes("unauthorized");
 }
 
 /**

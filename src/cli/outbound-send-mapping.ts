@@ -1,6 +1,5 @@
 import { normalizeAnyChannelId } from "../channels/registry.js";
-import type { OutboundSendDeps } from "../infra/outbound/send-deps.js";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
+import type { OutboundSendDeps } from "../infra/outbound/deliver.js";
 
 /**
  * CLI-internal send function sources, keyed by channel ID.
@@ -9,13 +8,12 @@ import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 export type CliOutboundSendSource = { [channelId: string]: unknown };
 
 function normalizeLegacyChannelStem(raw: string): string {
-  const normalized = normalizeLowercaseStringOrEmpty(
-    raw
-      .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
-      .replace(/_/g, "-")
-      .trim(),
-  );
-  return normalized.replace(/-/g, "");
+  return raw
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .replace(/_/g, "-")
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, "");
 }
 
 function resolveChannelIdFromLegacySourceKey(key: string): string | undefined {

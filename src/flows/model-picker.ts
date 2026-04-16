@@ -10,14 +10,13 @@ import {
   resolveConfiguredModelRef,
 } from "../agents/model-selection.js";
 import { formatTokenK } from "../commands/models/shared.js";
+import type { OpenClawConfig } from "../config/config.js";
 import { resolveAgentModelPrimaryValue } from "../config/model-input.js";
-import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { applyPrimaryModel } from "../plugins/provider-model-primary.js";
 import { resolveOwningPluginIdsForProvider } from "../plugins/providers.js";
 import type { ProviderPlugin } from "../plugins/types.js";
 import type { RuntimeEnv } from "../runtime.js";
 import { createLazyRuntimeSurface } from "../shared/lazy-runtime.js";
-import { normalizeOptionalString } from "../shared/string-coerce.js";
 import type { WizardPrompter, WizardSelectOption } from "../wizard/prompts.js";
 
 export { applyPrimaryModel } from "../plugins/provider-model-primary.js";
@@ -99,7 +98,7 @@ function resolveConfiguredModelRaw(cfg: OpenClawConfig): string {
 function resolveConfiguredModelKeys(cfg: OpenClawConfig): string[] {
   const models = cfg.agents?.defaults?.models ?? {};
   return Object.keys(models)
-    .map((key) => key.trim())
+    .map((key) => String(key ?? "").trim())
     .filter((key) => key.length > 0);
 }
 
@@ -107,7 +106,7 @@ function normalizeModelKeys(values: string[]): string[] {
   const seen = new Set<string>();
   const next: string[] = [];
   for (const raw of values) {
-    const value = raw.trim();
+    const value = String(raw ?? "").trim();
     if (!value || seen.has(value)) {
       continue;
     }
@@ -222,11 +221,9 @@ async function promptManualModel(params: {
     message: params.allowBlank ? "Default model (blank to keep)" : "Default model",
     initialValue: params.initialValue,
     placeholder: "provider/model",
-    validate: params.allowBlank
-      ? undefined
-      : (value) => (normalizeOptionalString(value) ? undefined : "Required"),
+    validate: params.allowBlank ? undefined : (value) => (value?.trim() ? undefined : "Required"),
   });
-  const model = (modelInput ?? "").trim();
+  const model = String(modelInput ?? "").trim();
   if (!model) {
     return {};
   }
@@ -413,9 +410,8 @@ export async function promptDefaultModel(
   const includeManual = params.includeManual ?? true;
   const includeProviderPluginSetups = params.includeProviderPluginSetups ?? false;
   const ignoreAllowlist = params.ignoreAllowlist ?? false;
-  const preferredProviderRaw = normalizeOptionalString(params.preferredProvider);
-  const preferredProvider = preferredProviderRaw
-    ? normalizeProviderId(preferredProviderRaw)
+  const preferredProvider = params.preferredProvider?.trim()
+    ? normalizeProviderId(params.preferredProvider)
     : undefined;
   const configuredRaw = resolveConfiguredModelRaw(cfg);
   const resolved = resolveConfiguredModelRef({
@@ -532,11 +528,10 @@ export async function promptDefaultModel(
     options,
     initialValue,
   });
-  const selectedValue = selection ?? "";
-  if (selectedValue === KEEP_VALUE) {
+  if (selection === KEEP_VALUE) {
     return {};
   }
-  if (selectedValue === MANUAL_VALUE) {
+  if (selection === MANUAL_VALUE) {
     return promptManualModel({
       prompter: params.prompter,
       allowBlank: false,
@@ -545,7 +540,7 @@ export async function promptDefaultModel(
   }
 
   const providerPluginResult = await maybeHandleProviderPluginSelection({
-    selection: selectedValue,
+    selection: String(selection),
     cfg,
     prompter: params.prompter,
     agentDir: params.agentDir,
@@ -557,7 +552,7 @@ export async function promptDefaultModel(
     return providerPluginResult;
   }
 
-  const model = selectedValue;
+  const model = String(selection);
   const { runProviderModelSelectedHook } = await loadResolvedModelPickerRuntime();
   await runProviderModelSelectedHook({
     config: cfg,
@@ -583,9 +578,8 @@ export async function promptModelAllowlist(params: {
   const existingKeys = resolveConfiguredModelKeys(cfg);
   const allowedKeys = normalizeModelKeys(params.allowedKeys ?? []);
   const allowedKeySet = allowedKeys.length > 0 ? new Set(allowedKeys) : null;
-  const preferredProviderRaw = normalizeOptionalString(params.preferredProvider);
-  const preferredProvider = preferredProviderRaw
-    ? normalizeProviderId(preferredProviderRaw)
+  const preferredProvider = params.preferredProvider?.trim()
+    ? normalizeProviderId(params.preferredProvider)
     : undefined;
   const resolved = resolveConfiguredModelRef({
     cfg,
@@ -611,7 +605,7 @@ export async function promptModelAllowlist(params: {
       initialValue: existingKeys.join(", "),
       placeholder: "provider/model, other-provider/model",
     });
-    const parsed = (raw ?? "")
+    const parsed = String(raw ?? "")
       .split(",")
       .map((value) => value.trim())
       .filter((value) => value.length > 0);
@@ -669,7 +663,7 @@ export async function promptModelAllowlist(params: {
     initialValues: initialKeys.length > 0 ? initialKeys : undefined,
     searchable: true,
   });
-  const selected = normalizeModelKeys(selection);
+  const selected = normalizeModelKeys(selection.map((value) => String(value)));
   if (selected.length > 0) {
     return { models: selected };
   }

@@ -1,4 +1,3 @@
-import { normalizeOptionalLowercaseString } from "../shared/string-coerce.js";
 import { COMMAND_ARG_FORMATTERS } from "./commands-args.js";
 import type {
   ChatCommandDefinition,
@@ -54,20 +53,13 @@ export function registerAlias(
   if (!command) {
     throw new Error(`registerAlias: unknown command key: ${key}`);
   }
-  const existing = new Set(
-    command.textAliases
-      .map((alias) => normalizeOptionalLowercaseString(alias))
-      .filter((alias): alias is string => Boolean(alias)),
-  );
+  const existing = new Set(command.textAliases.map((alias) => alias.trim().toLowerCase()));
   for (const alias of aliases) {
     const trimmed = alias.trim();
     if (!trimmed) {
       continue;
     }
-    const lowered = normalizeOptionalLowercaseString(trimmed);
-    if (!lowered) {
-      continue;
-    }
+    const lowered = trimmed.toLowerCase();
     if (existing.has(lowered)) {
       continue;
     }
@@ -97,7 +89,7 @@ export function assertCommandRegistry(commands: ChatCommandDefinition[]): void {
     } else if (!nativeName) {
       throw new Error(`Native command missing native name: ${command.key}`);
     } else {
-      const nativeKey = normalizeOptionalLowercaseString(nativeName) ?? "";
+      const nativeKey = nativeName.toLowerCase();
       if (nativeNames.has(nativeKey)) {
         throw new Error(`Duplicate native command: ${nativeName}`);
       }
@@ -112,7 +104,7 @@ export function assertCommandRegistry(commands: ChatCommandDefinition[]): void {
       if (!alias.startsWith("/")) {
         throw new Error(`Command alias missing leading '/': ${alias}`);
       }
-      const aliasKey = normalizeOptionalLowercaseString(alias) ?? "";
+      const aliasKey = alias.toLowerCase();
       if (textAliases.has(aliasKey)) {
         throw new Error(`Duplicate command alias: ${alias}`);
       }
@@ -672,22 +664,6 @@ export function buildBuiltinChatCommands(): ChatCommandDefinition[] {
       argsMenu: "auto",
     }),
     defineChatCommand({
-      key: "trace",
-      nativeName: "trace",
-      description: "Toggle plugin trace lines.",
-      textAlias: "/trace",
-      category: "options",
-      args: [
-        {
-          name: "mode",
-          description: "on, off, or raw",
-          type: "string",
-          choices: ["on", "off", "raw"],
-        },
-      ],
-      argsMenu: "auto",
-    }),
-    defineChatCommand({
       key: "fast",
       nativeName: "fast",
       description: "Toggle fast mode.",
@@ -848,6 +824,7 @@ export function buildBuiltinChatCommands(): ChatCommandDefinition[] {
   registerAlias(commands, "reasoning", "/reason");
   registerAlias(commands, "elevated", "/elev");
   registerAlias(commands, "steer", "/tell");
+
   assertCommandRegistry(commands);
   return commands;
 }

@@ -1,4 +1,3 @@
-import { normalizeLowercaseStringOrEmpty } from "../../shared/string-coerce.js";
 import { sanitizeHtml, stripInvisibleUnicode } from "./web-fetch-visibility.js";
 
 export type ExtractMode = "markdown" | "text";
@@ -170,7 +169,7 @@ function exceedsEstimatedHtmlNestingDepth(html: string, maxDepth: number): boole
       j += 1;
     }
 
-    const tagName = normalizeLowercaseStringOrEmpty(html.slice(nameStart, j));
+    const tagName = html.slice(nameStart, j).toLowerCase();
     if (!tagName) {
       continue;
     }

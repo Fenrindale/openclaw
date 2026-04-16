@@ -12,7 +12,6 @@ import {
   logWebhookError,
   logWebhookProcessed,
   logWebhookReceived,
-  normalizeOptionalString,
   startDiagnosticHeartbeat,
   stopDiagnosticHeartbeat,
 } from "openclaw/plugin-sdk/text-runtime";
@@ -107,7 +106,7 @@ function hasValidTelegramWebhookSecret(
 }
 
 function parseIpLiteral(value: string | undefined): string | undefined {
-  const trimmed = normalizeOptionalString(value);
+  const trimmed = value?.trim();
   if (!trimmed) {
     return undefined;
   }
@@ -139,7 +138,7 @@ function isTrustedProxyAddress(
   }
   const blockList = new net.BlockList();
   for (const proxy of trustedProxies) {
-    const trimmed = normalizeOptionalString(proxy) ?? "";
+    const trimmed = proxy.trim();
     if (!trimmed) {
       continue;
     }
@@ -251,7 +250,7 @@ export async function startTelegramWebhook(opts: {
   const healthPath = opts.healthPath ?? "/healthz";
   const port = opts.port ?? 8787;
   const host = opts.host ?? "127.0.0.1";
-  const secret = normalizeOptionalString(opts.secret) ?? "";
+  const secret = typeof opts.secret === "string" ? opts.secret.trim() : "";
   if (!secret) {
     throw new Error(
       "Telegram webhook mode requires a non-empty secret token. " +

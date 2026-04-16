@@ -1,17 +1,13 @@
 import { hasOutboundReplyContent } from "openclaw/plugin-sdk/reply-payload";
-import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import type { OpenClawConfig } from "../../config/config.js";
 import type { TtsAutoMode } from "../../config/types.tts.js";
 import { logVerbose } from "../../globals.js";
 import { formatErrorMessage } from "../../infra/errors.js";
-import {
-  normalizeOptionalLowercaseString,
-  normalizeOptionalString,
-} from "../../shared/string-coerce.js";
 import { resolveStatusTtsSnapshot } from "../../tts/status-config.js";
 import { resolveConfiguredTtsMode } from "../../tts/tts-config.js";
 import type { FinalizedMsgContext } from "../templating.js";
 import type { ReplyPayload } from "../types.js";
-import type { ReplyDispatchKind, ReplyDispatcher } from "./reply-dispatcher.types.js";
+import type { ReplyDispatcher, ReplyDispatchKind } from "./reply-dispatcher.js";
 
 let routeReplyRuntimePromise: Promise<typeof import("./route-reply.runtime.js")> | null = null;
 let dispatchAcpTtsRuntimePromise: Promise<typeof import("./dispatch-acp-tts.runtime.js")> | null =
@@ -56,19 +52,46 @@ type ToolMessageHandle = {
   messageId: string;
 };
 
+function normalizeDeliveryChannel(value: string | undefined): string | undefined {
+  const normalized = value?.trim().toLowerCase();
+  return normalized || undefined;
+}
+
+function resolveDeliveryAccountId(params: {
+  cfg: OpenClawConfig;
+  channel: string | undefined;
+  accountId: string | undefined;
+}): string | undefined {
+  const explicit = params.accountId?.trim();
+  if (explicit) {
+    return explicit;
+  }
+  const channelId = normalizeDeliveryChannel(params.channel);
+  if (!channelId) {
+    return undefined;
+  }
+  const channelCfg = (
+    params.cfg.channels as Record<string, { defaultAccount?: unknown } | undefined> | undefined
+  )?.[channelId];
+  const configuredDefault = channelCfg?.defaultAccount;
+  return typeof configuredDefault === "string" && configuredDefault.trim()
+    ? configuredDefault.trim()
+    : undefined;
+}
+
 async function shouldTreatDeliveredTextAsVisible(params: {
   channel: string | undefined;
   kind: ReplyDispatchKind;
   text: string | undefined;
   routed: boolean;
 }): Promise<boolean> {
-  if (!normalizeOptionalString(params.text)) {
+  if (!params.text?.trim()) {
     return false;
   }
   if (params.kind === "final") {
     return true;
   }
-  const channelId = normalizeOptionalLowercaseString(params.channel);
+  const channelId = normalizeDeliveryChannel(params.channel);
   if (!channelId) {
     return false;
   }
@@ -183,16 +206,13 @@ export function createAcpDispatchDeliveryCoordinator(params: {
     },
     toolMessageByCallId: new Map(),
   };
-  const directChannel = normalizeOptionalLowercaseString(params.ctx.Provider ?? params.ctx.Surface);
-  const routedChannel = normalizeOptionalLowercaseString(params.originatingChannel);
-  const explicitAccountId = normalizeOptionalString(params.ctx.AccountId);
-  const resolvedAccountId =
-    explicitAccountId ??
-    normalizeOptionalString(
-      (
-        params.cfg.channels as Record<string, { defaultAccount?: unknown } | undefined> | undefined
-      )?.[routedChannel ?? directChannel ?? ""]?.defaultAccount,
-    );
+  const directChannel = normalizeDeliveryChannel(params.ctx.Provider ?? params.ctx.Surface);
+  const routedChannel = normalizeDeliveryChannel(params.originatingChannel);
+  const resolvedAccountId = resolveDeliveryAccountId({
+    cfg: params.cfg,
+    channel: routedChannel ?? directChannel,
+    accountId: params.ctx.AccountId,
+  });
 
   const settleDirectVisibleText = async () => {
     if (state.settledDirectVisibleText || state.queuedDirectVisibleTextDeliveries === 0) {
@@ -215,18 +235,7 @@ export function createAcpDispatchDeliveryCoordinator(params: {
       return;
     }
     state.startedReplyLifecycle = true;
-    // When delivery is suppressed (e.g. sendPolicy: "deny"), do not fire the
-    // onReplyStart callback — channels wire it to typing indicators / lifecycle
-    // notifications that should not leak outbound events while the session is
-    // under a deny policy. See #53328.
-    if (params.suppressUserDelivery) {
-      return;
-    }
-    void Promise.resolve(params.onReplyStart?.()).catch((error) => {
-      logVerbose(
-        `dispatch-acp: reply lifecycle start failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    });
+    await params.onReplyStart?.();
   };
 
   const tryEditToolMessage = async (
@@ -240,7 +249,7 @@ export function createAcpDispatchDeliveryCoordinator(params: {
     if (!handle?.messageId) {
       return false;
     }
-    const message = normalizeOptionalString(payload.text);
+    const message = payload.text?.trim();
     if (!message) {
       return false;
     }
@@ -259,7 +268,6 @@ export function createAcpDispatchDeliveryCoordinator(params: {
           message,
         },
         sessionKey: params.ctx.SessionKey,
-        requesterAccountId: params.ctx.AccountId,
       });
       state.routedCounts.tool += 1;
       return true;
@@ -276,7 +284,7 @@ export function createAcpDispatchDeliveryCoordinator(params: {
     payload: ReplyPayload,
     meta?: AcpDispatchDeliveryMeta,
   ): Promise<boolean> => {
-    if (kind === "block" && normalizeOptionalString(payload.text)) {
+    if (kind === "block" && payload.text?.trim()) {
       if (state.accumulatedBlockText.length > 0) {
         state.accumulatedBlockText += "\n";
       }
@@ -303,7 +311,7 @@ export function createAcpDispatchDeliveryCoordinator(params: {
     });
 
     if (params.shouldRouteToOriginating && params.originatingChannel && params.originatingTo) {
-      const toolCallId = normalizeOptionalString(meta?.toolCallId);
+      const toolCallId = meta?.toolCallId?.trim();
       if (kind === "tool" && meta?.allowEdit === true && toolCallId) {
         const edited = await tryEditToolMessage(ttsPayload, toolCallId);
         if (edited) {
@@ -324,10 +332,6 @@ export function createAcpDispatchDeliveryCoordinator(params: {
         to: params.originatingTo,
         sessionKey: params.ctx.SessionKey,
         accountId: resolvedAccountId,
-        requesterSenderId: params.ctx.SenderId,
-        requesterSenderName: params.ctx.SenderName,
-        requesterSenderUsername: params.ctx.SenderUsername,
-        requesterSenderE164: params.ctx.SenderE164,
         threadId: params.ctx.MessageThreadId,
         cfg: params.cfg,
       });

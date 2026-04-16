@@ -24,7 +24,6 @@ import { MEDIA_FFMPEG_MAX_AUDIO_DURATION_SECS } from "openclaw/plugin-sdk/media-
 import { unlinkIfExists } from "openclaw/plugin-sdk/media-runtime";
 import type { RetryRunner } from "openclaw/plugin-sdk/retry-runtime";
 import { resolvePreferredOpenClawTmpDir } from "openclaw/plugin-sdk/temp-path";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 
 const DISCORD_VOICE_MESSAGE_FLAG = 1 << 13;
 const SUPPRESS_NOTIFICATIONS_FLAG = 1 << 12;
@@ -180,7 +179,7 @@ export async function ensureOggOpus(filePath: string): Promise<{ path: string; c
     );
   }
 
-  const ext = normalizeLowercaseStringOrEmpty(path.extname(filePath));
+  const ext = path.extname(filePath).toLowerCase();
 
   // Check if already OGG
   if (ext === ".ogg") {

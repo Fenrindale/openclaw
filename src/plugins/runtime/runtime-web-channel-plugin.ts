@@ -1,6 +1,7 @@
 import type { AgentToolResult } from "@mariozechner/pi-agent-core";
+import { createJiti } from "jiti";
 import type { ChannelAgentTool } from "../../channels/plugins/types.core.js";
-import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import type { OpenClawConfig } from "../../config/config.js";
 import {
   getDefaultLocalRoots as getDefaultLocalRootsImpl,
   loadWebMedia as loadWebMediaImpl,
@@ -8,7 +9,6 @@ import {
   optimizeImageToJpeg as optimizeImageToJpegImpl,
 } from "../../media/web-media.js";
 import type { PollInput } from "../../polls.js";
-import type { PluginJitiLoaderCache } from "../jiti-loader-cache.js";
 import {
   loadPluginBoundaryModuleWithJiti,
   resolvePluginRuntimeRecordByEntryBaseNames,
@@ -108,7 +108,7 @@ let cachedHeavyModule: WebChannelHeavyRuntimeModule | null = null;
 let cachedLightModulePath: string | null = null;
 let cachedLightModule: WebChannelLightRuntimeModule | null = null;
 
-const jitiLoaders: PluginJitiLoaderCache = new Map();
+const jitiLoaders = new Map<boolean, ReturnType<typeof createJiti>>();
 
 function resolveWebChannelPluginRecord(): WebChannelPluginRecord {
   return resolvePluginRuntimeRecordByEntryBaseNames(["light-runtime-api", "runtime-api"], () => {
@@ -177,7 +177,7 @@ function getLightExport<K extends keyof WebChannelLightRuntimeModule>(
   const loaded = loadWebChannelLightModule();
   const value = loaded[exportName];
   if (value == null) {
-    throw new Error(`web channel plugin runtime is missing export '${exportName}'`);
+    throw new Error(`web channel plugin runtime is missing export '${String(exportName)}'`);
   }
   return value as NonNullable<WebChannelLightRuntimeModule[K]>;
 }
@@ -188,7 +188,7 @@ async function getHeavyExport<K extends keyof WebChannelHeavyRuntimeModule>(
   const loaded = await loadWebChannelHeavyModule();
   const value = loaded[exportName];
   if (value == null) {
-    throw new Error(`web channel plugin runtime is missing export '${exportName}'`);
+    throw new Error(`web channel plugin runtime is missing export '${String(exportName)}'`);
   }
   return value as NonNullable<WebChannelHeavyRuntimeModule[K]>;
 }

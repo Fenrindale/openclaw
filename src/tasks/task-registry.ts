@@ -1,14 +1,12 @@
 import crypto from "node:crypto";
-import { createRequire } from "node:module";
-import type { OpenClawConfig } from "../config/types.openclaw.js";
+import type { OpenClawConfig } from "../config/config.js";
 import { onAgentEvent } from "../infra/agent-events.js";
 import { formatErrorMessage } from "../infra/errors.js";
 import { requestHeartbeatNow } from "../infra/heartbeat-wake.js";
 import { enqueueSystemEvent } from "../infra/system-events.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { parseAgentSessionKey } from "../routing/session-key.js";
-import { normalizeOptionalString } from "../shared/string-coerce.js";
-import { normalizeDeliveryContext } from "../utils/delivery-context.shared.js";
+import { normalizeDeliveryContext } from "../utils/delivery-context.js";
 import { isDeliverableMessageChannel } from "../utils/message-channel.js";
 import {
   formatTaskBlockedFollowupMessage,
@@ -25,7 +23,6 @@ import {
   syncFlowFromTask,
   updateFlowRecordByIdExpectedRevision,
 } from "./task-flow-runtime-internal.js";
-import type { TaskRegistryControlRuntime } from "./task-registry-control.types.js";
 import {
   getTaskRegistryObservers,
   getTaskRegistryStore,
@@ -68,21 +65,13 @@ type TaskRegistryDeliveryRuntime = Pick<
 const TASK_REGISTRY_DELIVERY_RUNTIME_OVERRIDE_KEY = Symbol.for(
   "openclaw.taskRegistry.deliveryRuntimeOverride",
 );
-const TASK_REGISTRY_CONTROL_RUNTIME_OVERRIDE_KEY = Symbol.for(
-  "openclaw.taskRegistry.controlRuntimeOverride",
-);
-const require = createRequire(import.meta.url);
-const TASK_REGISTRY_CONTROL_RUNTIME_CANDIDATES = [
-  "./task-registry-control.runtime.js",
-  "./task-registry-control.runtime.ts",
-] as const;
-type TaskRegistryGlobalWithRuntimeOverrides = typeof globalThis & {
+type TaskRegistryGlobalWithDeliveryOverride = typeof globalThis & {
   [TASK_REGISTRY_DELIVERY_RUNTIME_OVERRIDE_KEY]?: TaskRegistryDeliveryRuntime | null;
-  [TASK_REGISTRY_CONTROL_RUNTIME_OVERRIDE_KEY]?: TaskRegistryControlRuntime | null;
 };
 let deliveryRuntimePromise: Promise<typeof import("./task-registry-delivery-runtime.js")> | null =
   null;
-let controlRuntimePromise: Promise<TaskRegistryControlRuntime> | null = null;
+let controlRuntimePromise: Promise<typeof import("./task-registry-control.runtime.js")> | null =
+  null;
 
 type TaskDeliveryOwner = {
   sessionKey?: string;
@@ -132,6 +121,11 @@ function assertTaskOwner(params: { ownerKey: string; scopeKind: TaskScopeKind })
   }
 }
 
+function normalizeOwnerKey(ownerKey?: string): string | undefined {
+  const trimmed = ownerKey?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
 function assertParentFlowLinkAllowed(params: {
   ownerKey: string;
   scopeKind: TaskScopeKind;
@@ -154,7 +148,7 @@ function assertParentFlowLinkAllowed(params: {
       flowId,
     });
   }
-  if (normalizeOptionalString(flow.ownerKey) !== normalizeOptionalString(params.ownerKey)) {
+  if (normalizeOwnerKey(flow.ownerKey) !== normalizeOwnerKey(params.ownerKey)) {
     throw new ParentFlowLinkError(
       "owner_key_mismatch",
       "Task ownerKey must match parent flow ownerKey.",
@@ -378,7 +372,7 @@ function appendTaskEvent(event: {
 }
 
 function loadTaskRegistryDeliveryRuntime() {
-  const deliveryRuntimeOverride = (globalThis as TaskRegistryGlobalWithRuntimeOverrides)[
+  const deliveryRuntimeOverride = (globalThis as TaskRegistryGlobalWithDeliveryOverride)[
     TASK_REGISTRY_DELIVERY_RUNTIME_OVERRIDE_KEY
   ];
   if (deliveryRuntimeOverride) {
@@ -389,24 +383,9 @@ function loadTaskRegistryDeliveryRuntime() {
 }
 
 function loadTaskRegistryControlRuntime() {
-  const controlRuntimeOverride = (globalThis as TaskRegistryGlobalWithRuntimeOverrides)[
-    TASK_REGISTRY_CONTROL_RUNTIME_OVERRIDE_KEY
-  ];
-  if (controlRuntimeOverride) {
-    return Promise.resolve(controlRuntimeOverride);
-  }
   // Registry reads happen far more often than task cancellation, so keep the ACP/subagent
   // control graph off the default import path until a cancellation flow actually needs it.
-  controlRuntimePromise ??= Promise.resolve().then(() => {
-    for (const candidate of TASK_REGISTRY_CONTROL_RUNTIME_CANDIDATES) {
-      try {
-        return require(candidate) as TaskRegistryControlRuntime;
-      } catch {
-        // Try runtime/source candidates in order.
-      }
-    }
-    throw new Error("Failed to load task registry control runtime.");
-  });
+  controlRuntimePromise ??= import("./task-registry-control.runtime.js");
   return controlRuntimePromise;
 }
 
@@ -421,6 +400,11 @@ function addRunIdIndex(taskId: string, runId?: string) {
     taskIdsByRunId.set(trimmed, ids);
   }
   ids.add(taskId);
+}
+
+function normalizeSessionIndexKey(sessionKey?: string): string | undefined {
+  const trimmed = sessionKey?.trim();
+  return trimmed ? trimmed : undefined;
 }
 
 function addIndexedKey(index: Map<string, Set<string>>, key: string, taskId: string) {
@@ -447,15 +431,15 @@ function getTaskRelatedSessionIndexKeys(task: Pick<TaskRecord, "ownerKey" | "chi
   return [
     ...new Set(
       [
-        normalizeOptionalString(task.ownerKey),
-        normalizeOptionalString(task.childSessionKey),
+        normalizeSessionIndexKey(task.ownerKey),
+        normalizeSessionIndexKey(task.childSessionKey),
       ].filter(Boolean) as string[],
     ),
   ];
 }
 
 function addOwnerKeyIndex(taskId: string, task: Pick<TaskRecord, "ownerKey">) {
-  const key = normalizeOptionalString(task.ownerKey);
+  const key = normalizeSessionIndexKey(task.ownerKey);
   if (!key) {
     return;
   }
@@ -463,7 +447,7 @@ function addOwnerKeyIndex(taskId: string, task: Pick<TaskRecord, "ownerKey">) {
 }
 
 function deleteOwnerKeyIndex(taskId: string, task: Pick<TaskRecord, "ownerKey">) {
-  const key = normalizeOptionalString(task.ownerKey);
+  const key = normalizeSessionIndexKey(task.ownerKey);
   if (!key) {
     return;
   }
@@ -548,8 +532,8 @@ function taskRunScopeKey(
   return [
     task.runtime,
     task.scopeKind,
-    normalizeOptionalString(task.ownerKey) ?? "",
-    normalizeOptionalString(task.childSessionKey) ?? "",
+    normalizeComparableText(task.ownerKey),
+    normalizeComparableText(task.childSessionKey),
   ].join("\u0000");
 }
 
@@ -561,17 +545,17 @@ function getTasksByRunScope(params: {
   const matches = getTasksByRunId(params.runId).filter(
     (task) => !params.runtime || task.runtime === params.runtime,
   );
-  const sessionKey = normalizeOptionalString(params.sessionKey);
+  const sessionKey = normalizeSessionIndexKey(params.sessionKey);
   if (sessionKey) {
     const childMatches = matches.filter(
-      (task) => normalizeOptionalString(task.childSessionKey) === sessionKey,
+      (task) => normalizeSessionIndexKey(task.childSessionKey) === sessionKey,
     );
     if (childMatches.length > 0) {
       return childMatches;
     }
     const ownerMatches = matches.filter(
       (task) =>
-        task.scopeKind === "session" && normalizeOptionalString(task.ownerKey) === sessionKey,
+        task.scopeKind === "session" && normalizeSessionIndexKey(task.ownerKey) === sessionKey,
     );
     return ownerMatches;
   }
@@ -587,10 +571,9 @@ function getPeerTasksForDelivery(task: TaskRecord): TaskRecord[] {
     (candidate) =>
       candidate.runtime === task.runtime &&
       candidate.scopeKind === task.scopeKind &&
-      (normalizeOptionalString(candidate.ownerKey) ?? "") ===
-        (normalizeOptionalString(task.ownerKey) ?? "") &&
-      (normalizeOptionalString(candidate.childSessionKey) ?? "") ===
-        (normalizeOptionalString(task.childSessionKey) ?? ""),
+      normalizeComparableText(candidate.ownerKey) === normalizeComparableText(task.ownerKey) &&
+      normalizeComparableText(candidate.childSessionKey) ===
+        normalizeComparableText(task.childSessionKey),
   );
 }
 
@@ -607,6 +590,10 @@ function pickPreferredRunIdTask(matches: TaskRecord[]): TaskRecord | undefined {
     }
     return left.createdAt - right.createdAt;
   })[0];
+}
+
+function normalizeComparableText(value: string | undefined): string {
+  return value?.trim() ?? "";
 }
 
 function compareTasksNewestFirst(
@@ -636,21 +623,18 @@ function findExistingTaskForCreate(params: {
         (task) =>
           task.runtime === params.runtime &&
           task.scopeKind === params.scopeKind &&
-          (normalizeOptionalString(task.ownerKey) ?? "") ===
-            (normalizeOptionalString(params.ownerKey) ?? "") &&
-          (normalizeOptionalString(task.childSessionKey) ?? "") ===
-            (normalizeOptionalString(params.childSessionKey) ?? "") &&
-          (normalizeOptionalString(task.parentFlowId) ?? "") ===
-            (normalizeOptionalString(params.parentFlowId) ?? ""),
+          normalizeComparableText(task.ownerKey) === normalizeComparableText(params.ownerKey) &&
+          normalizeComparableText(task.childSessionKey) ===
+            normalizeComparableText(params.childSessionKey) &&
+          normalizeComparableText(task.parentFlowId) ===
+            normalizeComparableText(params.parentFlowId),
       )
     : [];
   const exact = runId
     ? runScopeMatches.find(
         (task) =>
-          (normalizeOptionalString(task.label) ?? "") ===
-            (normalizeOptionalString(params.label) ?? "") &&
-          (normalizeOptionalString(task.task) ?? "") ===
-            (normalizeOptionalString(params.task) ?? ""),
+          normalizeComparableText(task.label) === normalizeComparableText(params.label) &&
+          normalizeComparableText(task.task) === normalizeComparableText(params.task),
       )
     : undefined;
   if (exact) {
@@ -713,11 +697,11 @@ function mergeExistingTaskForCreate(
   }
   const nextLabel = params.label?.trim();
   if (params.preferMetadata) {
-    if (nextLabel && (normalizeOptionalString(existing.label) ?? "") !== nextLabel) {
+    if (nextLabel && normalizeComparableText(existing.label) !== nextLabel) {
       patch.label = nextLabel;
     }
     const nextTask = params.task.trim();
-    if (nextTask && (normalizeOptionalString(existing.task) ?? "") !== nextTask) {
+    if (nextTask && normalizeComparableText(existing.task) !== nextTask) {
       patch.task = nextTask;
     }
   } else if (nextLabel && !existing.label?.trim()) {
@@ -775,7 +759,7 @@ function getLinkedFlowForDelivery(task: TaskRecord) {
   if (!flow) {
     return undefined;
   }
-  if (normalizeOptionalString(flow.ownerKey) !== normalizeOptionalString(task.ownerKey)) {
+  if (normalizeOwnerKey(flow.ownerKey) !== normalizeOwnerKey(task.ownerKey)) {
     return undefined;
   }
   return flow;
@@ -895,9 +879,9 @@ function updateTask(taskId: string, patch: Partial<TaskRecord>): TaskRecord | nu
     next.cleanupAfter = terminalAt + DEFAULT_TASK_RETENTION_MS;
   }
   const sessionIndexChanged =
-    normalizeOptionalString(current.ownerKey) !== normalizeOptionalString(next.ownerKey) ||
-    normalizeOptionalString(current.childSessionKey) !==
-      normalizeOptionalString(next.childSessionKey);
+    normalizeSessionIndexKey(current.ownerKey) !== normalizeSessionIndexKey(next.ownerKey) ||
+    normalizeSessionIndexKey(current.childSessionKey) !==
+      normalizeSessionIndexKey(next.childSessionKey);
   const parentFlowIndexChanged = current.parentFlowId?.trim() !== next.parentFlowId?.trim();
   tasks.set(taskId, next);
   if (patch.runId && patch.runId !== current.runId) {
@@ -1330,9 +1314,6 @@ function ensureListener() {
     }
     const now = evt.ts || Date.now();
     for (const current of scopedTasks) {
-      if (isTerminalTaskStatus(current.status)) {
-        continue;
-      }
       const patch: Partial<TaskRecord> = {
         lastEventAt: now,
       };
@@ -1456,17 +1437,17 @@ export function createTaskRecord(params: {
   const record: TaskRecord = {
     taskId,
     runtime: params.runtime,
-    taskKind: normalizeOptionalString(params.taskKind),
-    sourceId: normalizeOptionalString(params.sourceId),
+    taskKind: params.taskKind?.trim() || undefined,
+    sourceId: params.sourceId?.trim() || undefined,
     requesterSessionKey,
     ownerKey,
     scopeKind,
     childSessionKey: params.childSessionKey,
-    parentFlowId: normalizeOptionalString(params.parentFlowId),
-    parentTaskId: normalizeOptionalString(params.parentTaskId),
-    agentId: normalizeOptionalString(params.agentId),
-    runId: normalizeOptionalString(params.runId),
-    label: normalizeOptionalString(params.label),
+    parentFlowId: params.parentFlowId?.trim() || undefined,
+    parentTaskId: params.parentTaskId?.trim() || undefined,
+    agentId: params.agentId?.trim() || undefined,
+    runId: params.runId?.trim() || undefined,
+    label: params.label?.trim() || undefined,
     task: params.task,
     status,
     deliveryStatus,
@@ -1747,45 +1728,43 @@ export async function cancelTaskById(params: {
     };
   }
   const childSessionKey = task.childSessionKey?.trim();
+  if (!childSessionKey) {
+    return {
+      found: true,
+      cancelled: false,
+      reason: "Task has no cancellable child session.",
+      task: cloneTaskRecord(task),
+    };
+  }
   try {
-    if (task.runtime !== "cli") {
-      if (!childSessionKey) {
+    if (task.runtime === "acp") {
+      const { getAcpSessionManager } = await loadTaskRegistryControlRuntime();
+      await getAcpSessionManager().cancelSession({
+        cfg: params.cfg,
+        sessionKey: childSessionKey,
+        reason: "task-cancel",
+      });
+    } else if (task.runtime === "subagent") {
+      const { killSubagentRunAdmin } = await loadTaskRegistryControlRuntime();
+      const result = await killSubagentRunAdmin({
+        cfg: params.cfg,
+        sessionKey: childSessionKey,
+      });
+      if (!result.found || !result.killed) {
         return {
           found: true,
           cancelled: false,
-          reason: "Task has no cancellable child session.",
+          reason: result.found ? "Subagent was not running." : "Subagent task not found.",
           task: cloneTaskRecord(task),
         };
       }
-      if (task.runtime === "acp") {
-        const { getAcpSessionManager } = await loadTaskRegistryControlRuntime();
-        await getAcpSessionManager().cancelSession({
-          cfg: params.cfg,
-          sessionKey: childSessionKey,
-          reason: "task-cancel",
-        });
-      } else if (task.runtime === "subagent") {
-        const { killSubagentRunAdmin } = await loadTaskRegistryControlRuntime();
-        const result = await killSubagentRunAdmin({
-          cfg: params.cfg,
-          sessionKey: childSessionKey,
-        });
-        if (!result.found || !result.killed) {
-          return {
-            found: true,
-            cancelled: false,
-            reason: result.found ? "Subagent was not running." : "Subagent task not found.",
-            task: cloneTaskRecord(task),
-          };
-        }
-      } else {
-        return {
-          found: true,
-          cancelled: false,
-          reason: "Task runtime does not support cancellation yet.",
-          task: cloneTaskRecord(task),
-        };
-      }
+    } else {
+      return {
+        found: true,
+        cancelled: false,
+        reason: "Task runtime does not support cancellation yet.",
+        task: cloneTaskRecord(task),
+      };
     }
     const updated = updateTask(task.taskId, {
       status: "cancelled",
@@ -1871,7 +1850,7 @@ export function findLatestTaskForSessionKey(sessionKey: string): TaskRecord | un
 
 export function listTasksForSessionKey(sessionKey: string): TaskRecord[] {
   ensureTaskRegistryReady();
-  const key = normalizeOptionalString(sessionKey);
+  const key = normalizeSessionIndexKey(sessionKey);
   if (!key) {
     return [];
   }
@@ -1901,7 +1880,7 @@ export function findLatestTaskForFlowId(flowId: string): TaskRecord | undefined 
 
 export function listTasksForOwnerKey(ownerKey: string): TaskRecord[] {
   ensureTaskRegistryReady();
-  const key = normalizeOptionalString(ownerKey);
+  const key = normalizeSessionIndexKey(ownerKey);
   if (!key) {
     return [];
   }
@@ -1924,7 +1903,7 @@ export function findLatestTaskForRelatedSessionKey(sessionKey: string): TaskReco
 
 export function listTasksForRelatedSessionKey(sessionKey: string): TaskRecord[] {
   ensureTaskRegistryReady();
-  const key = normalizeOptionalString(sessionKey);
+  const key = normalizeSessionIndexKey(sessionKey);
   if (!key) {
     return [];
   }
@@ -1989,29 +1968,15 @@ export function resetTaskRegistryForTests(opts?: { persist?: boolean }) {
 }
 
 export function resetTaskRegistryDeliveryRuntimeForTests() {
-  (globalThis as TaskRegistryGlobalWithRuntimeOverrides)[
+  (globalThis as TaskRegistryGlobalWithDeliveryOverride)[
     TASK_REGISTRY_DELIVERY_RUNTIME_OVERRIDE_KEY
   ] = null;
   deliveryRuntimePromise = null;
 }
 
 export function setTaskRegistryDeliveryRuntimeForTests(runtime: TaskRegistryDeliveryRuntime): void {
-  (globalThis as TaskRegistryGlobalWithRuntimeOverrides)[
+  (globalThis as TaskRegistryGlobalWithDeliveryOverride)[
     TASK_REGISTRY_DELIVERY_RUNTIME_OVERRIDE_KEY
   ] = runtime;
   deliveryRuntimePromise = null;
-}
-
-export function resetTaskRegistryControlRuntimeForTests() {
-  (globalThis as TaskRegistryGlobalWithRuntimeOverrides)[
-    TASK_REGISTRY_CONTROL_RUNTIME_OVERRIDE_KEY
-  ] = null;
-  controlRuntimePromise = null;
-}
-
-export function setTaskRegistryControlRuntimeForTests(runtime: TaskRegistryControlRuntime): void {
-  (globalThis as TaskRegistryGlobalWithRuntimeOverrides)[
-    TASK_REGISTRY_CONTROL_RUNTIME_OVERRIDE_KEY
-  ] = runtime;
-  controlRuntimePromise = null;
 }

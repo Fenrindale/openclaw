@@ -1,5 +1,4 @@
 import { resolveLoggerBackedRuntime } from "openclaw/plugin-sdk/extension-shared";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 import { resolveIrcAccount } from "./accounts.js";
 import { connectIrcClient, type IrcClient } from "./client.js";
 import { buildIrcConnectOptions } from "./connect-options.js";
@@ -80,10 +79,7 @@ export async function monitorIrcProvider(opts: IrcMonitorOptions): Promise<{ sto
         if (!client) {
           return;
         }
-        if (
-          normalizeLowercaseStringOrEmpty(event.senderNick) ===
-          normalizeLowercaseStringOrEmpty(client.nick)
-        ) {
+        if (event.senderNick.toLowerCase() === client.nick.toLowerCase()) {
           return;
         }
 

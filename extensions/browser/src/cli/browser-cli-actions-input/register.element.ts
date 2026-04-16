@@ -1,5 +1,4 @@
 import type { Command } from "commander";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import type { BrowserParentOpts } from "../browser-cli-shared.js";
 import { danger, defaultRuntime } from "../core-api.js";
 import {
@@ -62,9 +61,9 @@ export function registerBrowserElementCommands(
         body: {
           kind: "click",
           ref: refValue,
-          targetId: normalizeOptionalString(opts.targetId),
+          targetId: opts.targetId?.trim() || undefined,
           doubleClick: Boolean(opts.double),
-          button: normalizeOptionalString(opts.button),
+          button: opts.button?.trim() || undefined,
           modifiers,
         },
         successMessage: (result) => {
@@ -96,7 +95,7 @@ export function registerBrowserElementCommands(
           text,
           submit: Boolean(opts.submit),
           slowly: Boolean(opts.slowly),
-          targetId: normalizeOptionalString(opts.targetId),
+          targetId: opts.targetId?.trim() || undefined,
         },
         successMessage: `typed into ref ${refValue}`,
       });
@@ -110,7 +109,7 @@ export function registerBrowserElementCommands(
     .action(async (key: string, opts, cmd) => {
       await runElementAction({
         cmd,
-        body: { kind: "press", key, targetId: normalizeOptionalString(opts.targetId) },
+        body: { kind: "press", key, targetId: opts.targetId?.trim() || undefined },
         successMessage: `pressed ${key}`,
       });
     });
@@ -123,7 +122,7 @@ export function registerBrowserElementCommands(
     .action(async (ref: string, opts, cmd) => {
       await runElementAction({
         cmd,
-        body: { kind: "hover", ref, targetId: normalizeOptionalString(opts.targetId) },
+        body: { kind: "hover", ref, targetId: opts.targetId?.trim() || undefined },
         successMessage: `hovered ref ${ref}`,
       });
     });
@@ -147,7 +146,7 @@ export function registerBrowserElementCommands(
         body: {
           kind: "scrollIntoView",
           ref: refValue,
-          targetId: normalizeOptionalString(opts.targetId),
+          targetId: opts.targetId?.trim() || undefined,
           timeoutMs,
         },
         timeoutMs,
@@ -168,7 +167,7 @@ export function registerBrowserElementCommands(
           kind: "drag",
           startRef,
           endRef,
-          targetId: normalizeOptionalString(opts.targetId),
+          targetId: opts.targetId?.trim() || undefined,
         },
         successMessage: `dragged ${startRef} → ${endRef}`,
       });
@@ -187,7 +186,7 @@ export function registerBrowserElementCommands(
           kind: "select",
           ref,
           values,
-          targetId: normalizeOptionalString(opts.targetId),
+          targetId: opts.targetId?.trim() || undefined,
         },
         successMessage: `selected ${values.join(", ")}`,
       });

@@ -1,8 +1,5 @@
 import type { MsgContext } from "../auto-reply/templating.js";
-import type { GroupKeyResolution } from "../config/sessions/types.js";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
-import type { InboundLastRouteUpdate } from "./session.types.js";
-export type { InboundLastRouteUpdate, RecordInboundSession } from "./session.types.js";
+import type { GroupKeyResolution, SessionEntry } from "../config/sessions/types.js";
 
 let inboundSessionRuntimePromise: Promise<
   typeof import("../config/sessions/inbound.runtime.js")
@@ -13,14 +10,31 @@ function loadInboundSessionRuntime() {
   return inboundSessionRuntimePromise;
 }
 
+function normalizeSessionStoreKey(sessionKey: string): string {
+  return sessionKey.trim().toLowerCase();
+}
+
+export type InboundLastRouteUpdate = {
+  sessionKey: string;
+  channel: SessionEntry["lastChannel"];
+  to: string;
+  accountId?: string;
+  threadId?: string | number;
+  mainDmOwnerPin?: {
+    ownerRecipient: string;
+    senderRecipient: string;
+    onSkip?: (params: { ownerRecipient: string; senderRecipient: string }) => void;
+  };
+};
+
 function shouldSkipPinnedMainDmRouteUpdate(
   pin: InboundLastRouteUpdate["mainDmOwnerPin"] | undefined,
 ): boolean {
   if (!pin) {
     return false;
   }
-  const owner = normalizeLowercaseStringOrEmpty(pin.ownerRecipient);
-  const sender = normalizeLowercaseStringOrEmpty(pin.senderRecipient);
+  const owner = pin.ownerRecipient.trim().toLowerCase();
+  const sender = pin.senderRecipient.trim().toLowerCase();
   if (!owner || !sender || owner === sender) {
     return false;
   }
@@ -38,7 +52,7 @@ export async function recordInboundSession(params: {
   onRecordError: (err: unknown) => void;
 }): Promise<void> {
   const { storePath, sessionKey, ctx, groupResolution, createIfMissing } = params;
-  const canonicalSessionKey = normalizeLowercaseStringOrEmpty(sessionKey);
+  const canonicalSessionKey = normalizeSessionStoreKey(sessionKey);
   const runtime = await loadInboundSessionRuntime();
   void runtime
     .recordSessionMetaFromInbound({
@@ -57,7 +71,7 @@ export async function recordInboundSession(params: {
   if (shouldSkipPinnedMainDmRouteUpdate(update.mainDmOwnerPin)) {
     return;
   }
-  const targetSessionKey = normalizeLowercaseStringOrEmpty(update.sessionKey);
+  const targetSessionKey = normalizeSessionStoreKey(update.sessionKey);
   await runtime.updateLastRoute({
     storePath,
     sessionKey: targetSessionKey,

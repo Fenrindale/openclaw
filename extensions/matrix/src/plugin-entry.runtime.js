@@ -10,10 +10,7 @@ const require = createRequire(import.meta.url);
 const { createJiti } = require("jiti");
 
 const PLUGIN_ID = "matrix";
-const OPENCLAW_PLUGIN_SDK_PACKAGE_NAMES = [
-  ["openclaw", "plugin-sdk"].join("/"),
-  ["@openclaw", "plugin-sdk"].join("/"),
-];
+const OPENCLAW_PLUGIN_SDK_PREFIX = ["openclaw", "plugin-sdk"].join("/");
 const PLUGIN_SDK_EXPORT_PREFIX = "./plugin-sdk/";
 const PLUGIN_SDK_SOURCE_EXTENSIONS = [".ts", ".mts", ".js", ".mjs", ".cts", ".cjs"];
 const PLUGIN_ENTRY_RUNTIME_BASENAME = "plugin-entry.handlers.runtime";
@@ -38,31 +35,11 @@ function readPackageJson(packageRoot) {
   }
 }
 
-function normalizeLowercaseStringOrEmpty(value) {
-  return typeof value === "string" ? value.toLowerCase() : "";
-}
-
-function hasTrustedOpenClawRootIndicator(packageRoot, packageJson) {
-  const packageExports = packageJson?.exports ?? {};
-  if (!Object.prototype.hasOwnProperty.call(packageExports, "./plugin-sdk")) {
-    return false;
-  }
-  const hasCliEntryExport = Object.prototype.hasOwnProperty.call(packageExports, "./cli-entry");
-  const hasOpenClawBin =
-    (typeof packageJson?.bin === "string" &&
-      normalizeLowercaseStringOrEmpty(packageJson.bin).includes("openclaw")) ||
-    (typeof packageJson?.bin === "object" &&
-      packageJson.bin !== null &&
-      typeof packageJson.bin.openclaw === "string");
-  const hasOpenClawEntrypoint = fs.existsSync(path.join(packageRoot, "openclaw.mjs"));
-  return hasCliEntryExport || hasOpenClawBin || hasOpenClawEntrypoint;
-}
-
 function findOpenClawPackageRoot(startDir) {
   let cursor = path.resolve(startDir);
   for (let i = 0; i < 12; i += 1) {
     const pkg = readPackageJson(cursor);
-    if (pkg?.name === "openclaw" && hasTrustedOpenClawRootIndicator(cursor, pkg)) {
+    if (pkg?.name === "openclaw" && pkg.exports?.["./plugin-sdk"]) {
       return { packageRoot: cursor, packageJson: pkg };
     }
     const parent = path.dirname(cursor);
@@ -98,34 +75,28 @@ function buildPluginSdkAliasMap(moduleUrl) {
     resolveExistingFile(path.join(sourcePluginSdkDir, "root-alias"), [".cjs"]) ??
     resolveExistingFile(path.join(distPluginSdkDir, "root-alias"), [".cjs"]);
   if (rootAlias) {
-    for (const packageName of OPENCLAW_PLUGIN_SDK_PACKAGE_NAMES) {
-      aliasMap[packageName] = rootAlias;
-    }
+    aliasMap[OPENCLAW_PLUGIN_SDK_PREFIX] = rootAlias;
   }
 
-  for (const exportKey of Object.keys(packageJson.exports ?? {}).toSorted()) {
+  for (const exportKey of Object.keys(packageJson.exports ?? {})) {
     if (!exportKey.startsWith(PLUGIN_SDK_EXPORT_PREFIX)) {
       continue;
     }
     const subpath = exportKey.slice(PLUGIN_SDK_EXPORT_PREFIX.length);
-    if (!/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(subpath)) {
+    if (!subpath) {
       continue;
     }
     const resolvedPath =
       resolveExistingFile(path.join(sourcePluginSdkDir, subpath), PLUGIN_SDK_SOURCE_EXTENSIONS) ??
       resolveExistingFile(path.join(distPluginSdkDir, subpath), [".js"]);
     if (resolvedPath) {
-      for (const packageName of OPENCLAW_PLUGIN_SDK_PACKAGE_NAMES) {
-        aliasMap[`${packageName}/${subpath}`] = resolvedPath;
-      }
+      aliasMap[`${OPENCLAW_PLUGIN_SDK_PREFIX}/${subpath}`] = resolvedPath;
     }
   }
 
   const extensionApi =
-    resolveExistingFile(
-      path.join(packageRoot, "src", "extensionAPI"),
-      PLUGIN_SDK_SOURCE_EXTENSIONS,
-    ) ?? resolveExistingFile(path.join(packageRoot, "dist", "extensionAPI"), [".js"]);
+    resolveExistingFile(path.join(packageRoot, "src", "extensionAPI"), [".ts", ".js"]) ??
+    resolveExistingFile(path.join(packageRoot, "dist", "extensionAPI"), [".js"]);
   if (extensionApi) {
     aliasMap["openclaw/extension-api"] = extensionApi;
   }

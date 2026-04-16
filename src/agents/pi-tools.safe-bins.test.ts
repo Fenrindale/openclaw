@@ -1,23 +1,23 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
 import type { ExecApprovalsResolved } from "../infra/exec-approvals.js";
 import type { SafeBinProfileFixture } from "../infra/exec-safe-bin-policy.js";
-import { withEnvAsync } from "../test-utils/env.js";
+import { captureEnv } from "../test-utils/env.js";
 
-let createOpenClawCodingTools: typeof import("./pi-tools.js").createOpenClawCodingTools;
+const bundledPluginsDirSnapshot = captureEnv(["OPENCLAW_BUNDLED_PLUGINS_DIR"]);
 
-beforeAll(async () => {
-  await withEnvAsync(
-    {
-      OPENCLAW_BUNDLED_PLUGINS_DIR: path.join(os.tmpdir(), "openclaw-test-no-bundled-extensions"),
-    },
-    async () => {
-      ({ createOpenClawCodingTools } = await import("./pi-tools.js"));
-    },
+beforeAll(() => {
+  process.env.OPENCLAW_BUNDLED_PLUGINS_DIR = path.join(
+    os.tmpdir(),
+    "openclaw-test-no-bundled-extensions",
   );
+});
+
+afterAll(() => {
+  bundledPluginsDirSnapshot.restore();
 });
 
 vi.mock("../infra/shell-env.js", async () => {
@@ -76,6 +76,8 @@ vi.mock("../infra/exec-approvals.js", async () => {
   };
   return { ...mod, resolveExecApprovals: () => approvals };
 });
+
+const { createOpenClawCodingTools } = await import("./pi-tools.js");
 
 type ExecToolResult = {
   content: Array<{ type: string; text?: string }>;

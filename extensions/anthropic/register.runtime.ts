@@ -20,7 +20,6 @@ import {
 } from "openclaw/plugin-sdk/provider-auth";
 import { cloneFirstTemplateModel } from "openclaw/plugin-sdk/provider-model-shared";
 import { fetchClaudeUsage } from "openclaw/plugin-sdk/provider-usage";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 import * as claudeCliAuth from "./cli-auth-seam.js";
 import { buildAnthropicCliBackend } from "./cli-backend.js";
 import { buildAnthropicCliMigrationResult } from "./cli-migration.js";
@@ -51,6 +50,13 @@ const ANTHROPIC_MODERN_MODEL_PREFIXES = [
   "claude-opus-4-5",
   "claude-sonnet-4-5",
   "claude-haiku-4-5",
+] as const;
+const _ANTHROPIC_OAUTH_ALLOWLIST = [
+  "anthropic/claude-sonnet-4-6",
+  "anthropic/claude-opus-4-6",
+  "anthropic/claude-opus-4-5",
+  "anthropic/claude-sonnet-4-5",
+  "anthropic/claude-haiku-4-5",
 ] as const;
 const ANTHROPIC_SETUP_TOKEN_NOTE_LINES = [
   "Anthropic setup-token auth is supported in OpenClaw.",
@@ -186,7 +192,7 @@ function resolveAnthropic46ForwardCompatModel(params: {
   fallbackTemplateIds: readonly string[];
 }): ProviderRuntimeModel | undefined {
   const trimmedModelId = params.ctx.modelId.trim();
-  const lower = normalizeLowercaseStringOrEmpty(trimmedModelId);
+  const lower = trimmedModelId.toLowerCase();
   const is46Model =
     lower === params.dashModelId ||
     lower === params.dotModelId ||
@@ -211,7 +217,7 @@ function resolveAnthropic46ForwardCompatModel(params: {
     templateIds,
     ctx: params.ctx,
     patch:
-      normalizeLowercaseStringOrEmpty(params.ctx.provider) === CLAUDE_CLI_BACKEND_ID
+      params.ctx.provider.trim().toLowerCase() === CLAUDE_CLI_BACKEND_ID
         ? { provider: CLAUDE_CLI_BACKEND_ID }
         : undefined,
   });
@@ -240,18 +246,8 @@ function resolveAnthropicForwardCompatModel(
   );
 }
 
-function shouldUseAnthropicAdaptiveThinkingDefault(modelId: string): boolean {
-  const lowerModelId = normalizeLowercaseStringOrEmpty(modelId);
-  return (
-    lowerModelId.startsWith(ANTHROPIC_OPUS_46_MODEL_ID) ||
-    lowerModelId.startsWith(ANTHROPIC_OPUS_46_DOT_MODEL_ID) ||
-    lowerModelId.startsWith(ANTHROPIC_SONNET_46_MODEL_ID) ||
-    lowerModelId.startsWith(ANTHROPIC_SONNET_46_DOT_MODEL_ID)
-  );
-}
-
 function matchesAnthropicModernModel(modelId: string): boolean {
-  const lower = normalizeLowercaseStringOrEmpty(modelId);
+  const lower = modelId.trim().toLowerCase();
   return ANTHROPIC_MODERN_MODEL_PREFIXES.some((prefix) => lower.startsWith(prefix));
 }
 
@@ -373,6 +369,13 @@ async function runAnthropicCliMigrationNonInteractive(ctx: {
 export function registerAnthropicPlugin(api: OpenClawPluginApi): void {
   const providerId = "anthropic";
   const defaultAnthropicModel = "anthropic/claude-sonnet-4-6";
+  const _anthropicOauthAllowlist = [
+    "anthropic/claude-sonnet-4-6",
+    "anthropic/claude-opus-4-6",
+    "anthropic/claude-opus-4-5",
+    "anthropic/claude-sonnet-4-5",
+    "anthropic/claude-haiku-4-5",
+  ] as const;
   api.registerCliBackend(buildAnthropicCliBackend());
   api.registerProvider({
     id: providerId,
@@ -456,7 +459,7 @@ export function registerAnthropicPlugin(api: OpenClawPluginApi): void {
     applyConfigDefaults: ({ config, env }) => applyAnthropicConfigDefaults({ config, env }),
     resolveDynamicModel: (ctx) => resolveAnthropicForwardCompatModel(ctx),
     resolveSyntheticAuth: ({ provider }) =>
-      normalizeLowercaseStringOrEmpty(provider) === CLAUDE_CLI_BACKEND_ID
+      provider.trim().toLowerCase() === CLAUDE_CLI_BACKEND_ID
         ? resolveClaudeCliSyntheticAuth()
         : undefined,
     buildReplayPolicy: buildAnthropicReplayPolicy,
@@ -464,7 +467,11 @@ export function registerAnthropicPlugin(api: OpenClawPluginApi): void {
     resolveReasoningOutputMode: () => "native",
     wrapStreamFn: wrapAnthropicProviderStream,
     resolveDefaultThinkingLevel: ({ modelId }) =>
-      matchesAnthropicModernModel(modelId) && shouldUseAnthropicAdaptiveThinkingDefault(modelId)
+      matchesAnthropicModernModel(modelId) &&
+      (modelId.toLowerCase().startsWith(ANTHROPIC_OPUS_46_MODEL_ID) ||
+        modelId.toLowerCase().startsWith(ANTHROPIC_OPUS_46_DOT_MODEL_ID) ||
+        modelId.toLowerCase().startsWith(ANTHROPIC_SONNET_46_MODEL_ID) ||
+        modelId.toLowerCase().startsWith(ANTHROPIC_SONNET_46_DOT_MODEL_ID))
         ? "adaptive"
         : undefined,
     resolveUsageAuth: async (ctx) => await ctx.resolveOAuthToken(),

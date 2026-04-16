@@ -15,7 +15,6 @@ import {
   failTaskRunByRunId,
 } from "../../tasks/task-executor.js";
 import { resetTaskRegistryForTests } from "../../tasks/task-registry.js";
-import { configureTaskRegistryRuntime } from "../../tasks/task-registry.store.js";
 import { buildStatusReply, buildStatusText } from "./commands-status.js";
 import { buildCommandTestParams } from "./commands.test-harness.js";
 
@@ -47,8 +46,6 @@ async function buildStatusReplyForTest(params: { sessionKey?: string; verbose?: 
     resolveDefaultThinkingLevel: commandParams.resolveDefaultThinkingLevel,
     isGroup: commandParams.isGroup,
     defaultGroupActivation: commandParams.defaultGroupActivation,
-    modelAuthOverride: "api-key",
-    activeModelAuthOverride: "api-key",
   });
 }
 
@@ -87,35 +84,15 @@ function writeTranscriptUsageLog(params: {
   );
 }
 
-function configureInMemoryTaskRegistryStoreForTests(): void {
-  configureTaskRegistryRuntime({
-    store: {
-      loadSnapshot: () => ({
-        tasks: new Map(),
-        deliveryStates: new Map(),
-      }),
-      saveSnapshot: () => {},
-      upsertTaskWithDeliveryState: () => {},
-      upsertTask: () => {},
-      deleteTaskWithDeliveryState: () => {},
-      deleteTask: () => {},
-      upsertDeliveryState: () => {},
-      deleteDeliveryState: () => {},
-      close: () => {},
-    },
-  });
-}
-
 describe("buildStatusReply subagent summary", () => {
   beforeEach(() => {
     resetSubagentRegistryForTests();
-    resetTaskRegistryForTests({ persist: false });
-    configureInMemoryTaskRegistryStoreForTests();
+    resetTaskRegistryForTests();
   });
 
   afterEach(() => {
     resetSubagentRegistryForTests();
-    resetTaskRegistryForTests({ persist: false });
+    resetTaskRegistryForTests();
   });
 
   it("counts ended orchestrators with active descendants as active", async () => {
@@ -475,8 +452,6 @@ describe("buildStatusReply subagent summary", () => {
         resolveDefaultThinkingLevel: async () => undefined,
         isGroup: false,
         defaultGroupActivation: () => "mention",
-        modelAuthOverride: "api-key",
-        activeModelAuthOverride: "api-key",
       });
 
       expect(normalizeTestText(text)).toContain("Context: 1.0k/32k");

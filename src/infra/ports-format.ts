@@ -1,11 +1,8 @@
 import { formatCliCommand } from "../cli/command-format.js";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 import type { PortListener, PortListenerKind, PortUsage } from "./ports-types.js";
 
 export function classifyPortListener(listener: PortListener, port: number): PortListenerKind {
-  const raw = normalizeLowercaseStringOrEmpty(
-    `${listener.commandLine ?? ""} ${listener.command ?? ""}`,
-  );
+  const raw = `${listener.commandLine ?? ""} ${listener.command ?? ""}`.trim().toLowerCase();
   if (raw.includes("openclaw")) {
     return "gateway";
   }
@@ -31,15 +28,13 @@ function parseListenerAddress(address: string): { host: string; port: number } |
   const bracketMatch = normalized.match(/^\[([^\]]+)\]:(\d+)$/);
   if (bracketMatch) {
     const port = Number.parseInt(bracketMatch[2], 10);
-    return Number.isFinite(port)
-      ? { host: normalizeLowercaseStringOrEmpty(bracketMatch[1]), port }
-      : null;
+    return Number.isFinite(port) ? { host: bracketMatch[1].toLowerCase(), port } : null;
   }
   const lastColon = normalized.lastIndexOf(":");
   if (lastColon <= 0 || lastColon >= normalized.length - 1) {
     return null;
   }
-  const host = normalizeLowercaseStringOrEmpty(normalized.slice(0, lastColon));
+  const host = normalized.slice(0, lastColon).trim().toLowerCase();
   const portToken = normalized.slice(lastColon + 1).trim();
   if (!/^\d+$/.test(portToken)) {
     return null;

@@ -10,7 +10,6 @@
  * 6. Optionally sends a proactive follow-up to the user
  */
 
-import { normalizeOptionalLowercaseString } from "openclaw/plugin-sdk/text-runtime";
 import {
   dispatchReplyFromConfigWithSettledDispatcher,
   type OpenClawConfig,
@@ -242,9 +241,7 @@ export async function runFeedbackReflection(params: RunFeedbackReflectionParams)
     log.debug?.("failed to store reflection learning", { error: formatUnknownError(err) });
   }
 
-  const conversationType = normalizeOptionalLowercaseString(
-    params.conversationRef.conversation?.conversationType,
-  );
+  const conversationType = params.conversationRef.conversation?.conversationType?.toLowerCase();
   const shouldNotify =
     conversationType === "personal" &&
     parsedReflection.followUp &&

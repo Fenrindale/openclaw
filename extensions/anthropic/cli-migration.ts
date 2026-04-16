@@ -3,7 +3,6 @@ import {
   type OpenClawConfig,
   type ProviderAuthResult,
 } from "openclaw/plugin-sdk/provider-auth";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 import {
   readClaudeCliCredentialsForSetup,
   readClaudeCliCredentialsForSetupNonInteractive,
@@ -20,11 +19,11 @@ type ClaudeCliCredential = NonNullable<ReturnType<typeof readClaudeCliCredential
 
 function toClaudeCliModelRef(raw: string): string | null {
   const trimmed = raw.trim();
-  if (!normalizeLowercaseStringOrEmpty(trimmed).startsWith("anthropic/")) {
+  if (!trimmed.toLowerCase().startsWith("anthropic/")) {
     return null;
   }
   const modelId = trimmed.slice("anthropic/".length).trim();
-  if (!normalizeLowercaseStringOrEmpty(modelId).startsWith("claude-")) {
+  if (!modelId.toLowerCase().startsWith("claude-")) {
     return null;
   }
   return `claude-cli/${modelId}`;

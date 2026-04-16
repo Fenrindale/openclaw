@@ -1,18 +1,11 @@
 import { getChannelPlugin } from "../../channels/plugins/index.js";
-import type {
-  ChannelResolveKind,
-  ChannelResolveResult,
-} from "../../channels/plugins/types.adapters.js";
+import type { ChannelResolveKind, ChannelResolveResult } from "../../channels/plugins/types.js";
 import { resolveCommandConfigWithSecrets } from "../../cli/command-config-resolution.js";
 import { getChannelsCommandSecretTargetIds } from "../../cli/command-secret-targets.js";
 import { loadConfig, readConfigFileSnapshot, replaceConfigFile } from "../../config/config.js";
 import { danger } from "../../globals.js";
 import { resolveMessageChannelSelection } from "../../infra/outbound/channel-selection.js";
 import { type RuntimeEnv, writeRuntimeJson } from "../../runtime.js";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalLowercaseString,
-} from "../../shared/string-coerce.js";
 import { resolveInstallableChannelPlugin } from "../channel-setup/channel-plugin-resolution.js";
 
 export type ChannelsResolveOptions = {
@@ -78,10 +71,10 @@ function detectAutoKindForPlugin(
     return generic;
   }
   const trimmed = input.trim();
-  const lowered = normalizeLowercaseStringOrEmpty(trimmed);
+  const lowered = trimmed.toLowerCase();
   const prefixes = [plugin.id, ...(plugin.meta?.aliases ?? [])]
-    .map((entry) => normalizeOptionalLowercaseString(entry))
-    .filter((entry): entry is string => Boolean(entry));
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean);
   for (const prefix of prefixes) {
     if (!lowered.startsWith(`${prefix}:`)) {
       continue;

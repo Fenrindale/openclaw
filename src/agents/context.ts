@@ -3,10 +3,9 @@
 
 import path from "node:path";
 import { loadConfig } from "../config/config.js";
-import type { OpenClawConfig } from "../config/types.openclaw.js";
+import type { OpenClawConfig } from "../config/config.js";
 import { computeBackoff, type BackoffPolicy } from "../infra/backoff.js";
 import { consumeRootOptionToken, FLAG_TERMINATOR } from "../infra/cli-root-options.js";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 import { resolveOpenClawAgentDir } from "./agent-paths.js";
 import { lookupCachedContextTokens, MODEL_CONTEXT_TOKEN_CACHE } from "./context-cache.js";
 import { CONTEXT_WINDOW_RUNTIME_STATE } from "./context-runtime-state.js";
@@ -93,7 +92,10 @@ function loadModelsConfigRuntime() {
 }
 
 function isLikelyOpenClawCliProcess(argv: string[] = process.argv): boolean {
-  const entryBasename = normalizeLowercaseStringOrEmpty(path.basename(argv[1] ?? ""));
+  const entryBasename = path
+    .basename(argv[1] ?? "")
+    .trim()
+    .toLowerCase();
   return (
     entryBasename === "openclaw" ||
     entryBasename === "openclaw.mjs" ||
@@ -273,9 +275,9 @@ function resolveConfiguredModelParams(
   if (!models) {
     return undefined;
   }
-  const key = normalizeLowercaseStringOrEmpty(`${provider}/${model}`);
+  const key = `${provider}/${model}`.trim().toLowerCase();
   for (const [rawKey, entry] of Object.entries(models)) {
-    if (normalizeLowercaseStringOrEmpty(rawKey) === key) {
+    if (rawKey.trim().toLowerCase() === key) {
       const params = (entry as AgentModelEntry | undefined)?.params;
       return params && typeof params === "object" ? params : undefined;
     }
@@ -358,9 +360,7 @@ function resolveConfiguredProviderContextTokens(
   }
 
   // 1. Exact match (case-insensitive, no alias expansion).
-  const exactResult = findContextTokens(
-    (id) => normalizeLowercaseStringOrEmpty(id) === normalizeLowercaseStringOrEmpty(provider),
-  );
+  const exactResult = findContextTokens((id) => id.trim().toLowerCase() === provider.toLowerCase());
   if (exactResult !== undefined) {
     return exactResult;
   }
@@ -374,7 +374,7 @@ function isAnthropic1MModel(provider: string, model: string): boolean {
   if (provider !== "anthropic") {
     return false;
   }
-  const normalized = normalizeLowercaseStringOrEmpty(model);
+  const normalized = model.trim().toLowerCase();
   const modelId = normalized.includes("/")
     ? (normalized.split("/").at(-1) ?? normalized)
     : normalized;

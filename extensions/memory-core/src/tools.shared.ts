@@ -8,7 +8,6 @@ import {
   type AnyAgentTool,
   type OpenClawConfig,
 } from "openclaw/plugin-sdk/memory-core-host-runtime-core";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 
 type MemoryToolRuntime = typeof import("./tools.runtime.js");
 type MemorySearchManagerResult = Awaited<
@@ -119,7 +118,7 @@ export function createMemoryTool(params: {
 
 export function buildMemorySearchUnavailableResult(error: string | undefined) {
   const reason = (error ?? "memory search unavailable").trim() || "memory search unavailable";
-  const isQuotaError = /insufficient_quota|quota|429/.test(normalizeLowercaseStringOrEmpty(reason));
+  const isQuotaError = /insufficient_quota|quota|429/.test(reason.toLowerCase());
   const warning = isQuotaError
     ? "Memory search is unavailable because the embedding provider quota is exhausted."
     : "Memory search is unavailable due to an embedding/provider error.";
@@ -133,11 +132,6 @@ export function buildMemorySearchUnavailableResult(error: string | undefined) {
     error: reason,
     warning,
     action,
-    debug: {
-      warning,
-      action,
-      error: reason,
-    },
   };
 }
 

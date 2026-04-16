@@ -1,11 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 import { createTestPluginApi } from "../../test/helpers/plugins/plugin-api.js";
-import {
-  browserPluginNodeHostCommands,
-  browserPluginReload,
-  browserSecurityAuditCollectors,
-  registerBrowserPlugin,
-} from "./plugin-registration.js";
 import type { OpenClawPluginApi } from "./runtime-api.js";
 
 const runtimeApiMocks = vi.hoisted(() => ({
@@ -32,6 +26,8 @@ vi.mock("./register.runtime.js", async () => {
   };
 });
 
+import browserPlugin from "./index.js";
+
 function createApi() {
   const registerCli = vi.fn();
   const registerGatewayMethod = vi.fn();
@@ -53,19 +49,19 @@ function createApi() {
 
 describe("browser plugin", () => {
   it("exposes static browser metadata on the plugin definition", () => {
-    expect(browserPluginReload).toEqual({ restartPrefixes: ["browser"] });
-    expect(browserPluginNodeHostCommands).toEqual([
+    expect(browserPlugin.reload).toEqual({ restartPrefixes: ["browser"] });
+    expect(browserPlugin.nodeHostCommands).toEqual([
       expect.objectContaining({
         command: "browser.proxy",
         cap: "browser",
       }),
     ]);
-    expect(browserSecurityAuditCollectors).toHaveLength(1);
+    expect(browserPlugin.securityAuditCollectors).toHaveLength(1);
   });
 
   it("forwards per-session browser options into the tool factory", async () => {
     const { api, registerTool } = createApi();
-    registerBrowserPlugin(api);
+    await browserPlugin.register(api);
 
     const tool = registerTool.mock.calls[0]?.[0];
     if (typeof tool !== "function") {

@@ -1,5 +1,4 @@
 import { spawn } from "node:child_process";
-import { normalizeOptionalLowercaseString } from "../shared/string-coerce.js";
 import { formatErrorMessage } from "./errors.js";
 import { triggerOpenClawRestart } from "./restart.js";
 import { detectRespawnSupervisor } from "./supervisor-markers.js";
@@ -13,7 +12,10 @@ export type GatewayRespawnResult = {
 };
 
 function isTruthy(value: string | undefined): boolean {
-  const normalized = normalizeOptionalLowercaseString(value);
+  if (!value) {
+    return false;
+  }
+  const normalized = value.trim().toLowerCase();
   return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
 }
 

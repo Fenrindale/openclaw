@@ -1,5 +1,5 @@
 import {
-  createWebSearchProviderContractFields,
+  enablePluginInConfig,
   type WebSearchProviderPlugin,
 } from "openclaw/plugin-sdk/provider-web-search-contract";
 
@@ -16,11 +16,9 @@ export function createOllamaWebSearchProvider(): WebSearchProviderPlugin {
     docsUrl: "https://docs.openclaw.ai/tools/web",
     autoDetectOrder: 110,
     credentialPath: "",
-    ...createWebSearchProviderContractFields({
-      credentialPath: "",
-      searchCredential: { type: "none" },
-      selectionPluginId: "ollama",
-    }),
+    getCredentialValue: () => undefined,
+    setCredentialValue: () => {},
+    applySelectionConfig: (config) => enablePluginInConfig(config, "ollama").config,
     createTool: () => null,
   };
 }

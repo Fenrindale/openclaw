@@ -9,7 +9,7 @@ import type {
   ChannelCapabilitiesDiagnostics,
   ChannelCapabilitiesDisplayLine,
   ChannelPlugin,
-} from "../../channels/plugins/types.public.js";
+} from "../../channels/plugins/types.js";
 import {
   readConfigFileSnapshot,
   replaceConfigFile,
@@ -18,10 +18,6 @@ import {
 import { danger } from "../../globals.js";
 import { formatErrorMessage } from "../../infra/errors.js";
 import { defaultRuntime, type RuntimeEnv, writeRuntimeJson } from "../../runtime.js";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-} from "../../shared/string-coerce.js";
 import { theme } from "../../terminal/theme.js";
 import { resolveInstallableChannelPlugin } from "../channel-setup/channel-plugin-resolution.js";
 import { formatChannelAccountLabel, requireValidConfig } from "./shared.js";
@@ -190,7 +186,7 @@ async function resolveChannelReports(params: {
       includeActions: true,
     }).actions;
     const actions = Array.from(
-      new Set<string>(["send", "broadcast", ...discoveredActions.map((action) => action)]),
+      new Set<string>(["send", "broadcast", ...discoveredActions.map((action) => String(action))]),
     );
 
     reports.push({
@@ -199,7 +195,7 @@ async function resolveChannelReports(params: {
       accountId,
       accountName:
         typeof (resolvedAccount as { name?: string }).name === "string"
-          ? normalizeOptionalString((resolvedAccount as { name?: string }).name)
+          ? (resolvedAccount as { name?: string }).name?.trim() || undefined
           : undefined,
       configured,
       enabled,
@@ -223,8 +219,8 @@ export async function channelsCapabilitiesCommand(
   }
   let cfg = loadedCfg;
   const timeoutMs = normalizeTimeout(opts.timeout, 10_000);
-  const rawChannel = normalizeLowercaseStringOrEmpty(opts.channel);
-  const rawTarget = normalizeOptionalString(opts.target) ?? "";
+  const rawChannel = typeof opts.channel === "string" ? opts.channel.trim().toLowerCase() : "";
+  const rawTarget = typeof opts.target === "string" ? opts.target.trim() : "";
 
   if (opts.account && (!rawChannel || rawChannel === "all")) {
     runtime.error(danger("--account requires a specific --channel."));
@@ -266,7 +262,7 @@ export async function channelsCapabilitiesCommand(
 
   const reports: ChannelCapabilitiesReport[] = [];
   for (const plugin of selected) {
-    const accountOverride = normalizeOptionalString(opts.account);
+    const accountOverride = opts.account?.trim() || undefined;
     reports.push(
       ...(await resolveChannelReports({
         plugin,

@@ -5,7 +5,6 @@ import {
   type GroupToolPolicyConfig,
 } from "openclaw/plugin-sdk/channel-policy";
 import { normalizeAtHashSlug } from "openclaw/plugin-sdk/string-normalization-runtime";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import type { DiscordConfig } from "./runtime-api.js";
 
 function normalizeDiscordSlug(value?: string | null) {
@@ -22,7 +21,7 @@ function resolveDiscordGuildEntry(guilds: DiscordConfig["guilds"], groupSpace?: 
   if (!guilds || Object.keys(guilds).length === 0) {
     return null;
   }
-  const space = normalizeOptionalString(groupSpace) ?? "";
+  const space = groupSpace?.trim() ?? "";
   if (space && guilds[space]) {
     return guilds[space];
   }

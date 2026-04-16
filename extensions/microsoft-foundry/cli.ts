@@ -1,8 +1,4 @@
 import { execFile, execFileSync, spawn } from "node:child_process";
-import {
-  normalizeOptionalString,
-  normalizeStringifiedOptionalString,
-} from "openclaw/plugin-sdk/text-runtime";
 import type { AzAccessToken, AzAccount } from "./shared.js";
 import { COGNITIVE_SERVICES_RESOURCE } from "./shared.js";
 
@@ -37,20 +33,16 @@ function summarizeAzErrorMessage(raw: string): string {
 }
 
 function buildAzCommandError(error: Error, stderr: string, stdout: string): Error {
-  const details = summarizeAzErrorMessage(`${stderr ?? ""} ${stdout ?? ""}`);
+  const details = summarizeAzErrorMessage(`${String(stderr ?? "")} ${String(stdout ?? "")}`);
   return new Error(details ? `${error.message}: ${details}` : error.message);
 }
 
 export function execAz(args: string[]): string {
-  return (
-    normalizeOptionalString(
-      execFileSync("az", args, {
-        encoding: "utf-8",
-        timeout: 30_000,
-        shell: process.platform === "win32",
-      }),
-    ) ?? ""
-  );
+  return execFileSync("az", args, {
+    encoding: "utf-8",
+    timeout: 30_000,
+    shell: process.platform === "win32",
+  }).trim();
 }
 
 export async function execAzAsync(args: string[]): Promise<string> {
@@ -65,10 +57,10 @@ export async function execAzAsync(args: string[]): Promise<string> {
       },
       (error, stdout, stderr) => {
         if (error) {
-          reject(buildAzCommandError(error, stderr ?? "", stdout ?? ""));
+          reject(buildAzCommandError(error, String(stderr ?? ""), String(stdout ?? "")));
           return;
         }
-        resolve(normalizeStringifiedOptionalString(stdout) ?? "");
+        resolve(String(stdout).trim());
       },
     );
   });
@@ -185,7 +177,7 @@ export async function azLoginDeviceCodeWithOptions(params: {
         resolve();
         return;
       }
-      const output = normalizeOptionalString([...stderrChunks, ...stdoutChunks].join("")) ?? "";
+      const output = [...stderrChunks, ...stdoutChunks].join("").trim();
       reject(
         new Error(
           output

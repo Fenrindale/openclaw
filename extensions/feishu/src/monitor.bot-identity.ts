@@ -1,4 +1,3 @@
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import type { RuntimeEnv } from "../runtime-api.js";
 import { waitForAbortableDelay } from "./async.js";
 import { fetchBotIdentityForMonitor, type FeishuMonitorBotIdentity } from "./monitor.startup.js";
@@ -13,8 +12,8 @@ export function applyBotIdentityState(
   accountId: string,
   identity: FeishuMonitorBotIdentity,
 ): { botOpenId?: string; botName?: string } {
-  const botOpenId = normalizeOptionalString(identity.botOpenId);
-  const botName = normalizeOptionalString(identity.botName);
+  const botOpenId = identity.botOpenId?.trim() || undefined;
+  const botName = identity.botName?.trim() || undefined;
 
   botOpenIds.set(accountId, botOpenId ?? "");
   if (botName) {

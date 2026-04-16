@@ -1,7 +1,6 @@
 import crypto from "node:crypto";
 import { formatErrorMessage } from "../infra/errors.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
-import { normalizeOptionalString } from "../shared/string-coerce.js";
 import {
   getTaskFlowRegistryObservers,
   getTaskFlowRegistryStore,
@@ -58,26 +57,6 @@ type FlowRecordPatch = Omit<
   endedAt?: number | null;
 };
 
-export type CreateFlowRecordParams = {
-  syncMode?: TaskFlowSyncMode;
-  ownerKey: string;
-  requesterOrigin?: TaskFlowRecord["requesterOrigin"];
-  controllerId?: string | null;
-  revision?: number;
-  status?: TaskFlowStatus;
-  notifyPolicy?: TaskNotifyPolicy;
-  goal: string;
-  currentStep?: string | null;
-  blockedTaskId?: string | null;
-  blockedSummary?: string | null;
-  stateJson?: JsonValue | null;
-  waitJson?: JsonValue | null;
-  cancelRequestedAt?: number | null;
-  createdAt?: number;
-  updatedAt?: number;
-  endedAt?: number | null;
-};
-
 export type TaskFlowUpdateResult =
   | {
       applied: true;
@@ -113,7 +92,7 @@ function normalizeRestoredFlowRecord(record: TaskFlowRecord): TaskFlowRecord {
   const syncMode = record.syncMode === "task_mirrored" ? "task_mirrored" : "managed";
   const controllerId =
     syncMode === "managed"
-      ? (normalizeOptionalString(record.controllerId) ?? "core/legacy-restored")
+      ? (normalizeText(record.controllerId) ?? "core/legacy-restored")
       : undefined;
   return {
     ...record,
@@ -123,9 +102,9 @@ function normalizeRestoredFlowRecord(record: TaskFlowRecord): TaskFlowRecord {
       ? { requesterOrigin: cloneStructuredValue(record.requesterOrigin)! }
       : {}),
     ...(controllerId ? { controllerId } : {}),
-    currentStep: normalizeOptionalString(record.currentStep),
-    blockedTaskId: normalizeOptionalString(record.blockedTaskId),
-    blockedSummary: normalizeOptionalString(record.blockedSummary),
+    currentStep: normalizeText(record.currentStep),
+    blockedTaskId: normalizeText(record.blockedTaskId),
+    blockedSummary: normalizeText(record.blockedSummary),
     ...(record.stateJson !== undefined
       ? { stateJson: cloneStructuredValue(record.stateJson)! }
       : {}),
@@ -156,12 +135,22 @@ function ensureNotifyPolicy(notifyPolicy?: TaskNotifyPolicy): TaskNotifyPolicy {
   return notifyPolicy ?? "done_only";
 }
 
+function normalizeOwnerKey(ownerKey?: string): string | undefined {
+  const trimmed = ownerKey?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function normalizeText(value?: string | null): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
 function normalizeJsonBlob(value: JsonValue | null | undefined): JsonValue | undefined {
   return value === undefined ? undefined : cloneStructuredValue(value);
 }
 
 function assertFlowOwnerKey(ownerKey: string): string {
-  const normalized = normalizeOptionalString(ownerKey);
+  const normalized = normalizeOwnerKey(ownerKey);
   if (!normalized) {
     throw new Error("Flow ownerKey is required.");
   }
@@ -169,11 +158,15 @@ function assertFlowOwnerKey(ownerKey: string): string {
 }
 
 function assertControllerId(controllerId?: string | null): string {
-  const normalized = normalizeOptionalString(controllerId);
+  const normalized = normalizeText(controllerId);
   if (!normalized) {
     throw new Error("Managed flow controllerId is required.");
   }
   return normalized;
+}
+
+function resolveFlowGoal(task: Pick<TaskRecord, "label" | "task">): string {
+  return task.label?.trim() || task.task.trim() || "Background task";
 }
 
 function resolveFlowBlockedSummary(
@@ -182,9 +175,7 @@ function resolveFlowBlockedSummary(
   if (task.status !== "succeeded" || task.terminalOutcome !== "blocked") {
     return undefined;
   }
-  return (
-    normalizeOptionalString(task.terminalSummary) ?? normalizeOptionalString(task.progressSummary)
-  );
+  return task.terminalSummary?.trim() || task.progressSummary?.trim() || undefined;
 }
 
 export function deriveTaskFlowStatusFromTask(
@@ -261,7 +252,25 @@ function persistFlowDelete(flowId: string) {
   persistFlowRegistry();
 }
 
-function buildFlowRecord(params: CreateFlowRecordParams): TaskFlowRecord {
+function buildFlowRecord(params: {
+  syncMode?: TaskFlowSyncMode;
+  ownerKey: string;
+  requesterOrigin?: TaskFlowRecord["requesterOrigin"];
+  controllerId?: string | null;
+  revision?: number;
+  status?: TaskFlowStatus;
+  notifyPolicy?: TaskNotifyPolicy;
+  goal: string;
+  currentStep?: string | null;
+  blockedTaskId?: string | null;
+  blockedSummary?: string | null;
+  stateJson?: JsonValue | null;
+  waitJson?: JsonValue | null;
+  cancelRequestedAt?: number | null;
+  createdAt?: number;
+  updatedAt?: number;
+  endedAt?: number | null;
+}): TaskFlowRecord {
   const now = params.createdAt ?? Date.now();
   const syncMode = params.syncMode ?? "managed";
   const controllerId = syncMode === "managed" ? assertControllerId(params.controllerId) : undefined;
@@ -277,9 +286,9 @@ function buildFlowRecord(params: CreateFlowRecordParams): TaskFlowRecord {
     status: params.status ?? "queued",
     notifyPolicy: ensureNotifyPolicy(params.notifyPolicy),
     goal: params.goal,
-    currentStep: normalizeOptionalString(params.currentStep),
-    blockedTaskId: normalizeOptionalString(params.blockedTaskId),
-    blockedSummary: normalizeOptionalString(params.blockedSummary),
+    currentStep: normalizeText(params.currentStep),
+    blockedTaskId: normalizeText(params.blockedTaskId),
+    blockedSummary: normalizeText(params.blockedSummary),
     ...(normalizeJsonBlob(params.stateJson) !== undefined
       ? { stateJson: normalizeJsonBlob(params.stateJson)! }
       : {}),
@@ -295,9 +304,7 @@ function buildFlowRecord(params: CreateFlowRecordParams): TaskFlowRecord {
 
 function applyFlowPatch(current: TaskFlowRecord, patch: FlowRecordPatch): TaskFlowRecord {
   const controllerId =
-    patch.controllerId === undefined
-      ? current.controllerId
-      : normalizeOptionalString(patch.controllerId);
+    patch.controllerId === undefined ? current.controllerId : normalizeText(patch.controllerId);
   if (current.syncMode === "managed") {
     assertControllerId(controllerId);
   }
@@ -308,17 +315,15 @@ function applyFlowPatch(current: TaskFlowRecord, patch: FlowRecordPatch): TaskFl
     ...(patch.goal ? { goal: patch.goal } : {}),
     controllerId,
     currentStep:
-      patch.currentStep === undefined
-        ? current.currentStep
-        : normalizeOptionalString(patch.currentStep),
+      patch.currentStep === undefined ? current.currentStep : normalizeText(patch.currentStep),
     blockedTaskId:
       patch.blockedTaskId === undefined
         ? current.blockedTaskId
-        : normalizeOptionalString(patch.blockedTaskId),
+        : normalizeText(patch.blockedTaskId),
     blockedSummary:
       patch.blockedSummary === undefined
         ? current.blockedSummary
-        : normalizeOptionalString(patch.blockedSummary),
+        : normalizeText(patch.blockedSummary),
     stateJson:
       patch.stateJson === undefined ? current.stateJson : normalizeJsonBlob(patch.stateJson),
     waitJson: patch.waitJson === undefined ? current.waitJson : normalizeJsonBlob(patch.waitJson),
@@ -343,7 +348,25 @@ function writeFlowRecord(next: TaskFlowRecord, previous?: TaskFlowRecord): TaskF
   return cloneFlowRecord(next);
 }
 
-export function createFlowRecord(params: CreateFlowRecordParams): TaskFlowRecord {
+export function createFlowRecord(params: {
+  syncMode?: TaskFlowSyncMode;
+  ownerKey: string;
+  requesterOrigin?: TaskFlowRecord["requesterOrigin"];
+  controllerId?: string | null;
+  revision?: number;
+  status?: TaskFlowStatus;
+  notifyPolicy?: TaskNotifyPolicy;
+  goal: string;
+  currentStep?: string | null;
+  blockedTaskId?: string | null;
+  blockedSummary?: string | null;
+  stateJson?: JsonValue | null;
+  waitJson?: JsonValue | null;
+  cancelRequestedAt?: number | null;
+  createdAt?: number;
+  updatedAt?: number;
+  endedAt?: number | null;
+}): TaskFlowRecord {
   ensureFlowRegistryReady();
   const record = buildFlowRecord(params);
   return writeFlowRecord(record);
@@ -407,10 +430,9 @@ export function createTaskFlowForTask(params: {
     requesterOrigin: params.requesterOrigin,
     status: terminalFlowStatus,
     notifyPolicy: params.task.notifyPolicy,
-    goal:
-      normalizeOptionalString(params.task.label) ?? (params.task.task.trim() || "Background task"),
+    goal: resolveFlowGoal(params.task),
     blockedTaskId:
-      terminalFlowStatus === "blocked" ? normalizeOptionalString(params.task.taskId) : undefined,
+      terminalFlowStatus === "blocked" ? params.task.taskId.trim() || undefined : undefined,
     blockedSummary: resolveFlowBlockedSummary(params.task),
     createdAt: params.task.createdAt,
     updatedAt: params.task.lastEventAt ?? params.task.createdAt,
@@ -471,8 +493,7 @@ export function setFlowWaiting(params: {
     expectedRevision: params.expectedRevision,
     patch: {
       status:
-        normalizeOptionalString(params.blockedTaskId) ||
-        normalizeOptionalString(params.blockedSummary)
+        normalizeText(params.blockedTaskId) || normalizeText(params.blockedSummary)
           ? "blocked"
           : "waiting",
       currentStep: params.currentStep,
@@ -615,7 +636,7 @@ export function syncFlowFromTask(
   return updateFlowRecordByIdUnchecked(flowId, {
     status: terminalFlowStatus,
     notifyPolicy: task.notifyPolicy,
-    goal: normalizeOptionalString(task.label) ?? (task.task.trim() || "Background task"),
+    goal: resolveFlowGoal(task),
     blockedTaskId: terminalFlowStatus === "blocked" ? task.taskId.trim() || null : null,
     blockedSummary:
       terminalFlowStatus === "blocked" ? (resolveFlowBlockedSummary(task) ?? null) : null,

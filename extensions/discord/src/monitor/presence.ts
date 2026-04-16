@@ -1,6 +1,5 @@
 import type { Activity, UpdatePresenceData } from "@buape/carbon/gateway";
 import type { DiscordAccountConfig } from "openclaw/plugin-sdk/config-runtime";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 
 const DEFAULT_CUSTOM_ACTIVITY_TYPE = 4;
 const CUSTOM_STATUS_NAME = "Custom Status";
@@ -13,10 +12,10 @@ type DiscordPresenceConfig = Pick<
 export function resolveDiscordPresenceUpdate(
   config: DiscordPresenceConfig,
 ): UpdatePresenceData | null {
-  const activityText = normalizeOptionalString(config.activity) ?? "";
-  const status = normalizeOptionalString(config.status) ?? "";
+  const activityText = typeof config.activity === "string" ? config.activity.trim() : "";
+  const status = typeof config.status === "string" ? config.status.trim() : "";
   const activityType = config.activityType;
-  const activityUrl = normalizeOptionalString(config.activityUrl) ?? "";
+  const activityUrl = typeof config.activityUrl === "string" ? config.activityUrl.trim() : "";
 
   const hasActivity = Boolean(activityText);
   const hasStatus = Boolean(status);

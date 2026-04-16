@@ -1,7 +1,3 @@
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalLowercaseString,
-} from "openclaw/plugin-sdk/text-runtime";
 import { browserCloseTab } from "./client.js";
 
 export type TrackedSessionBrowserTab = {
@@ -15,7 +11,7 @@ export type TrackedSessionBrowserTab = {
 const trackedTabsBySession = new Map<string, Map<string, TrackedSessionBrowserTab>>();
 
 function normalizeSessionKey(raw: string): string {
-  return normalizeOptionalLowercaseString(raw) ?? "";
+  return raw.trim().toLowerCase();
 }
 
 function normalizeTargetId(raw: string): string {
@@ -23,7 +19,11 @@ function normalizeTargetId(raw: string): string {
 }
 
 function normalizeProfile(raw?: string): string | undefined {
-  return normalizeOptionalLowercaseString(raw);
+  if (!raw) {
+    return undefined;
+  }
+  const trimmed = raw.trim();
+  return trimmed ? trimmed.toLowerCase() : undefined;
 }
 
 function normalizeBaseUrl(raw?: string): string | undefined {
@@ -39,7 +39,7 @@ function toTrackedTabId(params: { targetId: string; baseUrl?: string; profile?: 
 }
 
 function isIgnorableCloseError(err: unknown): boolean {
-  const message = normalizeLowercaseStringOrEmpty(String(err));
+  const message = String(err).toLowerCase();
   return (
     message.includes("tab not found") ||
     message.includes("target closed") ||

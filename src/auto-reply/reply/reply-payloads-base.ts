@@ -1,6 +1,5 @@
 import type { ReplyToMode } from "../../config/types.js";
 import { hasReplyPayloadContent } from "../../interactive/payload.js";
-import { normalizeOptionalString } from "../../shared/string-coerce.js";
 import type { OriginatingChannelType } from "../templating.js";
 import type { ReplyPayload, ReplyThreadingPolicy } from "../types.js";
 import { extractReplyToTag } from "./reply-tags.js";
@@ -10,11 +9,11 @@ import {
 } from "./reply-threading.js";
 
 export function formatBtwTextForExternalDelivery(payload: ReplyPayload): string | undefined {
-  const text = normalizeOptionalString(payload.text);
+  const text = payload.text?.trim();
   if (!text) {
     return payload.text;
   }
-  const question = normalizeOptionalString(payload.btw?.question);
+  const question = payload.btw?.question?.trim();
   if (!question) {
     return payload.text;
   }
@@ -29,8 +28,8 @@ function resolveReplyThreadingForPayload(params: {
   currentMessageId?: string;
   replyThreading?: ReplyThreadingPolicy;
 }): ReplyPayload {
-  const implicitReplyToId = normalizeOptionalString(params.implicitReplyToId);
-  const currentMessageId = normalizeOptionalString(params.currentMessageId);
+  const implicitReplyToId = params.implicitReplyToId?.trim() || undefined;
+  const currentMessageId = params.currentMessageId?.trim() || undefined;
   const allowImplicitReplyToCurrentMessage = resolveImplicitCurrentMessageReplyAllowance(
     params.replyToMode,
     params.replyThreading,
@@ -92,7 +91,7 @@ export function applyReplyThreading(params: {
 }): ReplyPayload[] {
   const { payloads, replyToMode, replyToChannel, currentMessageId, replyThreading } = params;
   const applyReplyToMode = createReplyToModeFilterForChannel(replyToMode, replyToChannel);
-  const implicitReplyToId = normalizeOptionalString(currentMessageId);
+  const implicitReplyToId = currentMessageId?.trim() || undefined;
   return payloads
     .map((payload) =>
       resolveReplyThreadingForPayload({

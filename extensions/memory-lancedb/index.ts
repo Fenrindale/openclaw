@@ -11,7 +11,6 @@ import type * as LanceDB from "@lancedb/lancedb";
 import { Type } from "@sinclair/typebox";
 import OpenAI from "openai";
 import { ensureGlobalUndiciEnvProxyDispatcher } from "openclaw/plugin-sdk/runtime-env";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 import { definePluginEntry, type OpenClawPluginApi } from "./api.js";
 import {
   DEFAULT_CAPTURE_MAX_CHARS,
@@ -40,8 +39,6 @@ type MemorySearchResult = {
   score: number;
 };
 
-type LegacyBeforeAgentStartContext = { prependContext: string } | undefined;
-
 // ============================================================================
 // LanceDB Provider
 // ============================================================================
@@ -56,7 +53,6 @@ class MemoryDB {
   constructor(
     private readonly dbPath: string,
     private readonly vectorDim: number,
-    private readonly storageOptions?: Record<string, string>,
   ) {}
 
   private async ensureInitialized(): Promise<void> {
@@ -73,10 +69,7 @@ class MemoryDB {
 
   private async doInitialize(): Promise<void> {
     const lancedb = await loadLanceDbModule();
-    const connectionOptions: LanceDB.ConnectionOptions = this.storageOptions
-      ? { storageOptions: this.storageOptions }
-      : {};
-    this.db = await lancedb.connect(this.dbPath, connectionOptions);
+    this.db = await lancedb.connect(this.dbPath);
     const tables = await this.db.tableNames();
 
     if (tables.includes(TABLE_NAME)) {
@@ -266,7 +259,7 @@ export function shouldCapture(text: string, options?: { maxChars?: number }): bo
 }
 
 export function detectCategory(text: string): MemoryCategory {
-  const lower = normalizeLowercaseStringOrEmpty(text);
+  const lower = text.toLowerCase();
   if (/prefer|radši|like|love|hate|want/i.test(lower)) {
     return "preference";
   }
@@ -295,12 +288,11 @@ export default definePluginEntry({
 
   register(api: OpenClawPluginApi) {
     const cfg = memoryConfigSchema.parse(api.pluginConfig);
-    const dbPath = cfg.dbPath!;
-    const resolvedDbPath = dbPath.includes("://") ? dbPath : api.resolvePath(dbPath);
+    const resolvedDbPath = api.resolvePath(cfg.dbPath!);
     const { model, dimensions, apiKey, baseUrl } = cfg.embedding;
 
     const vectorDim = dimensions ?? vectorDimsForModel(model);
-    const db = new MemoryDB(resolvedDbPath, vectorDim, cfg.storageOptions);
+    const db = new MemoryDB(resolvedDbPath, vectorDim);
     const embeddings = new Embeddings(apiKey, model, baseUrl, dimensions);
 
     api.logger.info(`memory-lancedb: plugin registered (db: ${resolvedDbPath}, lazy init)`);
@@ -543,9 +535,9 @@ export default definePluginEntry({
 
     // Auto-recall: inject relevant memories before agent starts
     if (cfg.autoRecall) {
-      api.on("before_agent_start", async (event): Promise<LegacyBeforeAgentStartContext> => {
+      api.on("before_agent_start", async (event) => {
         if (!event.prompt || event.prompt.length < 5) {
-          return undefined;
+          return;
         }
 
         try {
@@ -553,7 +545,7 @@ export default definePluginEntry({
           const results = await db.search(vector, 3, 0.3);
 
           if (results.length === 0) {
-            return undefined;
+            return;
           }
 
           api.logger.info?.(`memory-lancedb: injecting ${results.length} memories into context`);
@@ -566,7 +558,6 @@ export default definePluginEntry({
         } catch (err) {
           api.logger.warn(`memory-lancedb: recall failed: ${String(err)}`);
         }
-        return undefined;
       });
     }
 

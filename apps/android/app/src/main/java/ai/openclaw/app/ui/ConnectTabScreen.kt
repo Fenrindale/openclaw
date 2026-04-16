@@ -38,7 +38,6 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -141,12 +140,7 @@ fun ConnectTabScreen(viewModel: MainViewModel) {
     }
 
   val showDiagnostics = !isConnected && gatewayStatusHasDiagnostics(statusText)
-  val pairingRequired = !isConnected && gatewayStatusLooksLikePairing(statusText)
   val statusLabel = gatewayStatusForDisplay(statusText)
-
-  PairingAutoRetryEffect(enabled = pairingRequired) {
-    viewModel.refreshGatewayConnection()
-  }
 
   Column(
     modifier = Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 16.dp),
@@ -284,9 +278,6 @@ fun ConnectTabScreen(viewModel: MainViewModel) {
           }
 
           validationText = null
-          if (inputMode == ConnectInputMode.SetupCode) {
-            viewModel.resetGatewaySetupAuth()
-          }
           viewModel.setManualEnabled(true)
           viewModel.setManualHost(config.host)
           viewModel.setManualPort(config.port)
@@ -328,17 +319,8 @@ fun ConnectTabScreen(viewModel: MainViewModel) {
           modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 14.dp),
           verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-          Text(if (pairingRequired) "Pairing required" else "Last gateway error", style = mobileHeadline, color = mobileWarning)
+          Text("Last gateway error", style = mobileHeadline, color = mobileWarning)
           Text(statusLabel, style = mobileBody.copy(fontFamily = FontFamily.Monospace), color = mobileText)
-          if (pairingRequired) {
-            Text(
-              "Approve this phone on the gateway. OpenClaw retries automatically while this screen stays open.",
-              style = mobileCallout,
-              color = mobileTextSecondary,
-            )
-            CommandBlock("openclaw devices list")
-            CommandBlock("openclaw devices approve <requestId>")
-          }
           Text("OpenClaw Android ${openClawAndroidVersionLabel()}", style = mobileCaption1, color = mobileTextSecondary)
           Button(
             onClick = {
@@ -482,18 +464,14 @@ fun ConnectTabScreen(viewModel: MainViewModel) {
               colors = outlinedColors(),
             )
 
-            Text(
-              if (manualTlsInput) "Port (optional, defaults to 443)" else "Port",
-              style = mobileCaption1.copy(fontWeight = FontWeight.SemiBold),
-              color = mobileTextSecondary,
-            )
+            Text("Port", style = mobileCaption1.copy(fontWeight = FontWeight.SemiBold), color = mobileTextSecondary)
             OutlinedTextField(
               value = manualPortInput,
               onValueChange = {
                 manualPortInput = it
                 validationText = null
               },
-              placeholder = { Text(if (manualTlsInput) "443" else "18789", style = mobileBody, color = mobileTextTertiary) },
+              placeholder = { Text("18789", style = mobileBody, color = mobileTextTertiary) },
               modifier = Modifier.fillMaxWidth(),
               singleLine = true,
               keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),

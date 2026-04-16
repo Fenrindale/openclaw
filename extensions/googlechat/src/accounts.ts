@@ -8,7 +8,6 @@ import {
 } from "openclaw/plugin-sdk/account-resolution";
 import { safeParseJsonWithSchema, safeParseWithSchema } from "openclaw/plugin-sdk/extension-shared";
 import { isSecretRef } from "openclaw/plugin-sdk/secret-input";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import { z } from "zod";
 import type { GoogleChatAccountConfig } from "./types.config.js";
 
@@ -104,7 +103,7 @@ function resolveCredentialsFromConfig(params: {
     );
   }
 
-  const file = normalizeOptionalString(account.serviceAccountFile);
+  const file = account.serviceAccountFile?.trim();
   if (file) {
     return { credentialsFile: file, source: "file" };
   }
@@ -115,7 +114,7 @@ function resolveCredentialsFromConfig(params: {
     if (envInline) {
       return { credentials: envInline, source: "env" };
     }
-    const envFile = normalizeOptionalString(process.env[ENV_SERVICE_ACCOUNT_FILE]);
+    const envFile = process.env[ENV_SERVICE_ACCOUNT_FILE]?.trim();
     if (envFile) {
       return { credentialsFile: envFile, source: "env" };
     }
@@ -139,7 +138,7 @@ export function resolveGoogleChatAccount(params: {
 
   return {
     accountId,
-    name: normalizeOptionalString(merged.name),
+    name: merged.name?.trim() || undefined,
     enabled,
     config: merged,
     credentialSource: credentials.source,

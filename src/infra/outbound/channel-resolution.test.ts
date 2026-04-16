@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const resolveDefaultAgentIdMock = vi.hoisted(() => vi.fn());
 const resolveAgentWorkspaceDirMock = vi.hoisted(() => vi.fn());
-const getLoadedChannelPluginMock = vi.hoisted(() => vi.fn());
 const getChannelPluginMock = vi.hoisted(() => vi.fn());
 const applyPluginAutoEnableMock = vi.hoisted(() => vi.fn());
 const resolveRuntimePluginRegistryMock = vi.hoisted(() => vi.fn());
@@ -18,7 +17,6 @@ vi.mock("../../agents/agent-scope.js", () => ({
 }));
 
 vi.mock("../../channels/plugins/index.js", () => ({
-  getLoadedChannelPlugin: (...args: unknown[]) => getLoadedChannelPluginMock(...args),
   getChannelPlugin: (...args: unknown[]) => getChannelPluginMock(...args),
 }));
 
@@ -69,7 +67,6 @@ describe("outbound channel resolution", () => {
   beforeEach(async () => {
     resolveDefaultAgentIdMock.mockReset();
     resolveAgentWorkspaceDirMock.mockReset();
-    getLoadedChannelPluginMock.mockReset();
     getChannelPluginMock.mockReset();
     applyPluginAutoEnableMock.mockReset();
     resolveRuntimePluginRegistryMock.mockReset();
@@ -110,7 +107,7 @@ describe("outbound channel resolution", () => {
 
   it("returns the already-registered plugin without bootstrapping", async () => {
     const plugin = { id: "telegram" };
-    getLoadedChannelPluginMock.mockReturnValueOnce(plugin);
+    getChannelPluginMock.mockReturnValueOnce(plugin);
     const channelResolution = await importChannelResolution("existing-plugin");
 
     expect(
@@ -143,7 +140,7 @@ describe("outbound channel resolution", () => {
 
   it("bootstraps plugins once per registry key and returns the newly loaded plugin", async () => {
     const plugin = { id: "telegram" };
-    getLoadedChannelPluginMock.mockReturnValueOnce(undefined).mockReturnValueOnce(plugin);
+    getChannelPluginMock.mockReturnValueOnce(undefined).mockReturnValueOnce(plugin);
     const channelResolution = await importChannelResolution("bootstrap-success");
 
     expect(
@@ -165,7 +162,7 @@ describe("outbound channel resolution", () => {
 
   it("bootstraps when the active registry has other channels but not the requested one", async () => {
     const plugin = { id: "telegram" };
-    getLoadedChannelPluginMock.mockReturnValueOnce(undefined).mockReturnValueOnce(plugin);
+    getChannelPluginMock.mockReturnValueOnce(undefined).mockReturnValueOnce(plugin);
     getActivePluginRegistryMock.mockReturnValue({
       channels: [{ plugin: { id: "discord" } }],
     });

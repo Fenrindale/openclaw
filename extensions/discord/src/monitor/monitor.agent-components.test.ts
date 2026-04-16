@@ -13,11 +13,7 @@ import {
   upsertPairingRequestMock,
 } from "../test-support/component-runtime.js";
 import { resolveComponentInteractionContext } from "./agent-components-helpers.js";
-import {
-  createAgentComponentButton,
-  createAgentSelectMenu,
-  resolveDiscordComponentOriginatingTo,
-} from "./agent-components.js";
+import { createAgentComponentButton, createAgentSelectMenu } from "./agent-components.js";
 
 describe("agent components", () => {
   const defaultDmSessionKey = buildAgentSessionKey({
@@ -98,34 +94,6 @@ describe("agent components", () => {
       reply,
     };
   };
-
-  async function expectSuccessfulDmButtonInteraction(params: {
-    dmPolicy: "pairing" | "open";
-    expectPairingStoreRead: boolean;
-  }) {
-    const button = createAgentComponentButton({
-      cfg: createCfg(),
-      accountId: "default",
-      dmPolicy: params.dmPolicy,
-    });
-    const { interaction, defer, reply } = createDmButtonInteraction();
-
-    await button.run(interaction, { componentId: "hello" } as ComponentData);
-
-    expect(defer).not.toHaveBeenCalled();
-    expect(reply).toHaveBeenCalledWith({ content: "✓", ephemeral: true });
-    expect(enqueueSystemEventMock).toHaveBeenCalledWith(
-      "[Discord component: hello clicked by Alice#1234 (123456789)]",
-      expect.objectContaining({
-        sessionKey: defaultDmSessionKey,
-      }),
-    );
-    if (params.expectPairingStoreRead) {
-      expect(readAllowFromStoreMock).toHaveBeenCalledWith("discord", "default");
-    } else {
-      expect(readAllowFromStoreMock).not.toHaveBeenCalled();
-    }
-  }
 
   beforeEach(() => {
     resetDiscordComponentRuntimeMocks();
@@ -248,36 +216,47 @@ describe("agent components", () => {
 
   it("authorizes DM interactions from pairing-store entries in pairing mode", async () => {
     readAllowFromStoreMock.mockResolvedValue(["123456789"]);
-    await expectSuccessfulDmButtonInteraction({
+    const button = createAgentComponentButton({
+      cfg: createCfg(),
+      accountId: "default",
       dmPolicy: "pairing",
-      expectPairingStoreRead: true,
     });
+    const { interaction, defer, reply } = createDmButtonInteraction();
+
+    await button.run(interaction, { componentId: "hello" } as ComponentData);
+
+    expect(defer).not.toHaveBeenCalled();
+    expect(reply).toHaveBeenCalledWith({ content: "✓", ephemeral: true });
+    expect(enqueueSystemEventMock).toHaveBeenCalledWith(
+      "[Discord component: hello clicked by Alice#1234 (123456789)]",
+      expect.objectContaining({
+        sessionKey: defaultDmSessionKey,
+      }),
+    );
     expect(upsertPairingRequestMock).not.toHaveBeenCalled();
+    expect(readAllowFromStoreMock).toHaveBeenCalledWith("discord", "default");
   });
 
   it("allows DM component interactions in open mode without reading pairing store", async () => {
     readAllowFromStoreMock.mockResolvedValue(["123456789"]);
-    await expectSuccessfulDmButtonInteraction({
+    const button = createAgentComponentButton({
+      cfg: createCfg(),
+      accountId: "default",
       dmPolicy: "open",
-      expectPairingStoreRead: false,
     });
-  });
+    const { interaction, defer, reply } = createDmButtonInteraction();
 
-  it("uses user conversation ids for direct-message component originating targets", () => {
-    expect(
-      resolveDiscordComponentOriginatingTo({
-        isDirectMessage: true,
-        userId: "123456789",
-        channelId: "dm-channel",
+    await button.run(interaction, { componentId: "hello" } as ComponentData);
+
+    expect(defer).not.toHaveBeenCalled();
+    expect(reply).toHaveBeenCalledWith({ content: "✓", ephemeral: true });
+    expect(enqueueSystemEventMock).toHaveBeenCalledWith(
+      "[Discord component: hello clicked by Alice#1234 (123456789)]",
+      expect.objectContaining({
+        sessionKey: defaultDmSessionKey,
       }),
-    ).toBe("user:123456789");
-    expect(
-      resolveDiscordComponentOriginatingTo({
-        isDirectMessage: false,
-        userId: "123456789",
-        channelId: "guild-channel",
-      }),
-    ).toBe("channel:guild-channel");
+    );
+    expect(readAllowFromStoreMock).not.toHaveBeenCalled();
   });
 
   it("blocks DM component interactions in disabled mode without reading pairing store", async () => {

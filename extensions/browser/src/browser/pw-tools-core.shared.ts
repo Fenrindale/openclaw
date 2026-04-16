@@ -1,5 +1,3 @@
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
-import { formatErrorMessage } from "../infra/errors.js";
 import { parseRoleRef } from "./pw-role-snapshot.js";
 
 let nextUploadArmId = 0;
@@ -22,7 +20,7 @@ export function bumpDownloadArmId(): number {
 }
 
 export function requireRef(value: unknown): string {
-  const raw = normalizeOptionalString(value) ?? "";
+  const raw = typeof value === "string" ? value.trim() : "";
   const roleRef = raw ? parseRoleRef(raw) : null;
   const ref = roleRef ?? (raw.startsWith("@") ? raw.slice(1) : raw);
   if (!ref) {
@@ -35,8 +33,8 @@ export function requireRefOrSelector(
   ref: string | undefined,
   selector: string | undefined,
 ): { ref?: string; selector?: string } {
-  const trimmedRef = normalizeOptionalString(ref) ?? "";
-  const trimmedSelector = normalizeOptionalString(selector) ?? "";
+  const trimmedRef = typeof ref === "string" ? ref.trim() : "";
+  const trimmedSelector = typeof selector === "string" ? selector.trim() : "";
   if (!trimmedRef && !trimmedSelector) {
     throw new Error("ref or selector is required");
   }
@@ -51,7 +49,7 @@ export function normalizeTimeoutMs(timeoutMs: number | undefined, fallback: numb
 }
 
 export function toAIFriendlyError(error: unknown, selector: string): Error {
-  const message = formatErrorMessage(error);
+  const message = error instanceof Error ? error.message : String(error);
 
   if (message.includes("strict mode violation")) {
     const countMatch = message.match(/resolved to (\d+) elements/);

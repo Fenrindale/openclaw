@@ -1,8 +1,7 @@
 import path from "node:path";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 
 export function sanitizeUntrustedFileName(fileName: string, fallbackName: string): string {
-  const trimmed = normalizeOptionalString(fileName) ?? "";
+  const trimmed = String(fileName ?? "").trim();
   if (!trimmed) {
     return fallbackName;
   }

@@ -17,7 +17,6 @@ import {
   DEFAULT_GMAIL_TOPIC,
 } from "../hooks/gmail.js";
 import { defaultRuntime } from "../runtime.js";
-import { normalizeOptionalString } from "../shared/string-coerce.js";
 import { formatDocsLink } from "../terminal/links.js";
 import { theme } from "../terminal/theme.js";
 
@@ -107,16 +106,16 @@ export function registerWebhooksCli(program: Command) {
 
 function parseGmailSetupOptions(raw: Record<string, unknown>): GmailSetupOptions {
   const accountRaw = raw.account;
-  const account = normalizeOptionalString(accountRaw) ?? "";
+  const account = typeof accountRaw === "string" ? accountRaw.trim() : "";
   if (!account) {
     throw new Error("--account is required");
   }
   const common = parseGmailCommonOptions(raw);
   return {
     account,
-    project: normalizeOptionalString(raw.project),
+    project: stringOption(raw.project),
     ...gmailOptionsFromCommon(common),
-    pushEndpoint: normalizeOptionalString(raw.pushEndpoint),
+    pushEndpoint: stringOption(raw.pushEndpoint),
     json: Boolean(raw.json),
   };
 }
@@ -124,28 +123,28 @@ function parseGmailSetupOptions(raw: Record<string, unknown>): GmailSetupOptions
 function parseGmailRunOptions(raw: Record<string, unknown>): GmailRunOptions {
   const common = parseGmailCommonOptions(raw);
   return {
-    account: normalizeOptionalString(raw.account),
+    account: stringOption(raw.account),
     ...gmailOptionsFromCommon(common),
   };
 }
 
 function parseGmailCommonOptions(raw: Record<string, unknown>) {
   return {
-    topic: normalizeOptionalString(raw.topic),
-    subscription: normalizeOptionalString(raw.subscription),
-    label: normalizeOptionalString(raw.label),
-    hookUrl: normalizeOptionalString(raw.hookUrl),
-    hookToken: normalizeOptionalString(raw.hookToken),
-    pushToken: normalizeOptionalString(raw.pushToken),
-    bind: normalizeOptionalString(raw.bind),
+    topic: stringOption(raw.topic),
+    subscription: stringOption(raw.subscription),
+    label: stringOption(raw.label),
+    hookUrl: stringOption(raw.hookUrl),
+    hookToken: stringOption(raw.hookToken),
+    pushToken: stringOption(raw.pushToken),
+    bind: stringOption(raw.bind),
     port: numberOption(raw.port),
-    path: normalizeOptionalString(raw.path),
+    path: stringOption(raw.path),
     includeBody: booleanOption(raw.includeBody),
     maxBytes: numberOption(raw.maxBytes),
     renewEveryMinutes: numberOption(raw.renewMinutes),
-    tailscaleRaw: normalizeOptionalString(raw.tailscale),
-    tailscalePath: normalizeOptionalString(raw.tailscalePath),
-    tailscaleTarget: normalizeOptionalString(raw.tailscaleTarget),
+    tailscaleRaw: stringOption(raw.tailscale),
+    tailscalePath: stringOption(raw.tailscalePath),
+    tailscaleTarget: stringOption(raw.tailscaleTarget),
   };
 }
 
@@ -169,6 +168,14 @@ function gmailOptionsFromCommon(
     tailscalePath: common.tailscalePath,
     tailscaleTarget: common.tailscaleTarget,
   };
+}
+
+function stringOption(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
 }
 
 function numberOption(value: unknown): number | undefined {

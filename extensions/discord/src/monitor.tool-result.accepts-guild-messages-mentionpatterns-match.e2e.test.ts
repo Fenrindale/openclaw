@@ -26,7 +26,7 @@ function createOpenGuildConfig(
   channels: Record<string, { allow: boolean; includeThreadStarter?: boolean }>,
   extra: Partial<Config> = {},
 ): Config {
-  const cfg: Config = {
+  return {
     ...createMentionRequiredGuildConfig(),
     ...extra,
     channels: {
@@ -41,8 +41,7 @@ function createOpenGuildConfig(
         },
       },
     },
-  };
-  return cfg;
+  } as Config;
 }
 
 describe("discord tool result dispatch", () => {

@@ -1,9 +1,8 @@
 import { Type } from "@sinclair/typebox";
+import type { OpenClawConfig } from "../../config/config.js";
 import { loadConfig } from "../../config/config.js";
-import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { formatErrorMessage } from "../../infra/errors.js";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
-import { resolveConfiguredMediaMaxBytes } from "../../media/configured-max-bytes.js";
 import { saveMediaBuffer } from "../../media/store.js";
 import { loadWebMedia } from "../../media/web-media.js";
 import { resolveMusicGenerationModeCapabilities } from "../../music-generation/capabilities.js";
@@ -17,21 +16,21 @@ import type {
   MusicGenerationProvider,
   MusicGenerationSourceImage,
 } from "../../music-generation/types.js";
-import { normalizeOptionalLowercaseString } from "../../shared/string-coerce.js";
+import { readSnakeCaseParamRaw } from "../../param-key.js";
 import { resolveUserPath } from "../../utils.js";
 import type { DeliveryContext } from "../../utils/delivery-context.js";
-import { ToolInputError, readNumberParam, readStringParam } from "./common.js";
+import {
+  ToolInputError,
+  readNumberParam,
+  readStringArrayParam,
+  readStringParam,
+} from "./common.js";
 import { decodeDataUrl } from "./image-tool.helpers.js";
 import {
   applyMusicGenerationModelConfigDefaults,
-  buildMediaReferenceDetails,
-  buildTaskRunDetails,
-  normalizeMediaReferenceInputs,
-  readBooleanToolParam,
+  findCapabilityProviderById,
   resolveCapabilityModelConfigForTool,
-  resolveGenerateAction,
   resolveMediaToolLocalRoots,
-  resolveSelectedCapabilityProvider,
 } from "./media-tool-shared.js";
 import { type ToolModelConfig } from "./model-config.helpers.js";
 import {
@@ -128,26 +127,49 @@ function resolveSelectedMusicGenerationProvider(params: {
   musicGenerationModelConfig: ToolModelConfig;
   modelOverride?: string;
 }): MusicGenerationProvider | undefined {
-  return resolveSelectedCapabilityProvider({
+  const selectedRef =
+    parseMusicGenerationModelRef(params.modelOverride) ??
+    parseMusicGenerationModelRef(params.musicGenerationModelConfig.primary);
+  if (!selectedRef) {
+    return undefined;
+  }
+  return findCapabilityProviderById({
     providers: listRuntimeMusicGenerationProviders({ config: params.config }),
-    modelConfig: params.musicGenerationModelConfig,
-    modelOverride: params.modelOverride,
-    parseModelRef: parseMusicGenerationModelRef,
+    providerId: selectedRef.provider,
   });
 }
 
 function resolveAction(args: Record<string, unknown>): "generate" | "list" | "status" {
-  return resolveGenerateAction({
-    args,
-    allowed: ["generate", "status", "list"],
-    defaultAction: "generate",
-  });
+  const raw = readStringParam(args, "action");
+  if (!raw) {
+    return "generate";
+  }
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === "generate" || normalized === "list" || normalized === "status") {
+    return normalized;
+  }
+  throw new ToolInputError('action must be "generate", "status", or "list"');
+}
+
+function readBooleanParam(params: Record<string, unknown>, key: string): boolean | undefined {
+  const raw = readSnakeCaseParamRaw(params, key);
+  if (typeof raw === "boolean") {
+    return raw;
+  }
+  if (typeof raw === "string") {
+    const normalized = raw.trim().toLowerCase();
+    if (normalized === "true") {
+      return true;
+    }
+    if (normalized === "false") {
+      return false;
+    }
+  }
+  return undefined;
 }
 
 function normalizeOutputFormat(raw: string | undefined): MusicGenerationOutputFormat | undefined {
-  const normalized = normalizeOptionalLowercaseString(raw) as
-    | MusicGenerationOutputFormat
-    | undefined;
+  const normalized = raw?.trim().toLowerCase() as MusicGenerationOutputFormat | undefined;
   if (!normalized) {
     return undefined;
   }
@@ -158,13 +180,26 @@ function normalizeOutputFormat(raw: string | undefined): MusicGenerationOutputFo
 }
 
 function normalizeReferenceImageInputs(args: Record<string, unknown>): string[] {
-  return normalizeMediaReferenceInputs({
-    args,
-    singularKey: "image",
-    pluralKey: "images",
-    maxCount: MAX_INPUT_IMAGES,
-    label: "reference images",
-  });
+  const single = readStringParam(args, "image");
+  const multiple = readStringArrayParam(args, "images");
+  const combined = [...(single ? [single] : []), ...(multiple ?? [])];
+  const deduped: string[] = [];
+  const seen = new Set<string>();
+  for (const candidate of combined) {
+    const trimmed = candidate.trim();
+    const dedupe = trimmed.startsWith("@") ? trimmed.slice(1).trim() : trimmed;
+    if (!dedupe || seen.has(dedupe)) {
+      continue;
+    }
+    seen.add(dedupe);
+    deduped.push(trimmed);
+  }
+  if (deduped.length > MAX_INPUT_IMAGES) {
+    throw new ToolInputError(
+      `Too many reference images: ${deduped.length} provided, maximum is ${MAX_INPUT_IMAGES}.`,
+    );
+  }
+  return deduped;
 }
 
 function validateMusicGenerationCapabilities(params: {
@@ -360,14 +395,13 @@ async function executeMusicGenerationJob(params: {
       progressSummary: "Saving generated music",
     });
   }
-  const configuredMediaMaxBytes = resolveConfiguredMediaMaxBytes(params.effectiveCfg);
   const savedTracks = await Promise.all(
     result.tracks.map((track) =>
       saveMediaBuffer(
         track.buffer,
         track.mimeType,
         "tool-music-generation",
-        configuredMediaMaxBytes,
+        undefined,
         params.filename || track.fileName,
       ),
     ),
@@ -420,7 +454,14 @@ async function executeMusicGenerationJob(params: {
         mediaUrls: savedTracks.map((track) => track.path),
       },
       paths: savedTracks.map((track) => track.path),
-      ...buildTaskRunDetails(params.taskHandle),
+      ...(params.taskHandle
+        ? {
+            task: {
+              taskId: params.taskHandle.taskId,
+              runId: params.taskHandle.runId,
+            },
+          }
+        : {}),
       ...(!ignoredOverrideKeys.has("lyrics") && params.lyrics
         ? { requestedLyrics: params.lyrics }
         : {}),
@@ -437,12 +478,21 @@ async function executeMusicGenerationJob(params: {
         : {}),
       ...(!ignoredOverrideKeys.has("format") && params.format ? { format: params.format } : {}),
       ...(params.filename ? { filename: params.filename } : {}),
-      ...buildMediaReferenceDetails({
-        entries: params.loadedReferenceImages,
-        singleKey: "image",
-        pluralKey: "images",
-        getResolvedInput: (entry) => entry.resolvedInput,
-      }),
+      ...(params.loadedReferenceImages.length === 1
+        ? {
+            image: params.loadedReferenceImages[0]?.resolvedInput,
+            ...(params.loadedReferenceImages[0]?.rewrittenFrom
+              ? { rewrittenFrom: params.loadedReferenceImages[0].rewrittenFrom }
+              : {}),
+          }
+        : params.loadedReferenceImages.length > 1
+          ? {
+              images: params.loadedReferenceImages.map((entry) => ({
+                image: entry.resolvedInput,
+                ...(entry.rewrittenFrom ? { rewrittenFrom: entry.rewrittenFrom } : {}),
+              })),
+            }
+          : {}),
       ...(result.lyrics?.length ? { lyrics: result.lyrics } : {}),
       attempts: result.attempts,
       ...(result.normalization ? { normalization: result.normalization } : {}),
@@ -512,7 +562,7 @@ export function createMusicGenerateTool(options?: {
 
       const prompt = readStringParam(args, "prompt", { required: true });
       const lyrics = readStringParam(args, "lyrics");
-      const instrumental = readBooleanToolParam(args, "instrumental");
+      const instrumental = readBooleanParam(args, "instrumental");
       const model = readStringParam(args, "model");
       const durationSeconds = readNumberParam(args, "durationSeconds", {
         integer: true,
@@ -614,13 +664,29 @@ export function createMusicGenerateTool(options?: {
           details: {
             async: true,
             status: "started",
-            ...buildTaskRunDetails(taskHandle),
-            ...buildMediaReferenceDetails({
-              entries: loadedReferenceImages,
-              singleKey: "image",
-              pluralKey: "images",
-              getResolvedInput: (entry) => entry.resolvedInput,
-            }),
+            ...(taskHandle
+              ? {
+                  task: {
+                    taskId: taskHandle.taskId,
+                    runId: taskHandle.runId,
+                  },
+                }
+              : {}),
+            ...(loadedReferenceImages.length === 1
+              ? {
+                  image: loadedReferenceImages[0]?.resolvedInput,
+                  ...(loadedReferenceImages[0]?.rewrittenFrom
+                    ? { rewrittenFrom: loadedReferenceImages[0].rewrittenFrom }
+                    : {}),
+                }
+              : loadedReferenceImages.length > 1
+                ? {
+                    images: loadedReferenceImages.map((entry) => ({
+                      image: entry.resolvedInput,
+                      ...(entry.rewrittenFrom ? { rewrittenFrom: entry.rewrittenFrom } : {}),
+                    })),
+                  }
+                : {}),
             ...(model ? { model } : {}),
             ...(lyrics ? { requestedLyrics: lyrics } : {}),
             ...(typeof instrumental === "boolean" ? { instrumental } : {}),

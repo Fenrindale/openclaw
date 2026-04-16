@@ -1,5 +1,4 @@
 import { logWarn } from "../logger.js";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 import {
   describeHttpMcpServerLaunchConfig,
   resolveHttpMcpServerLaunchConfig,
@@ -59,7 +58,7 @@ function getRequestedTransport(rawServer: unknown): string {
   ) {
     return "";
   }
-  return normalizeLowercaseStringOrEmpty((rawServer as { transport?: string }).transport);
+  return ((rawServer as { transport?: string }).transport ?? "").trim().toLowerCase();
 }
 
 function resolveHttpTransportConfig(

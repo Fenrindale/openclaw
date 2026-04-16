@@ -7,15 +7,13 @@ import {
   normalizeChannelId,
 } from "../../channels/plugins/index.js";
 import { buildChannelAccountSnapshot } from "../../channels/plugins/status.js";
-import type { ChannelPlugin } from "../../channels/plugins/types.plugin.js";
-import type { ChannelAccountSnapshot } from "../../channels/plugins/types.public.js";
+import type { ChannelAccountSnapshot, ChannelPlugin } from "../../channels/plugins/types.js";
+import type { OpenClawConfig } from "../../config/config.js";
 import { loadConfig, readConfigFileSnapshot } from "../../config/config.js";
 import { applyPluginAutoEnable } from "../../config/plugin-auto-enable.js";
-import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { getChannelActivity } from "../../infra/channel-activity.js";
 import { DEFAULT_ACCOUNT_ID } from "../../routing/session-key.js";
 import { defaultRuntime } from "../../runtime.js";
-import { normalizeOptionalString } from "../../shared/string-coerce.js";
 import {
   ErrorCodes,
   errorShape,
@@ -41,7 +39,7 @@ export async function logoutChannelAccount(params: {
   plugin: ChannelPlugin;
 }): Promise<ChannelLogoutPayload> {
   const resolvedAccountId =
-    normalizeOptionalString(params.accountId) ||
+    params.accountId?.trim() ||
     params.plugin.config.defaultAccountId?.(params.cfg) ||
     params.plugin.config.listAccountIds(params.cfg)[0] ||
     DEFAULT_ACCOUNT_ID;
@@ -56,7 +54,7 @@ export async function logoutChannelAccount(params: {
   if (!result) {
     throw new Error(`Channel ${params.channelId} does not support logout`);
   }
-  const cleared = result.cleared;
+  const cleared = Boolean(result.cleared);
   const loggedOut = typeof result.loggedOut === "boolean" ? result.loggedOut : cleared;
   if (loggedOut) {
     params.context.markChannelLoggedOut(params.channelId, true, resolvedAccountId);
@@ -272,7 +270,7 @@ export const channelsHandlers: GatewayRequestHandlers = {
       return;
     }
     const accountIdRaw = (params as { accountId?: unknown }).accountId;
-    const accountId = normalizeOptionalString(accountIdRaw);
+    const accountId = typeof accountIdRaw === "string" ? accountIdRaw.trim() : undefined;
     const snapshot = await readConfigFileSnapshot();
     if (!snapshot.valid) {
       respond(

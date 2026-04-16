@@ -17,7 +17,6 @@ import type { RuntimeEnv } from "openclaw/plugin-sdk/runtime-env";
 import { parseTtsDirectives } from "openclaw/plugin-sdk/speech";
 import { formatErrorMessage } from "openclaw/plugin-sdk/ssrf-runtime";
 import { resolvePreferredOpenClawTmpDir } from "openclaw/plugin-sdk/temp-path";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import { formatMention } from "../mentions.js";
 import { normalizeDiscordSlug, resolveDiscordOwnerAccess } from "../monitor/allow-list.js";
 import { formatDiscordUserTag } from "../monitor/format.js";
@@ -301,7 +300,7 @@ async function transcribeAudio(params: {
     agentDir: resolveAgentDir(params.cfg, params.agentId),
     mime: "audio/wav",
   });
-  return normalizeOptionalString(result.text);
+  return result.text?.trim() || undefined;
 }
 
 export class DiscordVoiceManager {

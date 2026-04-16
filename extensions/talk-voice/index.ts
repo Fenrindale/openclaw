@@ -1,10 +1,6 @@
 import { resolveActiveTalkProviderConfig } from "openclaw/plugin-sdk/config-runtime";
 import { formatErrorMessage } from "openclaw/plugin-sdk/error-runtime";
 import type { SpeechVoiceOption } from "openclaw/plugin-sdk/speech";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalLowercaseString,
-} from "openclaw/plugin-sdk/text-runtime";
 import { definePluginEntry, type OpenClawPluginApi } from "./api.js";
 
 function mask(s: string, keep: number = 6): string {
@@ -78,16 +74,16 @@ function findVoice(voices: SpeechVoiceOption[], query: string): SpeechVoiceOptio
   if (!q) {
     return null;
   }
-  const lower = normalizeLowercaseStringOrEmpty(q);
+  const lower = q.toLowerCase();
   const byId = voices.find((v) => v.id === q);
   if (byId) {
     return byId;
   }
-  const exactName = voices.find((v) => normalizeOptionalLowercaseString(v.name) === lower);
+  const exactName = voices.find((v) => (v.name ?? "").trim().toLowerCase() === lower);
   if (exactName) {
     return exactName;
   }
-  const partial = voices.find((v) => normalizeLowercaseStringOrEmpty(v.name).includes(lower));
+  const partial = voices.find((v) => (v.name ?? "").trim().toLowerCase().includes(lower));
   return partial ?? null;
 }
 
@@ -132,7 +128,7 @@ export default definePluginEntry({
         const commandLabel = resolveCommandLabel(ctx.channel);
         const args = ctx.args?.trim() ?? "";
         const tokens = args.split(/\s+/).filter(Boolean);
-        const action = normalizeLowercaseStringOrEmpty(tokens[0] ?? "status");
+        const action = (tokens[0] ?? "status").toLowerCase();
 
         const cfg = api.runtime.config.loadConfig();
         const active = resolveActiveTalkProviderConfig(cfg.talk);

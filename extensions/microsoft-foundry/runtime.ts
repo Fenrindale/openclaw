@@ -1,7 +1,6 @@
 import type { ProviderPrepareRuntimeAuthContext } from "openclaw/plugin-sdk/core";
 import { formatErrorMessage } from "openclaw/plugin-sdk/error-runtime";
 import { ensureAuthProfileStore } from "openclaw/plugin-sdk/provider-auth";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import { getAccessTokenResultAsync } from "./cli.js";
 import {
   type CachedTokenEntry,
@@ -46,9 +45,11 @@ export async function prepareFoundryRuntimeAuth(ctx: ProviderPrepareRuntimeAuthC
     const credential = ctx.profileId ? authStore.profiles[ctx.profileId] : undefined;
     const metadata = credential?.type === "api_key" ? credential.metadata : undefined;
     const modelId =
-      normalizeOptionalString(ctx.modelId) ??
-      normalizeOptionalString(metadata?.modelId) ??
-      ctx.modelId;
+      typeof ctx.modelId === "string" && ctx.modelId.trim().length > 0
+        ? ctx.modelId.trim()
+        : typeof metadata?.modelId === "string" && metadata.modelId.trim().length > 0
+          ? metadata.modelId.trim()
+          : ctx.modelId;
     const activeModelNameHint = ctx.modelId === metadata?.modelId ? metadata?.modelName : undefined;
     const modelNameHint = resolveConfiguredModelNameHint(
       modelId,
@@ -61,8 +62,9 @@ export async function prepareFoundryRuntimeAuth(ctx: ProviderPrepareRuntimeAuthC
           ? ctx.model.api
           : undefined;
     const endpoint =
-      normalizeOptionalString(metadata?.endpoint) ??
-      extractFoundryEndpoint(ctx.model.baseUrl ?? "");
+      typeof metadata?.endpoint === "string" && metadata.endpoint.trim().length > 0
+        ? metadata.endpoint.trim()
+        : extractFoundryEndpoint(ctx.model.baseUrl ?? "");
     const baseUrl = endpoint
       ? buildFoundryProviderBaseUrl(endpoint, modelId, modelNameHint, configuredApi)
       : undefined;

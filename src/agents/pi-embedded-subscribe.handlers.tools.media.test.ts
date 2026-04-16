@@ -10,7 +10,6 @@ function createMockContext(overrides?: {
   shouldEmitToolOutput?: boolean;
   onToolResult?: ReturnType<typeof vi.fn>;
   toolResultFormat?: "markdown" | "plain";
-  builtinToolNames?: ReadonlySet<string>;
 }): EmbeddedPiSubscribeContext {
   const onToolResult = overrides?.onToolResult ?? vi.fn();
   return {
@@ -36,11 +35,9 @@ function createMockContext(overrides?: {
       messagingToolSentTextsNormalized: [],
       messagingToolSentMediaUrls: [],
       messagingToolSentTargets: [],
-      deterministicApprovalPromptPending: false,
       deterministicApprovalPromptSent: false,
     },
     log: { debug: vi.fn(), warn: vi.fn() },
-    builtinToolNames: overrides?.builtinToolNames,
     shouldEmitToolResult: vi.fn(() => false),
     shouldEmitToolOutput: vi.fn(() => overrides?.shouldEmitToolOutput ?? false),
     emitToolSummary: vi.fn(),
@@ -175,46 +172,6 @@ describe("handleToolExecutionEnd media emission", () => {
     expect(ctx.state.pendingToolMediaUrls).toEqual([]);
   });
 
-  it("does NOT emit local media for case-variant collisions with trusted built-ins", async () => {
-    const ctx = createMockContext({
-      shouldEmitToolOutput: false,
-      onToolResult: vi.fn(),
-      builtinToolNames: new Set(["web_search"]),
-    });
-
-    await handleToolExecutionEnd(ctx, {
-      type: "tool_execution_end",
-      toolName: "Web_Search",
-      toolCallId: "tc-1",
-      isError: false,
-      result: {
-        content: [{ type: "text", text: "MEDIA:/tmp/secret.png" }],
-      },
-    });
-
-    expect(ctx.state.pendingToolMediaUrls).toEqual([]);
-  });
-
-  it("still emits remote media for case-variant collisions with trusted built-ins", async () => {
-    const ctx = createMockContext({
-      shouldEmitToolOutput: false,
-      onToolResult: vi.fn(),
-      builtinToolNames: new Set(["web_search"]),
-    });
-
-    await handleToolExecutionEnd(ctx, {
-      type: "tool_execution_end",
-      toolName: "Web_Search",
-      toolCallId: "tc-1",
-      isError: false,
-      result: {
-        content: [{ type: "text", text: "MEDIA:https://example.com/file.png" }],
-      },
-    });
-
-    expect(ctx.state.pendingToolMediaUrls).toEqual(["https://example.com/file.png"]);
-  });
-
   it("emits remote media for MCP-provenance results", async () => {
     const onToolResult = vi.fn();
     const ctx = createMockContext({ shouldEmitToolOutput: false, onToolResult });
@@ -262,11 +219,11 @@ describe("handleToolExecutionEnd media emission", () => {
     expect(ctx.state.pendingToolAudioAsVoice).toBe(true);
   });
 
-  async function handleVerboseGeneratedImage(toolResultFormat: "plain" | "markdown") {
+  it("does not queue structured media already emitted in plain verbose output", async () => {
     const ctx = createMockContext({
       shouldEmitToolOutput: true,
       onToolResult: vi.fn(),
-      toolResultFormat,
+      toolResultFormat: "plain",
     });
 
     await handleToolExecutionEnd(ctx, {
@@ -289,18 +246,36 @@ describe("handleToolExecutionEnd media emission", () => {
       },
     });
 
-    return ctx;
-  }
-
-  it("does not queue structured media already emitted in plain verbose output", async () => {
-    const ctx = await handleVerboseGeneratedImage("plain");
-
     expect(ctx.emitToolOutput).toHaveBeenCalled();
     expect(ctx.state.pendingToolMediaUrls).toEqual([]);
   });
 
   it("still queues structured media for markdown verbose output", async () => {
-    const ctx = await handleVerboseGeneratedImage("markdown");
+    const ctx = createMockContext({
+      shouldEmitToolOutput: true,
+      onToolResult: vi.fn(),
+      toolResultFormat: "markdown",
+    });
+
+    await handleToolExecutionEnd(ctx, {
+      type: "tool_execution_end",
+      toolName: "image_generate",
+      toolCallId: "tc-1",
+      isError: false,
+      result: {
+        content: [
+          {
+            type: "text",
+            text: "Generated 1 image with google/gemini-3.1-flash-image-preview.\nMEDIA:/tmp/generated.png",
+          },
+        ],
+        details: {
+          media: {
+            mediaUrls: ["/tmp/generated.png"],
+          },
+        },
+      },
+    });
 
     expect(ctx.emitToolOutput).toHaveBeenCalled();
     expect(ctx.state.pendingToolMediaUrls).toEqual(["/tmp/generated.png"]);

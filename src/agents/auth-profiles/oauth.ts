@@ -4,8 +4,7 @@ import {
   type OAuthCredentials,
   type OAuthProvider,
 } from "@mariozechner/pi-ai/oauth";
-import { loadConfig } from "../../config/config.js";
-import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import { loadConfig, type OpenClawConfig } from "../../config/config.js";
 import { coerceSecretRef } from "../../config/types.secrets.js";
 import { formatErrorMessage } from "../../infra/errors.js";
 import { withFileLock } from "../../infra/file-lock.js";
@@ -14,7 +13,6 @@ import {
   refreshProviderOAuthCredentialWithPlugin,
 } from "../../plugins/provider-runtime.runtime.js";
 import { resolveSecretRefString, type SecretRefResolveCache } from "../../secrets/resolve.js";
-import { normalizeLowercaseStringOrEmpty } from "../../shared/string-coerce.js";
 import { refreshChutesTokens } from "../chutes-oauth.js";
 import { writeCodexCliCredentials } from "../cli-credentials.js";
 import { AUTH_STORE_LOCK_OPTIONS, log } from "./constants.js";
@@ -126,7 +124,7 @@ function extractErrorMessage(error: unknown): string {
 }
 
 function isRefreshTokenReusedError(error: unknown): boolean {
-  const message = normalizeLowercaseStringOrEmpty(extractErrorMessage(error));
+  const message = extractErrorMessage(error).toLowerCase();
   return (
     message.includes("refresh_token_reused") ||
     message.includes("refresh token has already been used") ||
@@ -309,7 +307,7 @@ async function refreshOAuthTokenWithLock(params: {
 
     const oauthCreds: Record<string, OAuthCredentials> = { [cred.provider]: cred };
     const result =
-      cred.provider === "chutes"
+      String(cred.provider) === "chutes"
         ? await (async () => {
             const newCredentials = await refreshChutesTokens({
               credential: cred,

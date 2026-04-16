@@ -1,5 +1,4 @@
-import { KeyedAsyncQueue } from "openclaw/plugin-sdk/keyed-async-queue";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
+import { KeyedAsyncQueue } from "openclaw/plugin-sdk/core";
 import { inspectMatrixDirectRoomEvidence } from "./direct-room.js";
 import type { MatrixClient } from "./sdk.js";
 import { EventType, type MatrixDirectAccountData } from "./send/types.js";
@@ -61,7 +60,7 @@ async function readMatrixDirectAccountData(client: MatrixClient): Promise<Matrix
 }
 
 function normalizeRemoteUserId(remoteUserId: string): string {
-  const normalized = normalizeOptionalString(remoteUserId) ?? "";
+  const normalized = remoteUserId.trim();
   if (!isMatrixQualifiedUserId(normalized)) {
     throw new Error(`Matrix user IDs must be fully qualified (got "${remoteUserId}")`);
   }
@@ -76,7 +75,7 @@ function normalizeMappedRoomIds(direct: MatrixDirectAccountData, remoteUserId: s
   const seen = new Set<string>();
   const normalized: string[] = [];
   for (const value of current) {
-    const roomId = normalizeOptionalString(value) ?? "";
+    const roomId = typeof value === "string" ? value.trim() : "";
     if (!roomId || seen.has(roomId)) {
       continue;
     }
@@ -258,8 +257,7 @@ export async function inspectMatrixDirectRooms(params: {
   remoteUserId: string;
 }): Promise<MatrixDirectRoomInspection> {
   const remoteUserId = normalizeRemoteUserId(params.remoteUserId);
-  const selfUserId =
-    normalizeOptionalString(await params.client.getUserId().catch(() => null)) ?? null;
+  const selfUserId = (await params.client.getUserId().catch(() => null))?.trim() || null;
   const directContent = await readMatrixDirectAccountData(params.client);
   const mappedRoomIds = normalizeMappedRoomIds(directContent, remoteUserId);
   const mappedRooms = await Promise.all(

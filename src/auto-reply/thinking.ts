@@ -12,7 +12,6 @@ export {
   normalizeFastMode,
   normalizeNoticeLevel,
   normalizeReasoningLevel,
-  normalizeTraceLevel,
   normalizeThinkLevel,
   normalizeUsageDisplay,
   normalizeVerboseLevel,
@@ -24,7 +23,6 @@ export type {
   ElevatedMode,
   NoticeLevel,
   ReasoningLevel,
-  TraceLevel,
   ThinkLevel,
   ThinkingCatalogEntry,
   UsageDisplayLevel,
@@ -35,14 +33,9 @@ import {
   resolveProviderDefaultThinkingLevel,
   resolveProviderXHighThinking,
 } from "../plugins/provider-thinking.js";
-import {
-  normalizeOptionalLowercaseString,
-  normalizeOptionalString,
-} from "../shared/string-coerce.js";
 
 export function isBinaryThinkingProvider(provider?: string | null, model?: string | null): boolean {
-  const providerRaw = normalizeOptionalString(provider);
-  const normalizedProvider = providerRaw ? normalizeProviderId(providerRaw) : "";
+  const normalizedProvider = provider?.trim() ? normalizeProviderId(provider) : "";
   if (!normalizedProvider) {
     return false;
   }
@@ -51,7 +44,7 @@ export function isBinaryThinkingProvider(provider?: string | null, model?: strin
     provider: normalizedProvider,
     context: {
       provider: normalizedProvider,
-      modelId: normalizeOptionalString(model) ?? "",
+      modelId: model?.trim() ?? "",
     },
   });
   if (typeof pluginDecision === "boolean") {
@@ -61,12 +54,11 @@ export function isBinaryThinkingProvider(provider?: string | null, model?: strin
 }
 
 export function supportsXHighThinking(provider?: string | null, model?: string | null): boolean {
-  const modelKey = normalizeOptionalLowercaseString(model);
+  const modelKey = model?.trim().toLowerCase();
   if (!modelKey) {
     return false;
   }
-  const providerRaw = normalizeOptionalString(provider);
-  const providerKey = providerRaw ? normalizeProviderId(providerRaw) : "";
+  const providerKey = provider?.trim() ? normalizeProviderId(provider) : "";
   if (providerKey) {
     const pluginDecision = resolveProviderXHighThinking({
       provider: providerKey,

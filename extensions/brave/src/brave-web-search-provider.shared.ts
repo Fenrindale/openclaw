@@ -1,8 +1,4 @@
 import { Type } from "@sinclair/typebox";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-} from "openclaw/plugin-sdk/text-runtime";
 
 export type BraveConfig = {
   mode?: string;
@@ -129,8 +125,7 @@ function normalizeBraveSearchLang(value: string | undefined): string | undefined
   if (!trimmed) {
     return undefined;
   }
-  const lower = normalizeLowercaseStringOrEmpty(trimmed);
-  const canonical = BRAVE_SEARCH_LANG_ALIASES[lower] ?? lower;
+  const canonical = BRAVE_SEARCH_LANG_ALIASES[trimmed.toLowerCase()] ?? trimmed.toLowerCase();
   if (!BRAVE_SEARCH_LANG_CODES.has(canonical)) {
     return undefined;
   }
@@ -162,7 +157,7 @@ function normalizeBraveUiLang(value: string | undefined): string | undefined {
     return undefined;
   }
   const [, language, region] = match;
-  return `${normalizeLowercaseStringOrEmpty(language)}-${region.toUpperCase()}`;
+  return `${language.toLowerCase()}-${region.toUpperCase()}`;
 }
 
 export function resolveBraveConfig(searchConfig?: Record<string, unknown>): BraveConfig {
@@ -179,8 +174,8 @@ export function normalizeBraveLanguageParams(params: { search_lang?: string; ui_
   ui_lang?: string;
   invalidField?: "search_lang" | "ui_lang";
 } {
-  const rawSearchLang = normalizeOptionalString(params.search_lang);
-  const rawUiLang = normalizeOptionalString(params.ui_lang);
+  const rawSearchLang = params.search_lang?.trim() || undefined;
+  const rawUiLang = params.ui_lang?.trim() || undefined;
   let searchLangCandidate = rawSearchLang;
   let uiLangCandidate = rawUiLang;
 

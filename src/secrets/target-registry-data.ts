@@ -1,4 +1,5 @@
-import { loadPluginManifestRegistry } from "../plugins/manifest-registry.js";
+import { iterateBootstrapChannelPlugins } from "../channels/plugins/bootstrap-registry.js";
+import { listBundledPluginMetadata } from "../plugins/bundled-plugin-metadata.js";
 import { loadBundledChannelSecretContractApi } from "./channel-contract-api.js";
 import type { SecretTargetRegistryEntry } from "./target-registry-types.js";
 
@@ -7,21 +8,36 @@ const SIBLING_REF_SHAPE = "sibling_ref"; // pragma: allowlist secret
 
 function listChannelSecretTargetRegistryEntries(): SecretTargetRegistryEntry[] {
   const entries: SecretTargetRegistryEntry[] = [];
+  const handledChannelIds = new Set<string>();
 
-  for (const record of loadPluginManifestRegistry({}).plugins) {
-    if (record.origin !== "bundled") {
-      continue;
-    }
-    const channelIds = record.channels;
+  for (const metadata of listBundledPluginMetadata({
+    includeChannelConfigs: false,
+    includeSyntheticChannelConfigs: false,
+  })) {
+    const channelIds = metadata.manifest.channels ?? [];
     if (channelIds.length === 0) {
       continue;
     }
-    try {
-      const contractApi = loadBundledChannelSecretContractApi(record.id);
-      entries.push(...(contractApi?.secretTargetRegistryEntries ?? []));
-    } catch {
-      // Ignore bundled channels that do not expose a usable secret contract artifact.
+    if (!metadata.publicSurfaceArtifacts?.includes("contract-api.js")) {
+      if (!metadata.publicSurfaceArtifacts?.includes("secret-contract-api.js")) {
+        continue;
+      }
     }
+    try {
+      const contractApi = loadBundledChannelSecretContractApi(metadata.manifest.id);
+      entries.push(...(contractApi?.secretTargetRegistryEntries ?? []));
+      channelIds.forEach((channelId) => handledChannelIds.add(channelId));
+    } catch {
+      // Fall back to the full bootstrap plugin surface for channels that do not
+      // expose a usable secret contract artifact.
+    }
+  }
+
+  for (const plugin of iterateBootstrapChannelPlugins()) {
+    if (handledChannelIds.has(plugin.id)) {
+      continue;
+    }
+    entries.push(...(plugin.secrets?.secretTargetRegistryEntries ?? []));
   }
   return entries;
 }
@@ -363,17 +379,6 @@ const CORE_SECRET_TARGET_REGISTRY: SecretTargetRegistryEntry[] = [
     targetType: "plugins.entries.google.config.webSearch.apiKey",
     configFile: "openclaw.json",
     pathPattern: "plugins.entries.google.config.webSearch.apiKey",
-    secretShape: SECRET_INPUT_SHAPE,
-    expectedResolvedValue: "string",
-    includeInPlan: true,
-    includeInConfigure: true,
-    includeInAudit: true,
-  },
-  {
-    id: "plugins.entries.exa.config.webSearch.apiKey",
-    targetType: "plugins.entries.exa.config.webSearch.apiKey",
-    configFile: "openclaw.json",
-    pathPattern: "plugins.entries.exa.config.webSearch.apiKey",
     secretShape: SECRET_INPUT_SHAPE,
     expectedResolvedValue: "string",
     includeInPlan: true,

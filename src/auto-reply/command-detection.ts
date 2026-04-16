@@ -1,11 +1,10 @@
 import type { OpenClawConfig } from "../config/types.js";
 import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalLowercaseString,
-} from "../shared/string-coerce.js";
-import { listChatCommands, listChatCommandsForConfig } from "./commands-registry-list.js";
-import { normalizeCommandBody } from "./commands-registry-normalize.js";
-import type { CommandNormalizeOptions } from "./commands-registry.types.js";
+  type CommandNormalizeOptions,
+  listChatCommands,
+  listChatCommandsForConfig,
+  normalizeCommandBody,
+} from "./commands-registry.js";
 import { isAbortTrigger } from "./reply/abort-primitives.js";
 import { stripInboundMetadata } from "./reply/strip-inbound-meta.js";
 
@@ -29,11 +28,11 @@ export function hasControlCommand(
   if (!normalizedBody) {
     return false;
   }
-  const lowered = normalizeLowercaseStringOrEmpty(normalizedBody);
+  const lowered = normalizedBody.toLowerCase();
   const commands = cfg ? listChatCommandsForConfig(cfg) : listChatCommands();
   for (const command of commands) {
     for (const alias of command.textAliases) {
-      const normalized = normalizeOptionalLowercaseString(alias);
+      const normalized = alias.trim().toLowerCase();
       if (!normalized) {
         continue;
       }
@@ -67,8 +66,7 @@ export function isControlCommandMessage(
     return true;
   }
   const stripped = stripInboundMetadata(trimmed);
-  const normalized =
-    normalizeOptionalLowercaseString(normalizeCommandBody(stripped, options)) ?? "";
+  const normalized = normalizeCommandBody(stripped, options).trim().toLowerCase();
   return isAbortTrigger(normalized);
 }
 

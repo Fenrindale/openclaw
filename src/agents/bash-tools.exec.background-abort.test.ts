@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, beforeEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { killProcessTree } from "../process/kill-tree.js";
 
 const BACKGROUND_HOLD_CMD = 'node -e "setTimeout(() => {}, 5000)"';
@@ -23,14 +23,11 @@ const createTestExecTool = (
   defaults?: Parameters<typeof createExecTool>[0],
 ): ReturnType<typeof createExecTool> => createExecTool({ ...TEST_EXEC_DEFAULTS, ...defaults });
 
-beforeAll(async () => {
+beforeEach(async () => {
+  vi.resetModules();
   ({ createExecTool } = await import("./bash-tools.exec.js"));
   ({ getFinishedSession, getSession, resetProcessRegistryForTests } =
     await import("./bash-process-registry.js"));
-});
-
-beforeEach(() => {
-  vi.clearAllMocks();
 });
 
 afterEach(() => {

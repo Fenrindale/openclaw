@@ -6,7 +6,6 @@ import {
   type InboundDebounceCreateParams,
 } from "../auto-reply/inbound-debounce.js";
 import type { OpenClawConfig } from "../config/types.js";
-import { normalizeOptionalString } from "../shared/string-coerce.js";
 
 export function shouldDebounceTextInbound(params: {
   text: string | null | undefined;
@@ -21,7 +20,7 @@ export function shouldDebounceTextInbound(params: {
   if (params.hasMedia) {
     return false;
   }
-  const text = normalizeOptionalString(params.text) ?? "";
+  const text = params.text?.trim() ?? "";
   if (!text) {
     return false;
   }

@@ -7,8 +7,6 @@ import {
   patchAllowlistUsersInConfigEntries,
   summarizeMapping,
 } from "openclaw/plugin-sdk/allow-from";
-import { CHANNEL_APPROVAL_NATIVE_RUNTIME_CONTEXT_CAPABILITY } from "openclaw/plugin-sdk/approval-handler-adapter-runtime";
-import { registerChannelRuntimeContext } from "openclaw/plugin-sdk/channel-runtime-context";
 import type { SessionScope } from "openclaw/plugin-sdk/config-runtime";
 import { createConnectedChannelStatusPatch } from "openclaw/plugin-sdk/gateway-runtime";
 import { DEFAULT_GROUP_HISTORY_LIMIT } from "openclaw/plugin-sdk/reply-history";
@@ -42,6 +40,7 @@ import {
 } from "./config.runtime.js";
 import { createSlackMonitorContext } from "./context.js";
 import { registerSlackMonitorEvents } from "./events.js";
+import { SlackExecApprovalHandler } from "./exec-approvals.js";
 import { createSlackMessageHandler } from "./message-handler.js";
 import {
   formatUnknownError,
@@ -444,27 +443,21 @@ export async function monitorSlackProvider(opts: MonitorSlackOpts = {}) {
     : undefined;
 
   const handleSlackMessage = createSlackMessageHandler({ ctx, account, trackEvent });
-  if (
-    isSlackExecApprovalClientEnabled({
-      cfg,
-      accountId: account.accountId,
-    })
-  ) {
-    registerChannelRuntimeContext({
-      channelRuntime: opts.channelRuntime,
-      channelId: "slack",
-      accountId: account.accountId,
-      capability: CHANNEL_APPROVAL_NATIVE_RUNTIME_CONTEXT_CAPABILITY,
-      context: {
+  const execApprovalsHandler = isSlackExecApprovalClientEnabled({
+    cfg,
+    accountId: account.accountId,
+  })
+    ? new SlackExecApprovalHandler({
         app,
+        accountId: account.accountId,
         config: slackCfg.execApprovals ?? {},
-      },
-      abortSignal: opts.abortSignal,
-    });
-  }
+        cfg,
+      })
+    : null;
 
   registerSlackMonitorEvents({ ctx, account, handleSlackMessage, trackEvent });
   await registerSlackMonitorSlashCommands({ ctx, account });
+  await execApprovalsHandler?.start();
   if (slackMode === "http" && slackHttpHandler) {
     unregisterHttpHandler = registerSlackHttpHandler({
       path: slackWebhookPath,
@@ -670,6 +663,7 @@ export async function monitorSlackProvider(opts: MonitorSlackOpts = {}) {
   } finally {
     opts.abortSignal?.removeEventListener("abort", stopOnAbort);
     unregisterHttpHandler?.();
+    await execApprovalsHandler?.stop().catch(() => undefined);
     await gracefulStop();
   }
 }

@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { createTestPluginApi } from "../../../test/helpers/plugins/plugin-api.js";
 import type { OpenClawPluginApi, OpenClawPluginToolContext } from "../runtime-api.js";
-import { createLobsterTool } from "./lobster-tool.js";
 import { createFakeTaskFlow } from "./taskflow-test-helpers.js";
+
+let createLobsterTool: typeof import("./lobster-tool.js").createLobsterTool;
 
 function fakeApi(overrides: Partial<OpenClawPluginApi> = {}): OpenClawPluginApi {
   return createTestPluginApi({
@@ -31,6 +32,8 @@ function fakeCtx(overrides: Partial<OpenClawPluginToolContext> = {}): OpenClawPl
 
 describe("lobster plugin tool", () => {
   it("returns the Lobster envelope in details", async () => {
+    ({ createLobsterTool } = await import("./lobster-tool.js"));
+
     const runner = {
       run: vi.fn().mockResolvedValue({
         ok: true,
@@ -63,6 +66,8 @@ describe("lobster plugin tool", () => {
   });
 
   it("supports approval envelopes without changing the tool contract", async () => {
+    ({ createLobsterTool } = await import("./lobster-tool.js"));
+
     const runner = {
       run: vi.fn().mockResolvedValue({
         ok: true,
@@ -106,6 +111,8 @@ describe("lobster plugin tool", () => {
   });
 
   it("throws when the runner returns an error envelope", async () => {
+    ({ createLobsterTool } = await import("./lobster-tool.js"));
+
     const tool = createLobsterTool(fakeApi(), {
       runner: {
         run: vi.fn().mockResolvedValue({
@@ -127,6 +134,8 @@ describe("lobster plugin tool", () => {
   });
 
   it("can run through managed TaskFlow mode", async () => {
+    ({ createLobsterTool } = await import("./lobster-tool.js"));
+
     const runner = {
       run: vi.fn().mockResolvedValue({
         ok: true,
@@ -183,6 +192,8 @@ describe("lobster plugin tool", () => {
   });
 
   it("rejects managed TaskFlow params when no bound taskFlow runtime is available", async () => {
+    ({ createLobsterTool } = await import("./lobster-tool.js"));
+
     const tool = createLobsterTool(fakeApi(), {
       runner: { run: vi.fn() },
     });
@@ -198,6 +209,8 @@ describe("lobster plugin tool", () => {
   });
 
   it("rejects invalid flowStateJson in managed TaskFlow mode", async () => {
+    ({ createLobsterTool } = await import("./lobster-tool.js"));
+
     const tool = createLobsterTool(fakeApi(), {
       runner: { run: vi.fn() },
       taskFlow: createFakeTaskFlow(),
@@ -215,6 +228,8 @@ describe("lobster plugin tool", () => {
   });
 
   it("rejects managed TaskFlow resume mode without a token", async () => {
+    ({ createLobsterTool } = await import("./lobster-tool.js"));
+
     const tool = createLobsterTool(fakeApi(), {
       runner: { run: vi.fn() },
       taskFlow: createFakeTaskFlow(),
@@ -231,6 +246,8 @@ describe("lobster plugin tool", () => {
   });
 
   it("rejects managed TaskFlow resume mode without approve", async () => {
+    ({ createLobsterTool } = await import("./lobster-tool.js"));
+
     const tool = createLobsterTool(fakeApi(), {
       runner: { run: vi.fn() },
       taskFlow: createFakeTaskFlow(),
@@ -247,6 +264,8 @@ describe("lobster plugin tool", () => {
   });
 
   it("requires action", async () => {
+    ({ createLobsterTool } = await import("./lobster-tool.js"));
+
     const tool = createLobsterTool(fakeApi(), {
       runner: { run: vi.fn() },
     });
@@ -254,6 +273,8 @@ describe("lobster plugin tool", () => {
   });
 
   it("rejects unknown action", async () => {
+    ({ createLobsterTool } = await import("./lobster-tool.js"));
+
     const tool = createLobsterTool(fakeApi(), {
       runner: { run: vi.fn() },
     });
@@ -265,6 +286,8 @@ describe("lobster plugin tool", () => {
   });
 
   it("rejects absolute cwd", async () => {
+    ({ createLobsterTool } = await import("./lobster-tool.js"));
+
     const tool = createLobsterTool(fakeApi(), {
       runner: { run: vi.fn() },
     });
@@ -278,6 +301,8 @@ describe("lobster plugin tool", () => {
   });
 
   it("rejects cwd that escapes the gateway working directory", async () => {
+    ({ createLobsterTool } = await import("./lobster-tool.js"));
+
     const tool = createLobsterTool(fakeApi(), {
       runner: { run: vi.fn() },
     });
@@ -291,6 +316,8 @@ describe("lobster plugin tool", () => {
   });
 
   it("can be gated off in sandboxed contexts", async () => {
+    ({ createLobsterTool } = await import("./lobster-tool.js"));
+
     const api = fakeApi();
     const factoryTool = (ctx: OpenClawPluginToolContext) => {
       if (ctx.sandboxed) {

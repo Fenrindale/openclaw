@@ -1,5 +1,3 @@
-import { normalizeLowercaseStringOrEmpty } from "../../../../src/shared/string-coerce.js";
-
 const MEMORY_MULTIMODAL_SPECS = {
   image: {
     labelPrefix: "Image file",
@@ -75,7 +73,7 @@ export function buildMemoryMultimodalLabel(
 }
 
 export function buildCaseInsensitiveExtensionGlob(extension: string): string {
-  const normalized = normalizeLowercaseStringOrEmpty(extension).replace(/^\./, "");
+  const normalized = extension.trim().replace(/^\./, "").toLowerCase();
   if (!normalized) {
     return "*";
   }
@@ -90,7 +88,7 @@ export function classifyMemoryMultimodalPath(
   if (!isMemoryMultimodalEnabled(settings)) {
     return null;
   }
-  const lower = normalizeLowercaseStringOrEmpty(filePath);
+  const lower = filePath.trim().toLowerCase();
   for (const modality of settings.modalities) {
     for (const extension of getMemoryMultimodalExtensions(modality)) {
       if (lower.endsWith(extension)) {

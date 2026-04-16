@@ -3,7 +3,6 @@ import { createChannelReplyPipeline } from "openclaw/plugin-sdk/channel-reply-pi
 import {
   resolveCommandAuthorizedFromAuthorizers,
   resolveNativeCommandSessionTargets,
-  listProviderPluginCommandSpecs,
 } from "openclaw/plugin-sdk/command-auth";
 import { type ChatCommandDefinition, type CommandArgs } from "openclaw/plugin-sdk/command-auth";
 import {
@@ -12,7 +11,7 @@ import {
 } from "openclaw/plugin-sdk/config-runtime";
 import type { ReplyPayload } from "openclaw/plugin-sdk/reply-runtime";
 import { danger, logVerbose } from "openclaw/plugin-sdk/runtime-env";
-import { chunkItems, normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
+import { chunkItems } from "openclaw/plugin-sdk/text-runtime";
 import type { ResolvedSlackAccount } from "../accounts.js";
 import { truncateSlackText } from "../truncate.js";
 import { resolveSlackAllowListMatch, resolveSlackUserAllowed } from "./allow-list.js";
@@ -34,7 +33,6 @@ import { resolveSlackRoomContextHints } from "./room-context.js";
 type SlackBlock = { type: string; [key: string]: unknown };
 
 const SLACK_COMMAND_ARG_ACTION_ID = "openclaw_cmdarg";
-const SLACK_COMMAND_ARG_ACTION_LISTENER = /^openclaw_cmdarg/;
 const SLACK_COMMAND_ARG_VALUE_PREFIX = "cmdarg";
 const SLACK_COMMAND_ARG_BUTTON_ROW_SIZE = 5;
 const SLACK_COMMAND_ARG_OVERFLOW_MIN = 3;
@@ -222,18 +220,16 @@ function buildSlackCommandArgMenuBlocks(params: {
           },
         ]
       : encodedChoices.length <= SLACK_COMMAND_ARG_BUTTON_ROW_SIZE || !canUseStaticSelect
-        ? chunkItems(encodedChoices, SLACK_COMMAND_ARG_BUTTON_ROW_SIZE).map(
-            (choices, rowIndex) => ({
-              type: "actions",
-              elements: choices.map((choice, colIndex) => ({
-                type: "button",
-                action_id: `${SLACK_COMMAND_ARG_ACTION_ID}_${rowIndex}_${colIndex}`,
-                text: { type: "plain_text", text: choice.label },
-                value: choice.value,
-                confirm: buildSlackArgMenuConfirm({ command: params.command, arg: params.arg }),
-              })),
-            }),
-          )
+        ? chunkItems(encodedChoices, SLACK_COMMAND_ARG_BUTTON_ROW_SIZE).map((choices) => ({
+            type: "actions",
+            elements: choices.map((choice) => ({
+              type: "button",
+              action_id: SLACK_COMMAND_ARG_ACTION_ID,
+              text: { type: "plain_text", text: choice.label },
+              value: choice.value,
+              confirm: buildSlackArgMenuConfirm({ command: params.command, arg: params.arg }),
+            })),
+          }))
         : chunkItems(encodedChoices, SLACK_COMMAND_ARG_SELECT_OPTIONS_MAX).map(
             (choices, index) => ({
               type: "actions",
@@ -674,17 +670,6 @@ export async function registerSlackMonitorSlashCommands(params: {
       skillCommands,
       provider: "slack",
     });
-    const existingNativeNames = new Set(
-      nativeCommands.map((c) => normalizeLowercaseStringOrEmpty(c.name)).filter(Boolean),
-    );
-    for (const pluginCommand of listProviderPluginCommandSpecs("slack")) {
-      const normalizedName = normalizeLowercaseStringOrEmpty(pluginCommand.name);
-      if (!normalizedName || existingNativeNames.has(normalizedName)) {
-        continue;
-      }
-      existingNativeNames.add(normalizedName);
-      nativeCommands.push(pluginCommand);
-    }
   }
 
   if (nativeCommands.length > 0) {
@@ -784,9 +769,9 @@ export async function registerSlackMonitorSlashCommands(params: {
         await ack({ options: [] });
         return;
       }
-      const query = normalizeLowercaseStringOrEmpty(typedBody.value);
+      const query = typedBody.value?.trim().toLowerCase() ?? "";
       const options = entry.choices
-        .filter((choice) => !query || normalizeLowercaseStringOrEmpty(choice.label).includes(query))
+        .filter((choice) => !query || choice.label.toLowerCase().includes(query))
         .slice(0, SLACK_COMMAND_ARG_SELECT_OPTIONS_MAX)
         .map((choice) => ({
           text: { type: "plain_text", text: choice.label.slice(0, 75) },
@@ -807,7 +792,7 @@ export async function registerSlackMonitorSlashCommands(params: {
     );
   }
 
-  const registerArgAction = (actionId: string | RegExp) => {
+  const registerArgAction = (actionId: string) => {
     (
       ctx.app as unknown as {
         action: NonNullable<(typeof ctx.app & { action?: unknown })["action"]>;
@@ -885,5 +870,5 @@ export async function registerSlackMonitorSlashCommands(params: {
       });
     });
   };
-  registerArgAction(SLACK_COMMAND_ARG_ACTION_LISTENER);
+  registerArgAction(SLACK_COMMAND_ARG_ACTION_ID);
 }

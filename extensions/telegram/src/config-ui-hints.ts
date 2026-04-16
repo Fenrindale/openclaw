@@ -1,4 +1,4 @@
-import type { ChannelConfigUiHint } from "openclaw/plugin-sdk/channel-core";
+import type { ChannelConfigUiHint } from "openclaw/plugin-sdk/core";
 
 export const telegramChannelConfigUiHints = {
   "": {

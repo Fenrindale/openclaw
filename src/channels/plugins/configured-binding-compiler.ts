@@ -1,14 +1,10 @@
 import { listConfiguredBindings } from "../../config/bindings.js";
-import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import type { OpenClawConfig } from "../../config/config.js";
 import {
   getActivePluginChannelRegistryVersion,
   requireActivePluginChannelRegistry,
 } from "../../plugins/runtime.js";
 import { pickFirstExistingAgentId } from "../../routing/resolve-route.js";
-import {
-  normalizeOptionalLowercaseString,
-  normalizeOptionalString,
-} from "../../shared/string-coerce.js";
 import { resolveChannelConfiguredBindingProvider } from "./binding-provider.js";
 import type { CompiledConfiguredBinding, ConfiguredBindingChannel } from "./binding-types.js";
 import { resolveConfiguredBindingConsumer } from "./configured-binding-consumers.js";
@@ -37,7 +33,7 @@ const compiledRegistryCache = new WeakMap<
 >();
 
 function resolveLoadedChannelPlugin(channel: string) {
-  const normalized = normalizeOptionalLowercaseString(channel);
+  const normalized = channel.trim().toLowerCase();
   if (!normalized) {
     return undefined;
   }
@@ -48,7 +44,7 @@ function resolveConfiguredBindingAdapter(channel: string): {
   channel: ConfiguredBindingChannel;
   provider: ChannelConfiguredBindingProvider;
 } | null {
-  const normalized = normalizeOptionalLowercaseString(channel);
+  const normalized = channel.trim().toLowerCase();
   if (!normalized) {
     return null;
   }
@@ -71,7 +67,8 @@ function resolveConfiguredBindingAdapter(channel: string): {
 function resolveBindingConversationId(binding: {
   match?: { peer?: { id?: string } };
 }): string | null {
-  return normalizeOptionalString(binding.match?.peer?.id) ?? null;
+  const id = binding.match?.peer?.id?.trim();
+  return id ? id : null;
 }
 
 function compileConfiguredBindingTarget(params: {
@@ -111,7 +108,7 @@ function compileConfiguredBindingRule(params: {
   }
   return {
     channel: params.channel,
-    accountPattern: normalizeOptionalString(params.binding.match.accountId),
+    accountPattern: params.binding.match.accountId?.trim() || undefined,
     binding: params.binding,
     bindingConversationId: params.bindingConversationId,
     target: params.target,

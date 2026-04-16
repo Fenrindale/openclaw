@@ -1,6 +1,5 @@
 import { spawnSync } from "node:child_process";
 import os from "node:os";
-import { normalizeOptionalString } from "../shared/string-coerce.js";
 
 export type OsSummary = {
   platform: NodeJS.Platform;
@@ -9,9 +8,13 @@ export type OsSummary = {
   label: string;
 };
 
+function safeTrim(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
 function macosVersion(): string {
   const res = spawnSync("sw_vers", ["-productVersion"], { encoding: "utf-8" });
-  const out = normalizeOptionalString(res.stdout) ?? "";
+  const out = safeTrim(res.stdout);
   return out || os.release();
 }
 

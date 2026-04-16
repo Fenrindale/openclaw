@@ -1,5 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearProbeCache, FEISHU_PROBE_REQUEST_TIMEOUT_MS, probeFeishu } from "./probe.js";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const createFeishuClientMock = vi.hoisted(() => vi.fn());
 
@@ -7,10 +6,14 @@ vi.mock("./client.js", () => ({
   createFeishuClient: createFeishuClientMock,
 }));
 
+let FEISHU_PROBE_REQUEST_TIMEOUT_MS: typeof import("./probe.js").FEISHU_PROBE_REQUEST_TIMEOUT_MS;
+let probeFeishu: typeof import("./probe.js").probeFeishu;
+let clearProbeCache: typeof import("./probe.js").clearProbeCache;
+
 const DEFAULT_CREDS = { appId: "cli_123", appSecret: "secret" } as const; // pragma: allowlist secret
 const DEFAULT_SUCCESS_RESPONSE = {
   code: 0,
-  data: { pingBotInfo: { botName: "TestBot", botID: "ou_abc123" } },
+  bot: { bot_name: "TestBot", open_id: "ou_abc123" },
 } as const;
 const DEFAULT_SUCCESS_RESULT = {
   ok: true,
@@ -20,7 +23,7 @@ const DEFAULT_SUCCESS_RESULT = {
 } as const;
 const BOT1_RESPONSE = {
   code: 0,
-  data: { pingBotInfo: { botName: "Bot1", botID: "ou_1" } },
+  bot: { bot_name: "Bot1", open_id: "ou_1" },
 } as const;
 
 function makeRequestFn(response: Record<string, unknown>) {
@@ -97,6 +100,11 @@ async function readSequentialDefaultProbePair() {
 }
 
 describe("probeFeishu", () => {
+  beforeAll(async () => {
+    ({ FEISHU_PROBE_REQUEST_TIMEOUT_MS, probeFeishu, clearProbeCache } =
+      await import("./probe.js"));
+  });
+
   beforeEach(() => {
     clearProbeCache();
     vi.restoreAllMocks();
@@ -135,9 +143,8 @@ describe("probeFeishu", () => {
 
     expect(requestFn).toHaveBeenCalledWith(
       expect.objectContaining({
-        method: "POST",
-        url: "/open-apis/bot/v1/openclaw_bot/ping",
-        data: { needBotInfo: true },
+        method: "GET",
+        url: "/open-apis/bot/v3/info",
         timeout: FEISHU_PROBE_REQUEST_TIMEOUT_MS,
       }),
     );
@@ -260,10 +267,10 @@ describe("probeFeishu", () => {
     });
   });
 
-  it("handles response with pingBotInfo in data", async () => {
+  it("handles response.data.bot fallback path", async () => {
     setupClient({
       code: 0,
-      data: { pingBotInfo: { botName: "DataBot", botID: "ou_data" } },
+      data: { bot: { bot_name: "DataBot", open_id: "ou_data" } },
     });
 
     await expectDefaultSuccessResult(DEFAULT_CREDS, {

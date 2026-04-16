@@ -1,5 +1,4 @@
 import type { Command } from "commander";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import type { BrowserParentOpts } from "../browser-cli-shared.js";
 import { danger, defaultRuntime } from "../core-api.js";
 import {
@@ -32,7 +31,7 @@ export function registerBrowserFormWaitEvalCommands(
           body: {
             kind: "fill",
             fields,
-            targetId: normalizeOptionalString(opts.targetId),
+            targetId: opts.targetId?.trim() || undefined,
           },
         });
         logBrowserActionResult(parent, result, `filled ${fields.length} field(s)`);
@@ -61,7 +60,7 @@ export function registerBrowserFormWaitEvalCommands(
     .action(async (selector: string | undefined, opts, cmd) => {
       const { parent, profile } = resolveBrowserActionContext(cmd, parentOpts);
       try {
-        const sel = normalizeOptionalString(selector);
+        const sel = selector?.trim() || undefined;
         const load =
           opts.load === "load" || opts.load === "domcontentloaded" || opts.load === "networkidle"
             ? (opts.load as "load" | "domcontentloaded" | "networkidle")
@@ -73,13 +72,13 @@ export function registerBrowserFormWaitEvalCommands(
           body: {
             kind: "wait",
             timeMs: Number.isFinite(opts.time) ? opts.time : undefined,
-            text: normalizeOptionalString(opts.text),
-            textGone: normalizeOptionalString(opts.textGone),
+            text: opts.text?.trim() || undefined,
+            textGone: opts.textGone?.trim() || undefined,
             selector: sel,
-            url: normalizeOptionalString(opts.url),
+            url: opts.url?.trim() || undefined,
             loadState: load,
-            fn: normalizeOptionalString(opts.fn),
-            targetId: normalizeOptionalString(opts.targetId),
+            fn: opts.fn?.trim() || undefined,
+            targetId: opts.targetId?.trim() || undefined,
             timeoutMs,
           },
           timeoutMs,
@@ -111,8 +110,8 @@ export function registerBrowserFormWaitEvalCommands(
           body: {
             kind: "evaluate",
             fn: opts.fn,
-            ref: normalizeOptionalString(opts.ref),
-            targetId: normalizeOptionalString(opts.targetId),
+            ref: opts.ref?.trim() || undefined,
+            targetId: opts.targetId?.trim() || undefined,
           },
         });
         if (parent?.json) {

@@ -1,4 +1,4 @@
-import { getRuntimeConfigSnapshot } from "openclaw/plugin-sdk/config-runtime";
+import { getRuntimeConfigSnapshot, type OpenClawConfig } from "@openclaw/plugin-sdk/config-runtime";
 import {
   jsonResult,
   readCache,
@@ -7,7 +7,7 @@ import {
   resolveCacheTtlMs,
   resolveTimeoutSeconds,
   writeCache,
-} from "openclaw/plugin-sdk/provider-web-search";
+} from "@openclaw/plugin-sdk/provider-web-search";
 import { isXaiToolEnabled, resolveXaiToolApiKey } from "./src/tool-auth-shared.js";
 import { resolveEffectiveXSearchConfig } from "./src/x-search-config.js";
 import {
@@ -51,27 +51,27 @@ function getSharedXSearchCache(): Map<string, XSearchCacheEntry> {
 
 const X_SEARCH_CACHE = getSharedXSearchCache();
 
-function resolveXSearchConfig(cfg?: unknown): Record<string, unknown> | undefined {
-  return resolveEffectiveXSearchConfig(cfg as never);
+function resolveXSearchConfig(cfg?: OpenClawConfig): Record<string, unknown> | undefined {
+  return resolveEffectiveXSearchConfig(cfg);
 }
 
 function resolveXSearchEnabled(params: {
-  cfg?: unknown;
+  cfg?: OpenClawConfig;
   config?: Record<string, unknown>;
-  runtimeConfig?: unknown;
+  runtimeConfig?: OpenClawConfig;
 }): boolean {
   return isXaiToolEnabled({
     enabled: params.config?.enabled as boolean | undefined,
-    runtimeConfig: params.runtimeConfig as never,
-    sourceConfig: params.cfg as never,
+    runtimeConfig: params.runtimeConfig,
+    sourceConfig: params.cfg,
   });
 }
 
 function resolveXSearchApiKey(params: {
-  sourceConfig?: unknown;
-  runtimeConfig?: unknown;
+  sourceConfig?: OpenClawConfig;
+  runtimeConfig?: OpenClawConfig;
 }): string | undefined {
-  return resolveXaiToolApiKey(params as never);
+  return resolveXaiToolApiKey(params);
 }
 
 function normalizeOptionalIsoDate(value: string | undefined, label: string): string | undefined {
@@ -120,8 +120,8 @@ function buildXSearchCacheKey(params: {
 }
 
 export function createXSearchTool(options?: {
-  config?: unknown;
-  runtimeConfig?: Record<string, unknown> | null;
+  config?: OpenClawConfig;
+  runtimeConfig?: OpenClawConfig | null;
 }) {
   const xSearchConfig = resolveXSearchConfig(options?.config);
   const runtimeConfig = options?.runtimeConfig ?? getRuntimeConfigSnapshot();

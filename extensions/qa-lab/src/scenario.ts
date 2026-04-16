@@ -1,12 +1,7 @@
-import { formatErrorMessage } from "openclaw/plugin-sdk/error-runtime";
-import type { QaTransportActionName, QaTransportState } from "./qa-transport.js";
+import type { QaBusState } from "./bus-state.js";
 
 export type QaScenarioStepContext = {
-  state: QaTransportState;
-  performAction?: (
-    action: QaTransportActionName,
-    args: Record<string, unknown>,
-  ) => Promise<unknown>;
+  state: QaBusState;
 };
 
 export type QaScenarioStep = {
@@ -47,7 +42,7 @@ export async function runQaScenario(
         ...(details ? { details } : {}),
       });
     } catch (error) {
-      const details = formatErrorMessage(error);
+      const details = error instanceof Error ? error.message : String(error);
       steps.push({
         name: step.name,
         status: "fail",

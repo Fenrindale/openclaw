@@ -134,22 +134,17 @@ function buildTelegramExecApprovalPendingPayloadForTest(params: {
 
 const telegramApprovalPlugin: Pick<
   ChannelPlugin,
-  "id" | "meta" | "capabilities" | "config" | "approvalCapability"
+  "id" | "meta" | "capabilities" | "config" | "approvals"
 > = {
   ...createChannelTestPluginBase({ id: "telegram" }),
-  approvalCapability: {
+  approvals: {
     delivery: {
-      shouldSuppressForwardingFallback: (params: {
-        cfg: OpenClawConfig;
-        target: { channel: string; accountId?: string | null };
-        request: {
-          request: { turnSourceChannel?: string | null; turnSourceAccountId?: string | null };
-        };
-      }) => shouldSuppressTelegramExecApprovalForwardingFallbackForTest(params),
+      shouldSuppressForwardingFallback: (params) =>
+        shouldSuppressTelegramExecApprovalForwardingFallbackForTest(params),
     },
     render: {
       exec: {
-        buildPendingPayload: ({ request }: { request: { id: string } }) =>
+        buildPendingPayload: ({ request }) =>
           buildTelegramExecApprovalPendingPayloadForTest({ request }),
       },
     },
@@ -157,18 +152,12 @@ const telegramApprovalPlugin: Pick<
 };
 const discordApprovalPlugin: Pick<
   ChannelPlugin,
-  "id" | "meta" | "capabilities" | "config" | "approvalCapability"
+  "id" | "meta" | "capabilities" | "config" | "approvals"
 > = {
   ...createChannelTestPluginBase({ id: "discord" }),
-  approvalCapability: {
+  approvals: {
     delivery: {
-      shouldSuppressForwardingFallback: ({
-        cfg,
-        target,
-      }: {
-        cfg: OpenClawConfig;
-        target: { channel: string; accountId?: string | null };
-      }) =>
+      shouldSuppressForwardingFallback: ({ cfg, target }) =>
         target.channel === "discord" &&
         isDiscordExecApprovalClientEnabledForTest({ cfg, accountId: target.accountId }),
     },
@@ -346,7 +335,7 @@ describe("exec approval forwarder", () => {
     });
     expect(deliver).toHaveBeenCalledTimes(2);
 
-    await vi.advanceTimersByTimeAsync(baseRequest.expiresAtMs - baseRequest.createdAtMs);
+    await vi.runAllTimersAsync();
     expect(deliver).toHaveBeenCalledTimes(2);
   });
 
@@ -358,7 +347,7 @@ describe("exec approval forwarder", () => {
     await Promise.resolve();
     expect(deliver).toHaveBeenCalledTimes(1);
 
-    await vi.advanceTimersByTimeAsync(baseRequest.expiresAtMs - baseRequest.createdAtMs);
+    await vi.runAllTimersAsync();
     expect(deliver).toHaveBeenCalledTimes(2);
   });
 

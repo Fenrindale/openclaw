@@ -1,20 +1,13 @@
-import { estimateBase64DecodedBytes } from "openclaw/plugin-sdk/media-runtime";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 import type { RefAttachmentSummary } from "../ref-index-store.js";
 
-const MAX_FACE_EXT_BYTES = 64 * 1024;
-
 /** Replace QQ face tags with readable text labels. */
-export function parseFaceTags(text: string | undefined | null): string {
+export function parseFaceTags(text: string): string {
   if (!text) {
-    return "";
+    return text;
   }
 
   return text.replace(/<faceType=\d+,faceId="[^"]*",ext="([^"]*)">/g, (_match, ext: string) => {
     try {
-      if (estimateBase64DecodedBytes(ext) > MAX_FACE_EXT_BYTES) {
-        return "[Emoji: unknown emoji]";
-      }
       const decoded = Buffer.from(ext, "base64").toString("utf-8");
       const parsed = JSON.parse(decoded);
       const faceName = parsed.text || "unknown emoji";
@@ -26,9 +19,9 @@ export function parseFaceTags(text: string | undefined | null): string {
 }
 
 /** Remove internal framework markers before sending text outward. */
-export function filterInternalMarkers(text: string | undefined | null): string {
+export function filterInternalMarkers(text: string): string {
   if (!text) {
-    return "";
+    return text;
   }
 
   let result = text.replace(/\[\[[a-z_]+:\s*[^\]]*\]\]/gi, "");
@@ -69,7 +62,7 @@ export function buildAttachmentSummaries(
     return undefined;
   }
   return attachments.map((att, idx) => {
-    const ct = normalizeLowercaseStringOrEmpty(att.content_type);
+    const ct = att.content_type?.toLowerCase() ?? "";
     let type: RefAttachmentSummary["type"] = "unknown";
     if (ct.startsWith("image/")) {
       type = "image";

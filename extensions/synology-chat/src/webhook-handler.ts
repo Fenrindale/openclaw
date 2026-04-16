@@ -5,7 +5,6 @@
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import * as querystring from "node:querystring";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 import {
   beginWebhookRequestPipelineOrReject,
   createWebhookInFlightLimiter,
@@ -265,7 +264,7 @@ function extractTokenFromHeaders(req: IncomingMessage): string | undefined {
  * - text    <- text | message | content
  */
 function parsePayload(req: IncomingMessage, body: string): SynologyWebhookPayload | null {
-  const contentType = normalizeLowercaseStringOrEmpty(req.headers["content-type"]);
+  const contentType = String(req.headers["content-type"] ?? "").toLowerCase();
 
   let bodyFields: Record<string, unknown> = {};
   if (contentType.includes("application/json")) {

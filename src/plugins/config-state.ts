@@ -1,8 +1,4 @@
-import type { OpenClawConfig } from "../config/types.openclaw.js";
-import {
-  normalizeOptionalLowercaseString,
-  normalizeOptionalString,
-} from "../shared/string-coerce.js";
+import type { OpenClawConfig } from "../config/config.js";
 import {
   resolveMemorySlotDecisionShared,
   resolveEnableStateShared,
@@ -15,7 +11,7 @@ import {
   type NormalizedPluginsConfig as SharedNormalizedPluginsConfig,
 } from "./config-normalization-shared.js";
 import { loadPluginManifestRegistry } from "./manifest-registry.js";
-import type { PluginOrigin } from "./plugin-origin.types.js";
+import type { PluginOrigin } from "./types.js";
 
 export type PluginActivationSource = "disabled" | "explicit" | "auto" | "default";
 
@@ -23,7 +19,6 @@ export type PluginExplicitSelectionCause =
   | "enabled-in-config"
   | "bundled-channel-enabled-in-config"
   | "selected-memory-slot"
-  | "selected-context-engine-slot"
   | "selected-in-allowlist";
 
 export type PluginActivationCause =
@@ -74,21 +69,12 @@ function getBundledPluginAliasLookup(): ReadonlyMap<string, string> {
     if (plugin.origin !== "bundled") {
       continue;
     }
-    const pluginId = normalizeOptionalLowercaseString(plugin.id);
-    if (pluginId) {
-      lookup.set(pluginId, plugin.id);
-    }
+    lookup.set(plugin.id.toLowerCase(), plugin.id);
     for (const providerId of plugin.providers) {
-      const normalizedProviderId = normalizeOptionalLowercaseString(providerId);
-      if (normalizedProviderId) {
-        lookup.set(normalizedProviderId, plugin.id);
-      }
+      lookup.set(providerId.toLowerCase(), plugin.id);
     }
     for (const legacyPluginId of plugin.legacyPluginIds ?? []) {
-      const normalizedLegacyPluginId = normalizeOptionalLowercaseString(legacyPluginId);
-      if (normalizedLegacyPluginId) {
-        lookup.set(normalizedLegacyPluginId, plugin.id);
-      }
+      lookup.set(legacyPluginId.toLowerCase(), plugin.id);
     }
   }
   bundledPluginAliasLookupCache = lookup;
@@ -96,16 +82,14 @@ function getBundledPluginAliasLookup(): ReadonlyMap<string, string> {
 }
 
 export function normalizePluginId(id: string): string {
-  const trimmed = normalizeOptionalString(id) ?? "";
-  const normalized = normalizeOptionalLowercaseString(trimmed) ?? "";
-  return getBundledPluginAliasLookup().get(normalized) ?? trimmed;
+  const trimmed = id.trim();
+  return getBundledPluginAliasLookup().get(trimmed.toLowerCase()) ?? trimmed;
 }
 
 const PLUGIN_ACTIVATION_REASON_BY_CAUSE: Record<PluginActivationCause, string> = {
   "enabled-in-config": "enabled in config",
   "bundled-channel-enabled-in-config": "channel enabled in config",
   "selected-memory-slot": "selected memory slot",
-  "selected-context-engine-slot": "selected context engine slot",
   "selected-in-allowlist": "selected in allowlist",
   "plugins-disabled": "plugins disabled",
   "blocked-by-denylist": "blocked by denylist",
@@ -233,9 +217,6 @@ function resolveExplicitPluginSelection(params: {
   if (params.config.slots.memory === params.id) {
     return { explicitlyEnabled: true, cause: "selected-memory-slot" };
   }
-  if (params.config.slots.contextEngine === params.id) {
-    return { explicitlyEnabled: true, cause: "selected-context-engine-slot" };
-  }
   if (params.origin !== "bundled" && params.config.allow.includes(params.id)) {
     return { explicitlyEnabled: true, cause: "selected-in-allowlist" };
   }
@@ -293,12 +274,7 @@ export function resolvePluginActivationState(params: {
     });
   }
   const explicitlyAllowed = params.config.allow.includes(params.id);
-  if (
-    params.origin === "workspace" &&
-    !explicitlyAllowed &&
-    entry?.enabled !== true &&
-    explicitSelection.cause !== "selected-context-engine-slot"
-  ) {
+  if (params.origin === "workspace" && !explicitlyAllowed && entry?.enabled !== true) {
     return toPluginActivationState({
       enabled: false,
       activated: false,
@@ -314,15 +290,6 @@ export function resolvePluginActivationState(params: {
       explicitlyEnabled: true,
       source: "explicit",
       cause: "selected-memory-slot",
-    });
-  }
-  if (params.config.slots.contextEngine === params.id) {
-    return toPluginActivationState({
-      enabled: true,
-      activated: true,
-      explicitlyEnabled: true,
-      source: "explicit",
-      cause: "selected-context-engine-slot",
     });
   }
   if (explicitSelection.cause === "bundled-channel-enabled-in-config") {

@@ -1,5 +1,4 @@
 import { normalizeProviderId } from "../agents/provider-id.js";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 
 export const ANTHROPIC_SETUP_TOKEN_PREFIX = "sk-ant-oat01-";
 export const ANTHROPIC_SETUP_TOKEN_MIN_LENGTH = 80;
@@ -10,7 +9,8 @@ export function normalizeTokenProfileName(raw: string): string {
   if (!trimmed) {
     return DEFAULT_TOKEN_PROFILE_NAME;
   }
-  const slug = normalizeLowercaseStringOrEmpty(trimmed)
+  const slug = trimmed
+    .toLowerCase()
     .replace(/[^a-z0-9._-]+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-+|-+$/g, "");

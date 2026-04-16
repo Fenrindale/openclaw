@@ -19,7 +19,6 @@ function resolveExport<T>(mod: LazyServiceModule, names: string[]): T | null {
 export async function startLazyPluginServiceModule(params: {
   skipEnvVar?: string;
   overrideEnvVar?: string;
-  validateOverrideSpecifier?: (specifier: string) => string;
   loadDefaultModule: () => Promise<LazyServiceModule>;
   loadOverrideModule?: (specifier: string) => Promise<LazyServiceModule>;
   startExportNames: string[];
@@ -34,13 +33,7 @@ export async function startLazyPluginServiceModule(params: {
   const override = overrideEnvVar ? process.env[overrideEnvVar]?.trim() : undefined;
   const loadOverrideModule =
     params.loadOverrideModule ?? (async (specifier: string) => await import(specifier));
-  const validatedOverride =
-    override && params.validateOverrideSpecifier
-      ? params.validateOverrideSpecifier(override)
-      : override;
-  const mod = validatedOverride
-    ? await loadOverrideModule(validatedOverride)
-    : await params.loadDefaultModule();
+  const mod = override ? await loadOverrideModule(override) : await params.loadDefaultModule();
   const start = resolveExport<() => Promise<unknown>>(mod, params.startExportNames);
   if (!start) {
     return null;

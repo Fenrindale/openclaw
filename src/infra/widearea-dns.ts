@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 import { CONFIG_DIR, ensureDir } from "../utils.js";
 
 export function normalizeWideAreaDomain(raw?: string | null): string | null {
@@ -30,7 +29,9 @@ export function getWideAreaZonePath(domain: string): string {
 }
 
 function dnsLabel(raw: string, fallback: string): string {
-  const normalized = normalizeLowercaseStringOrEmpty(raw)
+  const normalized = raw
+    .trim()
+    .toLowerCase()
     .replace(/[^a-z0-9-]+/g, "-")
     .replace(/^-+/, "")
     .replace(/-+$/, "");

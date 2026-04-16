@@ -402,18 +402,6 @@ class SecurePrefs(
     securePrefs.edit { putString(key, password.trim()) }
   }
 
-  fun clearGatewaySetupAuth() {
-    val instanceId = _instanceId.value
-    securePrefs.edit {
-      remove("gateway.manual.token")
-      remove("gateway.token.$instanceId")
-      remove("gateway.bootstrapToken.$instanceId")
-      remove("gateway.password.$instanceId")
-    }
-    _gatewayToken.value = ""
-    _gatewayBootstrapToken.value = ""
-  }
-
   fun loadGatewayTlsFingerprint(stableId: String): String? {
     val key = "gateway.tls.$stableId"
     return plainPrefs.getString(key, null)?.trim()?.takeIf { it.isNotEmpty() }

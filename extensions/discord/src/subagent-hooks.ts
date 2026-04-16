@@ -1,8 +1,4 @@
-import type { OpenClawPluginApi } from "openclaw/plugin-sdk/channel-plugin-common";
-import {
-  normalizeOptionalLowercaseString,
-  normalizeOptionalStringifiedId,
-} from "openclaw/plugin-sdk/text-runtime";
+import type { OpenClawPluginApi } from "openclaw/plugin-sdk/core";
 import { resolveDiscordAccount } from "./accounts.js";
 import {
   autoBindSpawnedDiscordSubagent,
@@ -52,24 +48,8 @@ type DiscordSubagentDeliveryTargetEvent = {
   };
 };
 
-type DiscordSubagentSpawningResult =
-  | { status: "ok"; threadBindingReady?: boolean }
-  | { status: "error"; error: string }
-  | undefined;
-
-type DiscordSubagentDeliveryTargetResult =
-  | {
-      origin: {
-        channel: "discord";
-        accountId?: string;
-        to: string;
-        threadId?: string | number;
-      };
-    }
-  | undefined;
-
 function normalizeThreadBindingTargetKind(raw?: string): ThreadBindingTargetKind | undefined {
-  const normalized = normalizeOptionalLowercaseString(raw);
+  const normalized = raw?.trim().toLowerCase();
   if (normalized === "subagent" || normalized === "acp") {
     return normalized;
   }
@@ -100,13 +80,13 @@ function resolveThreadBindingFlags(api: OpenClawPluginApi, accountId?: string) {
 export async function handleDiscordSubagentSpawning(
   api: OpenClawPluginApi,
   event: DiscordSubagentSpawningEvent,
-): Promise<DiscordSubagentSpawningResult> {
+) {
   if (!event.threadRequested) {
-    return undefined;
+    return;
   }
-  const channel = normalizeOptionalLowercaseString(event.requester?.channel);
+  const channel = event.requester?.channel?.trim().toLowerCase();
   if (channel !== "discord") {
-    return undefined;
+    return;
   }
   const threadBindingFlags = resolveThreadBindingFlags(api, event.requester?.accountId);
   if (!threadBindingFlags.enabled) {
@@ -161,20 +141,18 @@ export function handleDiscordSubagentEnded(event: DiscordSubagentEndedEvent) {
   });
 }
 
-export function handleDiscordSubagentDeliveryTarget(
-  event: DiscordSubagentDeliveryTargetEvent,
-): DiscordSubagentDeliveryTargetResult {
+export function handleDiscordSubagentDeliveryTarget(event: DiscordSubagentDeliveryTargetEvent) {
   if (!event.expectsCompletionMessage) {
-    return undefined;
+    return;
   }
-  const requesterChannel = normalizeOptionalLowercaseString(event.requesterOrigin?.channel);
+  const requesterChannel = event.requesterOrigin?.channel?.trim().toLowerCase();
   if (requesterChannel !== "discord") {
-    return undefined;
+    return;
   }
   const requesterAccountId = event.requesterOrigin?.accountId?.trim();
   const requesterThreadId =
     event.requesterOrigin?.threadId != null && event.requesterOrigin.threadId !== ""
-      ? (normalizeOptionalStringifiedId(event.requesterOrigin.threadId) ?? "")
+      ? String(event.requesterOrigin.threadId).trim()
       : "";
   const bindings = listThreadBindingsBySessionKey({
     targetSessionKey: event.childSessionKey,
@@ -182,7 +160,7 @@ export function handleDiscordSubagentDeliveryTarget(
     targetKind: "subagent",
   });
   if (bindings.length === 0) {
-    return undefined;
+    return;
   }
 
   let binding: (typeof bindings)[number] | undefined;
@@ -201,7 +179,7 @@ export function handleDiscordSubagentDeliveryTarget(
     binding = bindings[0];
   }
   if (!binding) {
-    return undefined;
+    return;
   }
   return {
     origin: {

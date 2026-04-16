@@ -8,7 +8,6 @@ import {
   requestBodyErrorToText,
 } from "../infra/http-body.js";
 import { pruneMapToMaxSize } from "../infra/map-size.js";
-import { normalizeOptionalLowercaseString } from "../shared/string-coerce.js";
 import type { FixedWindowRateLimiter } from "./webhook-memory-guards.js";
 
 export type WebhookBodyReadProfile = "pre-auth" | "post-auth";
@@ -145,7 +144,7 @@ export function isJsonContentType(value: string | string[] | undefined): boolean
   if (!first) {
     return false;
   }
-  const mediaType = normalizeOptionalLowercaseString(first.split(";", 1)[0]);
+  const mediaType = first.split(";", 1)[0]?.trim().toLowerCase();
   return mediaType === "application/json" || Boolean(mediaType?.endsWith("+json"));
 }
 

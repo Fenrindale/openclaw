@@ -4,12 +4,8 @@ import { parseReplyDirectives } from "../../../auto-reply/reply/reply-directives
 import type { ReasoningLevel, VerboseLevel } from "../../../auto-reply/thinking.js";
 import { isSilentReplyPayloadText, SILENT_REPLY_TOKEN } from "../../../auto-reply/tokens.js";
 import { formatToolAggregate } from "../../../auto-reply/tool-meta.js";
-import type { OpenClawConfig } from "../../../config/types.openclaw.js";
+import type { OpenClawConfig } from "../../../config/config.js";
 import { isCronSessionKey } from "../../../routing/session-key.js";
-import {
-  normalizeOptionalLowercaseString,
-  normalizeOptionalString,
-} from "../../../shared/string-coerce.js";
 import {
   BILLING_ERROR_USER_MESSAGE,
   formatAssistantErrorText,
@@ -18,10 +14,10 @@ import {
   isRawApiErrorPayload,
   normalizeTextForComparison,
 } from "../../pi-embedded-helpers.js";
-import type { ToolResultFormat } from "../../pi-embedded-subscribe.shared-types.js";
+import type { ToolResultFormat } from "../../pi-embedded-subscribe.js";
 import {
+  extractAssistantText,
   extractAssistantThinking,
-  extractAssistantVisibleText,
   formatReasoningMessage,
 } from "../../pi-embedded-utils.js";
 import { isExecLikeToolName, type ToolErrorSummary } from "../../tool-error-summary.js";
@@ -44,7 +40,7 @@ const RECOVERABLE_TOOL_ERROR_KEYWORDS = [
 ] as const;
 
 function isRecoverableToolError(error: string | undefined): boolean {
-  const errorLower = normalizeOptionalLowercaseString(error) ?? "";
+  const errorLower = (error ?? "").toLowerCase();
   return RECOVERABLE_TOOL_ERROR_KEYWORDS.some((keyword) => errorLower.includes(keyword));
 }
 
@@ -77,7 +73,7 @@ function resolveToolErrorWarningPolicy(params: {
   sessionKey: string;
   verboseLevel?: VerboseLevel;
 }): ToolErrorWarningPolicy {
-  const normalizedToolName = normalizeOptionalLowercaseString(params.lastToolError.toolName) ?? "";
+  const normalizedToolName = params.lastToolError.toolName.trim().toLowerCase();
   const includeDetails = shouldIncludeToolErrorDetails(params);
   if (params.suppressToolErrorWarnings) {
     return { showWarning: false, includeDetails };
@@ -159,7 +155,7 @@ export function buildEmbeddedRunPayloads(params: {
           })
       : undefined;
   const rawErrorMessage = lastAssistantErrored
-    ? normalizeOptionalString(params.lastAssistant?.errorMessage)
+    ? params.lastAssistant?.errorMessage?.trim() || undefined
     : undefined;
   const rawErrorFingerprint = rawErrorMessage
     ? getApiErrorPayloadFingerprint(rawErrorMessage)
@@ -217,9 +213,7 @@ export function buildEmbeddedRunPayloads(params: {
     replyItems.push({ text: reasoningText, isReasoning: true });
   }
 
-  const fallbackAnswerText = params.lastAssistant
-    ? extractAssistantVisibleText(params.lastAssistant)
-    : "";
+  const fallbackAnswerText = params.lastAssistant ? extractAssistantText(params.lastAssistant) : "";
   const shouldSuppressRawErrorText = (text: string) => {
     if (!lastAssistantErrored) {
       return false;
@@ -349,7 +343,7 @@ export function buildEmbeddedRunPayloads(params: {
   const hasAudioAsVoiceTag = replyItems.some((item) => item.audioAsVoice);
   return replyItems
     .map((item) => ({
-      text: normalizeOptionalString(item.text),
+      text: item.text?.trim() ? item.text.trim() : undefined,
       mediaUrls: item.media?.length ? item.media : undefined,
       mediaUrl: item.media?.[0],
       isError: item.isError,

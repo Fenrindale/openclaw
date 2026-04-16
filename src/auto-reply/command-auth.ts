@@ -1,16 +1,7 @@
-import {
-  getLoadedChannelPluginById,
-  listLoadedChannelPlugins,
-} from "../channels/plugins/registry-loaded.js";
-import type { ChannelPlugin } from "../channels/plugins/types.plugin.js";
-import type { ChannelId } from "../channels/plugins/types.public.js";
+import { getChannelPlugin, listChannelPlugins } from "../channels/plugins/index.js";
+import type { ChannelId, ChannelPlugin } from "../channels/plugins/types.js";
 import { normalizeAnyChannelId } from "../channels/registry.js";
-import type { OpenClawConfig } from "../config/types.openclaw.js";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalLowercaseString,
-  normalizeOptionalString,
-} from "../shared/string-coerce.js";
+import type { OpenClawConfig } from "../config/config.js";
 import { normalizeStringEntries } from "../shared/string-normalization.js";
 import {
   INTERNAL_MESSAGE_CHANNEL,
@@ -109,10 +100,10 @@ function resolveProviderFromContext(
 
 function probeInferredProviders(ctx: MsgContext, cfg: OpenClawConfig): InferredProviderProbe {
   let droppedResolutionError = false;
-  const candidates = listLoadedChannelPlugins()
+  const candidates = listChannelPlugins()
     .map((plugin) => {
       const resolvedAllowFrom = buildProviderAllowFromResolution({
-        plugin: plugin as ChannelPlugin,
+        plugin,
         cfg,
         accountId: ctx.AccountId,
       });
@@ -261,7 +252,7 @@ function buildProviderAllowFromResolution(params: {
 
 function describeAllowFromResolutionError(err: unknown): string {
   if (err instanceof Error) {
-    const name = normalizeOptionalString(err.name) ?? "";
+    const name = err.name.trim();
     return name || "Error";
   }
   return "unknown_error";
@@ -280,7 +271,7 @@ function resolveOwnerAllowFromList(params: {
   }
   const filtered: string[] = [];
   for (const entry of raw) {
-    const trimmed = normalizeOptionalString(String(entry ?? "")) ?? "";
+    const trimmed = String(entry ?? "").trim();
     if (!trimmed) {
       continue;
     }
@@ -454,7 +445,7 @@ function resolveCommandSenderAuthorization(params: {
 }
 
 function isConversationLikeIdentity(value: string): boolean {
-  const normalized = normalizeOptionalLowercaseString(value);
+  const normalized = value.trim().toLowerCase();
   if (!normalized) {
     return false;
   }
@@ -471,11 +462,11 @@ function shouldUseFromAsSenderFallback(params: {
   from?: string | null;
   chatType?: string | null;
 }): boolean {
-  const from = normalizeOptionalString(params.from) ?? "";
+  const from = (params.from ?? "").trim();
   if (!from) {
     return false;
   }
-  const chatType = normalizeLowercaseStringOrEmpty(params.chatType);
+  const chatType = (params.chatType ?? "").trim().toLowerCase();
   if (chatType && chatType !== "direct") {
     return false;
   }
@@ -495,7 +486,7 @@ function resolveSenderCandidates(params: {
   const { plugin, cfg, accountId } = params;
   const candidates: string[] = [];
   const pushCandidate = (value?: string | null) => {
-    const trimmed = normalizeOptionalString(value) ?? "";
+    const trimmed = (value ?? "").trim();
     if (!trimmed) {
       return;
     }
@@ -532,7 +523,7 @@ function resolveFallbackAllowFrom(params: {
   providerId?: ChannelId;
   accountId?: string | null;
 }): Array<string | number> {
-  const providerId = normalizeOptionalString(params.providerId);
+  const providerId = params.providerId?.trim();
   if (!providerId) {
     return [];
   }
@@ -578,7 +569,7 @@ function resolveFallbackAccountConfig(
     | undefined,
   accountId?: string | null,
 ) {
-  const normalizedAccountId = normalizeOptionalLowercaseString(accountId);
+  const normalizedAccountId = accountId?.trim().toLowerCase();
   if (!accounts || !normalizedAccountId) {
     return undefined;
   }
@@ -587,7 +578,7 @@ function resolveFallbackAccountConfig(
     return direct;
   }
   const matchKey = Object.keys(accounts).find(
-    (key) => normalizeOptionalLowercaseString(key) === normalizedAccountId,
+    (key) => key.trim().toLowerCase() === normalizedAccountId,
   );
   return matchKey ? accounts[matchKey] : undefined;
 }
@@ -633,11 +624,9 @@ export function resolveCommandAuthorization(params: {
     ctx,
     cfg,
   );
-  const plugin = providerId
-    ? ((getLoadedChannelPluginById(providerId) as ChannelPlugin | undefined) ?? undefined)
-    : undefined;
-  const from = normalizeOptionalString(ctx.From) ?? "";
-  const to = normalizeOptionalString(ctx.To) ?? "";
+  const plugin = providerId ? getChannelPlugin(providerId) : undefined;
+  const from = (ctx.From ?? "").trim();
+  const to = (ctx.To ?? "").trim();
   const commandsAllowFromConfigured = Boolean(
     cfg.commands?.allowFrom && typeof cfg.commands.allowFrom === "object",
   );

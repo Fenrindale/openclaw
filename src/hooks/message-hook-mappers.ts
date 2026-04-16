@@ -1,17 +1,13 @@
 import type { FinalizedMsgContext } from "../auto-reply/templating.js";
 import { getChannelPlugin, normalizeChannelId } from "../channels/plugins/index.js";
-import type { OpenClawConfig } from "../config/types.openclaw.js";
+import type { OpenClawConfig } from "../config/config.js";
 import type {
   PluginHookInboundClaimContext,
   PluginHookInboundClaimEvent,
   PluginHookMessageContext,
   PluginHookMessageReceivedEvent,
   PluginHookMessageSentEvent,
-} from "../plugins/hook-message.types.js";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-} from "../shared/string-coerce.js";
+} from "../plugins/types.js";
 import type {
   MessagePreprocessedHookContext,
   MessageReceivedHookContext,
@@ -48,7 +44,6 @@ export type CanonicalInboundMessageHookContext = {
   channelName?: string;
   isGroup: boolean;
   groupId?: string;
-  topicName?: string;
 };
 
 export type CanonicalSentMessageHookContext = {
@@ -80,9 +75,7 @@ export function deriveInboundMessageHookContext(
         : typeof ctx.Body === "string"
           ? ctx.Body
           : "");
-  const channelId = normalizeLowercaseStringOrEmpty(
-    ctx.OriginatingChannel ?? ctx.Surface ?? ctx.Provider ?? "",
-  );
+  const channelId = (ctx.OriginatingChannel ?? ctx.Surface ?? ctx.Provider ?? "").toLowerCase();
   const conversationId = ctx.OriginatingTo ?? ctx.To ?? ctx.From ?? undefined;
   const isGroup = Boolean(ctx.GroupSubject || ctx.GroupChannel);
   const mediaPaths = Array.isArray(ctx.MediaPaths)
@@ -132,7 +125,6 @@ export function deriveInboundMessageHookContext(
     channelName: ctx.GroupChannel,
     isGroup,
     groupId: isGroup ? conversationId : undefined,
-    topicName: ctx.TopicName,
   };
 }
 
@@ -202,8 +194,8 @@ function resolveInboundConversation(canonical: CanonicalInboundMessageHookContex
     : null;
   if (pluginResolved) {
     return {
-      conversationId: normalizeOptionalString(pluginResolved.conversationId),
-      parentConversationId: normalizeOptionalString(pluginResolved.parentConversationId),
+      conversationId: pluginResolved.conversationId?.trim() || undefined,
+      parentConversationId: pluginResolved.parentConversationId?.trim() || undefined,
     };
   }
   const baseConversationId = stripChannelPrefix(
@@ -268,7 +260,6 @@ export function toPluginInboundClaimEvent(
       guildId: canonical.guildId,
       channelName: canonical.channelName,
       groupId: canonical.groupId,
-      topicName: canonical.topicName,
     },
   };
 }
@@ -294,7 +285,6 @@ export function toPluginMessageReceivedEvent(
       senderE164: canonical.senderE164,
       guildId: canonical.guildId,
       channelName: canonical.channelName,
-      topicName: canonical.topicName,
     },
   };
 }
@@ -332,7 +322,6 @@ export function toInternalMessageReceivedContext(
       senderE164: canonical.senderE164,
       guildId: canonical.guildId,
       channelName: canonical.channelName,
-      topicName: canonical.topicName,
     },
   };
 }

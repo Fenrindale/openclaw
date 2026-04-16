@@ -11,15 +11,10 @@ beforeAll(async () => {
 });
 
 describe("createLiveTargetMatcher", () => {
-  const env = {
-    OPENCLAW_DISABLE_PLUGIN_MANIFEST_CACHE: "1",
-  } as NodeJS.ProcessEnv;
-
   it("matches Anthropic-owned models for the claude-cli provider filter", () => {
     const matcher = createLiveTargetMatcher({
       providerFilter: new Set(["claude-cli"]),
       modelFilter: null,
-      env,
     });
 
     expect(matcher.matchesProvider("anthropic")).toBe(true);
@@ -30,7 +25,6 @@ describe("createLiveTargetMatcher", () => {
     const matcher = createLiveTargetMatcher({
       providerFilter: null,
       modelFilter: new Set(["claude-cli/claude-sonnet-4-6"]),
-      env,
     });
 
     expect(matcher.matchesModel("anthropic", "claude-sonnet-4-6")).toBe(true);
@@ -41,7 +35,6 @@ describe("createLiveTargetMatcher", () => {
     const matcher = createLiveTargetMatcher({
       providerFilter: new Set(["openrouter"]),
       modelFilter: new Set(["openrouter/openai/gpt-5.4"]),
-      env,
     });
 
     expect(matcher.matchesProvider("openrouter")).toBe(true);

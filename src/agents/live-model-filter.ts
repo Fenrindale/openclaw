@@ -1,5 +1,4 @@
 import { resolveProviderModernModelRef } from "../plugins/provider-runtime.js";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 import { normalizeProviderId } from "./provider-id.js";
 
 export type ModelRef = {
@@ -9,21 +8,18 @@ export type ModelRef = {
 
 const HIGH_SIGNAL_LIVE_MODEL_PRIORITY = [
   "anthropic/claude-opus-4-6",
-  "anthropic/claude-sonnet-4-6",
   "google/gemini-3.1-pro-preview",
-  "google/gemini-3-flash-preview",
+  "google/gemini-2.5-flash",
   "minimax/minimax-m2.7",
   "openai/gpt-5.2",
   "openai-codex/gpt-5.2",
   "opencode-go/glm-5",
   "openrouter/ai21/jamba-large-1.7",
-  "xai/grok-4-1-fast-non-reasoning",
+  "xai/grok-3",
   "zai/glm-4.7",
   "fireworks/accounts/fireworks/routers/kimi-k2p5-turbo",
   "minimax-portal/minimax-m2.7",
 ] as const;
-
-export const DEFAULT_HIGH_SIGNAL_LIVE_MODEL_LIMIT = HIGH_SIGNAL_LIVE_MODEL_PRIORITY.length;
 
 const HIGH_SIGNAL_LIVE_MODEL_PRIORITY_INDEX = new Map<string, number>(
   HIGH_SIGNAL_LIVE_MODEL_PRIORITY.map((key, index) => [key, index]),
@@ -55,19 +51,9 @@ function isHighSignalClaudeModelId(id: string): boolean {
   return minor >= 6;
 }
 
-function isPreGemini3ModelId(id: string): boolean {
-  const normalized = normalizeLowercaseStringOrEmpty(id);
-  const match = normalized.match(/(?:^|\/)gemini-(\d+)(?:[.-]|$)/);
-  if (!match) {
-    return false;
-  }
-  const major = Number.parseInt(match[1] ?? "0", 10);
-  return Number.isFinite(major) && major < 3;
-}
-
 export function isModernModelRef(ref: ModelRef): boolean {
   const provider = normalizeProviderId(ref.provider ?? "");
-  const id = normalizeLowercaseStringOrEmpty(ref.id);
+  const id = ref.id?.trim().toLowerCase() ?? "";
   if (!provider || !id) {
     return false;
   }
@@ -86,11 +72,8 @@ export function isModernModelRef(ref: ModelRef): boolean {
 }
 
 export function isHighSignalLiveModelRef(ref: ModelRef): boolean {
-  const id = normalizeLowercaseStringOrEmpty(ref.id);
+  const id = ref.id?.trim().toLowerCase() ?? "";
   if (!isModernModelRef(ref) || !id) {
-    return false;
-  }
-  if (isPreGemini3ModelId(id)) {
     return false;
   }
   return isHighSignalClaudeModelId(id);
@@ -98,7 +81,7 @@ export function isHighSignalLiveModelRef(ref: ModelRef): boolean {
 
 function toCanonicalHighSignalLiveModelKey(ref: ModelRef): string | null {
   const provider = normalizeProviderId(ref.provider ?? "");
-  const rawId = normalizeLowercaseStringOrEmpty(ref.id);
+  const rawId = ref.id?.trim().toLowerCase() ?? "";
   if (!provider || !rawId) {
     return null;
   }
@@ -181,22 +164,6 @@ export function selectHighSignalLiveItems<T>(
   }
 
   return [...selected, ...capByProviderSpread(remaining, maxItems - selected.length, providerOf)];
-}
-
-export function resolveHighSignalLiveModelLimit(params: {
-  rawMaxModels?: string;
-  useExplicitModels: boolean;
-  defaultLimit?: number;
-}): number {
-  const trimmed = params.rawMaxModels?.trim();
-  if (trimmed) {
-    const parsed = Number.parseInt(trimmed, 10);
-    return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
-  }
-  if (params.useExplicitModels) {
-    return 0;
-  }
-  return params.defaultLimit ?? DEFAULT_HIGH_SIGNAL_LIVE_MODEL_LIMIT;
 }
 
 export function getHighSignalLiveModelPriorityIndex(ref: ModelRef): number | null {

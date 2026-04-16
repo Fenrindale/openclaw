@@ -1,6 +1,5 @@
 import type { AgentSession } from "@mariozechner/pi-coding-agent";
-import { afterEach, describe, expect, it } from "vitest";
-import { clearMemoryPluginState, registerMemoryPromptSection } from "../../plugins/memory-state.js";
+import { describe, expect, it } from "vitest";
 import {
   applySystemPromptOverrideToSession,
   buildEmbeddedSystemPrompt,
@@ -68,10 +67,6 @@ describe("applySystemPromptOverrideToSession", () => {
 });
 
 describe("buildEmbeddedSystemPrompt", () => {
-  afterEach(() => {
-    clearMemoryPluginState();
-  });
-
   it("forwards provider prompt contributions into the embedded prompt", () => {
     const prompt = buildEmbeddedSystemPrompt({
       workspaceDir: "/tmp/openclaw",
@@ -93,28 +88,5 @@ describe("buildEmbeddedSystemPrompt", () => {
     });
 
     expect(prompt).toContain("## Embedded Stable\n\nStable provider guidance.");
-  });
-
-  it("can omit base memory guidance for non-legacy context engines", () => {
-    registerMemoryPromptSection(() => ["## Memory Recall", "Use memory carefully.", ""]);
-
-    const prompt = buildEmbeddedSystemPrompt({
-      workspaceDir: "/tmp/openclaw",
-      reasoningTagHint: false,
-      runtimeInfo: {
-        host: "local",
-        os: "darwin",
-        arch: "arm64",
-        node: process.version,
-        model: "gpt-5.4",
-        provider: "openai",
-      },
-      tools: [],
-      modelAliasLines: [],
-      userTimezone: "UTC",
-      includeMemorySection: false,
-    });
-
-    expect(prompt).not.toContain("## Memory Recall");
   });
 });

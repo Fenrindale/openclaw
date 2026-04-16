@@ -1,5 +1,3 @@
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
-
 const EXACT_SEMVER_VERSION_RE =
   /^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z.-]+))?(?:\+([0-9A-Za-z.-]+))?$/;
 const DIST_TAG_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
@@ -128,7 +126,7 @@ export function isPrereleaseResolutionAllowed(params: {
   if (params.spec.selectorKind === "exact-version") {
     return params.spec.selectorIsPrerelease;
   }
-  return normalizeLowercaseStringOrEmpty(params.spec.selector) !== "latest";
+  return params.spec.selector?.toLowerCase() !== "latest";
 }
 
 export function formatPrereleaseResolutionError(params: {
@@ -136,8 +134,7 @@ export function formatPrereleaseResolutionError(params: {
   resolvedVersion: string;
 }): string {
   const selectorHint =
-    params.spec.selectorKind === "none" ||
-    normalizeLowercaseStringOrEmpty(params.spec.selector) === "latest"
+    params.spec.selectorKind === "none" || params.spec.selector?.toLowerCase() === "latest"
       ? `Use "${params.spec.name}@beta" (or another prerelease tag) or an exact prerelease version to opt in explicitly.`
       : `Use an explicit prerelease tag or exact prerelease version if you want prerelease installs.`;
   return `Resolved ${params.spec.raw} to prerelease version ${params.resolvedVersion}, but prereleases are only installed when explicitly requested. ${selectorHint}`;

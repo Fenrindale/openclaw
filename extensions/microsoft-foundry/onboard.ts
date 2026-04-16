@@ -1,10 +1,5 @@
 import type { ProviderAuthContext } from "openclaw/plugin-sdk/core";
 import { formatErrorMessage } from "openclaw/plugin-sdk/error-runtime";
-import { fetchWithSsrFGuard } from "openclaw/plugin-sdk/ssrf-runtime";
-import {
-  normalizeOptionalString,
-  normalizeStringifiedOptionalString,
-} from "openclaw/plugin-sdk/text-runtime";
 import {
   azLoginDeviceCode,
   azLoginDeviceCodeWithOptions,
@@ -68,9 +63,8 @@ export function listFoundryResources(subscriptionId?: string): FoundryResourceOp
       if (account.kind !== "AIServices") {
         continue;
       }
-      const customSubdomain = normalizeOptionalString(account.customSubdomain);
-      const endpoint = customSubdomain
-        ? `https://${customSubdomain}.services.ai.azure.com`
+      const endpoint = account.customSubdomain?.trim()
+        ? `https://${account.customSubdomain.trim()}.services.ai.azure.com`
         : undefined;
       if (!endpoint) {
         continue;
@@ -247,33 +241,38 @@ async function promptEndpointAndModelBase(
     modelInitialValue?: string;
   },
 ): Promise<FoundrySelection> {
-  const endpoint = (
+  const endpoint = String(
     await ctx.prompter.text({
       message: "Microsoft Foundry endpoint URL",
       placeholder: "https://xxx.openai.azure.com or https://xxx.services.ai.azure.com",
       ...(options?.endpointInitialValue ? { initialValue: options.endpointInitialValue } : {}),
       validate: (v) => {
-        const val = normalizeStringifiedOptionalString(v) ?? "";
+        const val = String(v ?? "").trim();
         if (!val) {
           return "Endpoint URL is required";
         }
-        return URL.canParse(val) ? undefined : "Invalid URL";
+        try {
+          new URL(val);
+        } catch {
+          return "Invalid URL";
+        }
+        return undefined;
       },
-    })
+    }),
   ).trim();
-  const modelId = (
+  const modelId = String(
     await ctx.prompter.text({
       message: "Default model/deployment name",
       ...(options?.modelInitialValue ? { initialValue: options.modelInitialValue } : {}),
       placeholder: "gpt-4o",
       validate: (v) => {
-        const val = normalizeStringifiedOptionalString(v) ?? "";
+        const val = String(v ?? "").trim();
         if (!val) {
           return "Model ID is required";
         }
         return undefined;
       },
-    })
+    }),
   ).trim();
   const familyChoice = await promptFoundryModelFamily(ctx);
   const resolvedModelName =
@@ -348,21 +347,21 @@ export function extractTenantSuggestions(
   const seen = new Set<string>();
   const regex = /([0-9a-fA-F-]{36})(?:\s+'([^'\r\n]+)')?/g;
   for (const match of rawMessage.matchAll(regex)) {
-    const id = normalizeOptionalString(match[1]);
+    const id = match[1]?.trim();
     if (!id || seen.has(id)) {
       continue;
     }
     seen.add(id);
     suggestions.push({
       id,
-      ...(normalizeOptionalString(match[2]) ? { label: normalizeOptionalString(match[2]) } : {}),
+      ...(match[2]?.trim() ? { label: match[2].trim() } : {}),
     });
   }
   return suggestions;
 }
 
 export function isValidTenantIdentifier(value: string): boolean {
-  const trimmed = normalizeOptionalString(value) ?? "";
+  const trimmed = value.trim();
   if (!trimmed) {
     return false;
   }
@@ -399,12 +398,12 @@ export async function promptTenantId(
       "Azure Tenant",
     );
   }
-  const tenantId = (
+  const tenantId = String(
     await ctx.prompter.text({
       message: params?.required ? "Azure tenant ID" : "Azure tenant ID (optional)",
       placeholder: params?.suggestions?.[0]?.id ?? "00000000-0000-0000-0000-000000000000",
       validate: (value) => {
-        const trimmed = normalizeStringifiedOptionalString(value) ?? "";
+        const trimmed = String(value ?? "").trim();
         if (!trimmed) {
           return params?.required ? "Tenant ID is required" : undefined;
         }
@@ -412,7 +411,7 @@ export async function promptTenantId(
           ? undefined
           : "Enter a valid tenant ID or tenant domain";
       },
-    })
+    }),
   ).trim();
   return tenantId || undefined;
 }
@@ -470,36 +469,31 @@ export async function testFoundryConnection(params: {
       modelNameHint: params.modelNameHint,
       api: params.api,
     });
-    const { response: res, release } = await fetchWithSsrFGuard({
-      url: testRequest.url,
-      init: {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(testRequest.body),
+    const signal =
+      typeof AbortSignal.timeout === "function" ? AbortSignal.timeout(15_000) : undefined;
+    const res = await fetch(testRequest.url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
       },
-      timeoutMs: 15_000,
+      body: JSON.stringify(testRequest.body),
+      ...(signal ? { signal } : {}),
     });
-    try {
-      if (res.status === 400) {
-        const body = await res.text().catch(() => "");
-        await params.ctx.prompter.note(
-          `Endpoint is reachable but returned 400 Bad Request - check your deployment name and API version.\n${body.slice(0, 200)}`,
-          "Connection Test",
-        );
-      } else if (!res.ok) {
-        const body = await res.text().catch(() => "");
-        await params.ctx.prompter.note(
-          `Warning: test request returned ${res.status}. ${body.slice(0, 200)}\nProceeding anyway - you can fix the endpoint later.`,
-          "Connection Test",
-        );
-      } else {
-        await params.ctx.prompter.note("Connection test successful!", "✓");
-      }
-    } finally {
-      await release();
+    if (res.status === 400) {
+      const body = await res.text().catch(() => "");
+      await params.ctx.prompter.note(
+        `Endpoint is reachable but returned 400 Bad Request - check your deployment name and API version.\n${body.slice(0, 200)}`,
+        "Connection Test",
+      );
+    } else if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      await params.ctx.prompter.note(
+        `Warning: test request returned ${res.status}. ${body.slice(0, 200)}\nProceeding anyway - you can fix the endpoint later.`,
+        "Connection Test",
+      );
+    } else {
+      await params.ctx.prompter.note("Connection test successful!", "✓");
     }
   } catch (err) {
     await params.ctx.prompter.note(

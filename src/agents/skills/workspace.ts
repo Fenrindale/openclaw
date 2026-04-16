@@ -1,16 +1,12 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import type { OpenClawConfig } from "../../config/config.js";
 import { isPathInside } from "../../infra/path-guards.js";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
-import { normalizeOptionalString } from "../../shared/string-coerce.js";
-import { CONFIG_DIR, resolveHomeDir, resolveUserPath } from "../../utils.js";
+import { CONFIG_DIR, resolveUserPath } from "../../utils.js";
 import { resolveSandboxPath } from "../sandbox-paths.js";
-import {
-  resolveEffectiveAgentSkillFilter,
-  resolveEffectiveAgentSkillsLimits,
-} from "./agent-filter.js";
+import { resolveEffectiveAgentSkillFilter } from "./agent-filter.js";
 import { resolveBundledSkillsDir } from "./bundled-dir.js";
 import { shouldIncludeSkill } from "./config.js";
 import { normalizeSkillFilter } from "./filter.js";
@@ -39,46 +35,14 @@ const skillsLogger = createSubsystemLogger("skills");
  *
  * Saves ~5–6 tokens per skill path × N skills ≈ 400–600 tokens total.
  */
-function resolveUserHomeDir(): string | undefined {
-  try {
-    return path.resolve(os.homedir());
-  } catch {
-    return undefined;
-  }
-}
-
-function resolveCompactHomePrefixes(): string[] {
-  const homes = [resolveHomeDir(), resolveUserHomeDir()].filter((home): home is string => !!home);
-  const resolvedHomes = homes.map((home) => path.resolve(home));
-  const realHomes = resolvedHomes
-    .map((home) => tryRealpath(home))
-    .filter((home): home is string => !!home);
-  return [...resolvedHomes, ...realHomes]
-    .filter((home, index, all) => all.indexOf(home) === index)
-    .sort((a, b) => b.length - a.length);
-}
-
 function compactSkillPaths(skills: Skill[]): Skill[] {
-  const homes = resolveCompactHomePrefixes();
-  if (homes.length === 0) return skills;
+  const home = os.homedir();
+  if (!home) return skills;
+  const prefix = home.endsWith(path.sep) ? home : home + path.sep;
   return skills.map((s) => ({
     ...s,
-    filePath: compactHomePath(s.filePath, homes),
+    filePath: s.filePath.startsWith(prefix) ? "~/" + s.filePath.slice(prefix.length) : s.filePath,
   }));
-}
-
-function compactHomePath(filePath: string, homes: readonly string[]): string {
-  for (const home of homes) {
-    const prefix = home.endsWith(path.sep) ? home : home + path.sep;
-    if (filePath.startsWith(prefix)) {
-      return "~/" + filePath.slice(prefix.length);
-    }
-  }
-  return filePath;
-}
-
-function compactPathForConsoleMessage(filePath: string): string {
-  return compactHomePath(filePath, resolveCompactHomePrefixes());
 }
 
 function isSkillVisibleInAvailableSkillsPrompt(entry: SkillEntry): boolean {
@@ -117,7 +81,7 @@ function filterSkillEntries(
 const DEFAULT_MAX_CANDIDATES_PER_ROOT = 300;
 const DEFAULT_MAX_SKILLS_LOADED_PER_SOURCE = 200;
 const DEFAULT_MAX_SKILLS_IN_PROMPT = 150;
-const DEFAULT_MAX_SKILLS_PROMPT_CHARS = 18_000;
+const DEFAULT_MAX_SKILLS_PROMPT_CHARS = 30_000;
 const DEFAULT_MAX_SKILL_FILE_BYTES = 256_000;
 
 type ResolvedSkillsLimits = {
@@ -128,18 +92,14 @@ type ResolvedSkillsLimits = {
   maxSkillFileBytes: number;
 };
 
-function resolveSkillsLimits(config?: OpenClawConfig, agentId?: string): ResolvedSkillsLimits {
+function resolveSkillsLimits(config?: OpenClawConfig): ResolvedSkillsLimits {
   const limits = config?.skills?.limits;
-  const agentSkillsLimits = resolveEffectiveAgentSkillsLimits(config, agentId);
   return {
     maxCandidatesPerRoot: limits?.maxCandidatesPerRoot ?? DEFAULT_MAX_CANDIDATES_PER_ROOT,
     maxSkillsLoadedPerSource:
       limits?.maxSkillsLoadedPerSource ?? DEFAULT_MAX_SKILLS_LOADED_PER_SOURCE,
     maxSkillsInPrompt: limits?.maxSkillsInPrompt ?? DEFAULT_MAX_SKILLS_IN_PROMPT,
-    maxSkillsPromptChars:
-      agentSkillsLimits?.maxSkillsPromptChars ??
-      limits?.maxSkillsPromptChars ??
-      DEFAULT_MAX_SKILLS_PROMPT_CHARS,
+    maxSkillsPromptChars: limits?.maxSkillsPromptChars ?? DEFAULT_MAX_SKILLS_PROMPT_CHARS,
     maxSkillFileBytes: limits?.maxSkillFileBytes ?? DEFAULT_MAX_SKILL_FILE_BYTES,
   };
 }
@@ -180,76 +140,17 @@ function tryRealpath(filePath: string): string | null {
   }
 }
 
-function isSymlinkPath(filePath: string): boolean {
-  try {
-    return fs.lstatSync(filePath).isSymbolicLink();
-  } catch {
-    return false;
-  }
-}
-
-function buildEscapedSkillPathReason(params: { source: string; candidatePath: string }): {
-  reason: string;
-  consoleHint: string;
-} {
-  const candidateIsSymlink = isSymlinkPath(params.candidatePath);
-  if (params.source === "openclaw-bundled" && candidateIsSymlink) {
-    return {
-      reason: "bundled-symlink-escape",
-      consoleHint:
-        "reason=bundled-symlink-escape hint=likely-stray-local-symlink-or-checkout-mutation",
-    };
-  }
-  if (candidateIsSymlink) {
-    return {
-      reason: "symlink-escape",
-      consoleHint: "reason=symlink-escape",
-    };
-  }
-  if (params.source === "openclaw-bundled") {
-    return {
-      reason: "bundled-root-escape",
-      consoleHint:
-        "reason=bundled-root-escape hint=likely-stray-local-symlink-or-checkout-mutation",
-    };
-  }
-  return {
-    reason: "path-escape",
-    consoleHint: "reason=path-escape",
-  };
-}
-
 function warnEscapedSkillPath(params: {
   source: string;
   rootDir: string;
-  rootRealPath: string;
   candidatePath: string;
   candidateRealPath: string;
 }) {
-  const compactRootDir = compactPathForConsoleMessage(params.rootDir);
-  const compactRootRealPath = compactPathForConsoleMessage(params.rootRealPath);
-  const compactCandidatePath = compactPathForConsoleMessage(params.candidatePath);
-  const compactCandidateRealPath = compactPathForConsoleMessage(params.candidateRealPath);
-  const rootResolved =
-    path.resolve(params.rootDir) === params.rootRealPath
-      ? ""
-      : ` rootResolved=${compactRootRealPath}`;
-  const escapeReason = buildEscapedSkillPathReason({
-    source: params.source,
-    candidatePath: params.candidatePath,
-  });
-  skillsLogger.warn("Skipping escaped skill path outside its configured root.", {
+  skillsLogger.warn("Skipping skill path that resolves outside its configured root.", {
     source: params.source,
     rootDir: params.rootDir,
-    rootRealPath: params.rootRealPath,
     path: params.candidatePath,
     realPath: params.candidateRealPath,
-    reason: escapeReason.reason,
-    consoleMessage:
-      `Skipping escaped skill path outside its configured root: ` +
-      `source=${params.source} root=${compactRootDir}${rootResolved} ` +
-      `${escapeReason.consoleHint} requested=${compactCandidatePath} ` +
-      `resolved=${compactCandidateRealPath}`,
   });
 }
 
@@ -269,7 +170,6 @@ function resolveContainedSkillPath(params: {
   warnEscapedSkillPath({
     source: params.source,
     rootDir: params.rootDir,
-    rootRealPath: params.rootRealPath,
     candidatePath: path.resolve(params.candidatePath),
     candidateRealPath,
   });
@@ -349,12 +249,11 @@ function loadSkillEntries(
   workspaceDir: string,
   opts?: {
     config?: OpenClawConfig;
-    agentId?: string;
     managedSkillsDir?: string;
     bundledSkillsDir?: string;
   },
 ): SkillEntry[] {
-  const limits = resolveSkillsLimits(opts?.config, opts?.agentId);
+  const limits = resolveSkillsLimits(opts?.config);
 
   const loadSkills = (params: { dir: string; source: string }): Skill[] => {
     const rootDir = path.resolve(params.dir);
@@ -511,7 +410,9 @@ function loadSkillEntries(
   const workspaceSkillsDir = path.resolve(workspaceDir, "skills");
   const bundledSkillsDir = opts?.bundledSkillsDir ?? resolveBundledSkillsDir();
   const extraDirsRaw = opts?.config?.skills?.load?.extraDirs ?? [];
-  const extraDirs = extraDirsRaw.map((d) => normalizeOptionalString(d) ?? "").filter(Boolean);
+  const extraDirs = extraDirsRaw
+    .map((d) => (typeof d === "string" ? d.trim() : ""))
+    .filter(Boolean);
   const pluginSkillDirs = resolvePluginSkillDirs({
     workspaceDir,
     config: opts?.config,
@@ -535,10 +436,7 @@ function loadSkillEntries(
     dir: managedSkillsDir,
     source: "openclaw-managed",
   });
-  const osHomeDir = resolveUserHomeDir();
-  const personalAgentsSkillsDir = osHomeDir
-    ? path.resolve(osHomeDir, ".agents", "skills")
-    : path.resolve(".agents", "skills");
+  const personalAgentsSkillsDir = path.resolve(os.homedir(), ".agents", "skills");
   const personalAgentsSkills = loadSkills({
     dir: personalAgentsSkillsDir,
     source: "agents-skills-personal",
@@ -636,16 +534,12 @@ export function formatSkillsCompact(skills: Skill[]): string {
 // Budget reserved for the compact-mode warning line prepended by the caller.
 const COMPACT_WARNING_OVERHEAD = 150;
 
-function applySkillsPromptLimits(params: {
-  skills: Skill[];
-  config?: OpenClawConfig;
-  agentId?: string;
-}): {
+function applySkillsPromptLimits(params: { skills: Skill[]; config?: OpenClawConfig }): {
   skillsForPrompt: Skill[];
   truncated: boolean;
   compact: boolean;
 } {
-  const limits = resolveSkillsLimits(params.config, params.agentId);
+  const limits = resolveSkillsLimits(params.config);
   const total = params.skills.length;
   const byCount = params.skills.slice(0, Math.max(0, limits.maxSkillsInPrompt));
 
@@ -764,7 +658,6 @@ function resolveWorkspaceSkillPromptState(
   const { skillsForPrompt, truncated, compact } = applySkillsPromptLimits({
     skills: promptSkills,
     config: opts?.config,
-    agentId: opts?.agentId,
   });
   const truncationNote = truncated
     ? `⚠️ Skills truncated: included ${skillsForPrompt.length} of ${resolvedSkills.length}${compact ? " (compact format, descriptions omitted)" : ""}. Run \`openclaw skills check\` to audit.`

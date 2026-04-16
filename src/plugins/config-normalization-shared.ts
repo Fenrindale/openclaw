@@ -1,9 +1,5 @@
 import { normalizeChatChannelId } from "../channels/ids.js";
-import type { OpenClawConfig } from "../config/types.openclaw.js";
-import {
-  normalizeOptionalLowercaseString,
-  normalizeOptionalString,
-} from "../shared/string-coerce.js";
+import type { OpenClawConfig } from "../config/config.js";
 import { defaultSlotIdForKey } from "./slots.js";
 
 export type NormalizedPluginsConfig = {
@@ -13,7 +9,6 @@ export type NormalizedPluginsConfig = {
   loadPaths: string[];
   slots: {
     memory?: string | null;
-    contextEngine?: string | null;
   };
   entries: Record<
     string,
@@ -46,11 +41,14 @@ function normalizeList(value: unknown, normalizePluginId: NormalizePluginId): st
 }
 
 function normalizeSlotValue(value: unknown): string | null | undefined {
-  const trimmed = normalizeOptionalString(value);
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
   if (!trimmed) {
     return undefined;
   }
-  if (normalizeOptionalLowercaseString(trimmed) === "none") {
+  if (trimmed.toLowerCase() === "none") {
     return null;
   }
   return trimmed;
@@ -99,8 +97,8 @@ function normalizePluginEntries(
             ),
             allowedModels: Array.isArray((subagentRaw as { allowedModels?: unknown }).allowedModels)
               ? ((subagentRaw as { allowedModels?: unknown }).allowedModels as unknown[])
-                  .map((model) => normalizeOptionalString(model))
-                  .filter((model): model is string => Boolean(model))
+                  .map((model) => (typeof model === "string" ? model.trim() : ""))
+                  .filter(Boolean)
               : undefined,
           }
         : undefined;
@@ -143,7 +141,6 @@ export function normalizePluginsConfigWithResolver(
     loadPaths: normalizeList(config?.load?.paths, identityNormalizePluginId),
     slots: {
       memory: memorySlot === undefined ? defaultSlotIdForKey("memory") : memorySlot,
-      contextEngine: normalizeSlotValue(config?.slots?.contextEngine),
     },
     entries: normalizePluginEntries(config?.entries, normalizePluginId),
   };

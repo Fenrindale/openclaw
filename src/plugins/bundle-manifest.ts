@@ -2,13 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import JSON5 from "json5";
 import { matchBoundaryFileOpenFailure, openBoundaryFileSync } from "../infra/boundary-file-read.js";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-} from "../shared/string-coerce.js";
+import { normalizeOptionalString } from "../shared/string-coerce.js";
 import { isRecord } from "../utils.js";
-import type { PluginBundleFormat } from "./manifest-types.js";
 import { DEFAULT_PLUGIN_ENTRY_CANDIDATES, PLUGIN_MANIFEST_FILENAME } from "./manifest.js";
+import type { PluginBundleFormat } from "./types.js";
 
 export const CODEX_BUNDLE_MANIFEST_RELATIVE_PATH = ".codex-plugin/plugin.json";
 export const CLAUDE_BUNDLE_MANIFEST_RELATIVE_PATH = ".claude-plugin/plugin.json";
@@ -43,9 +40,7 @@ function normalizePathList(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
   }
-  return value
-    .map((entry) => normalizeOptionalString(entry))
-    .filter((entry): entry is string => Boolean(entry));
+  return value.map((entry) => (typeof entry === "string" ? entry.trim() : "")).filter(Boolean);
 }
 
 export function normalizeBundlePathList(value: unknown): string[] {
@@ -82,7 +77,7 @@ function hasInlineCapabilityValue(value: unknown): boolean {
 
 function slugifyPluginId(raw: string | undefined, rootDir: string): string {
   const fallback = path.basename(rootDir);
-  const source = normalizeLowercaseStringOrEmpty(raw) || normalizeLowercaseStringOrEmpty(fallback);
+  const source = (raw?.trim() || fallback).toLowerCase();
   const slug = source
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/-+/g, "-")

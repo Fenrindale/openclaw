@@ -1,5 +1,4 @@
 import type { SessionAcpIdentity, SessionAcpMeta } from "../../config/sessions/types.js";
-import { normalizeLowercaseStringOrEmpty } from "../../shared/string-coerce.js";
 import { normalizeText } from "../normalize-text.js";
 import { isSessionIdentityPending, resolveSessionIdentityFromMeta } from "./session-identity.js";
 
@@ -41,7 +40,7 @@ function normalizeAgentHintKey(value: unknown): string | undefined {
   if (!normalized) {
     return undefined;
   }
-  return normalizeLowercaseStringOrEmpty(normalized).replace(/[\s_]+/g, "-");
+  return normalized.toLowerCase().replace(/[\s_]+/g, "-");
 }
 
 function resolveAcpAgentResumeHintLine(params: {

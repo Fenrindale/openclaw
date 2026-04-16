@@ -10,7 +10,6 @@ import {
   readNumberParam,
   readResponseText,
   readStringParam,
-  resolveProviderWebSearchPluginConfig,
   resolveSearchCount,
   resolveSiteName,
   truncateText,
@@ -18,8 +17,7 @@ import {
   type WebSearchProviderPlugin,
 } from "openclaw/plugin-sdk/provider-web-search";
 import { fetchWithSsrFGuard } from "openclaw/plugin-sdk/ssrf-runtime";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
-import { OLLAMA_CLOUD_BASE_URL, OLLAMA_DEFAULT_BASE_URL } from "./defaults.js";
+import { OLLAMA_DEFAULT_BASE_URL } from "./defaults.js";
 import {
   buildOllamaBaseUrlSsrFPolicy,
   fetchOllamaModels,
@@ -65,18 +63,9 @@ function resolveOllamaWebSearchApiKey(config?: OpenClawConfig): string | undefin
 }
 
 function resolveOllamaWebSearchBaseUrl(config?: OpenClawConfig): string {
-  const pluginBaseUrl = normalizeOptionalString(
-    resolveProviderWebSearchPluginConfig(config, "ollama")?.baseUrl,
-  );
-  if (pluginBaseUrl) {
-    return resolveOllamaApiBase(pluginBaseUrl);
-  }
   const configuredBaseUrl = config?.models?.providers?.ollama?.baseUrl;
-  if (normalizeOptionalString(configuredBaseUrl)) {
-    const baseUrl = resolveOllamaApiBase(configuredBaseUrl);
-    if (baseUrl !== OLLAMA_CLOUD_BASE_URL) {
-      return baseUrl;
-    }
+  if (typeof configuredBaseUrl === "string" && configuredBaseUrl.trim()) {
+    return resolveOllamaApiBase(configuredBaseUrl);
   }
   return OLLAMA_DEFAULT_BASE_URL;
 }
@@ -84,14 +73,14 @@ function resolveOllamaWebSearchBaseUrl(config?: OpenClawConfig): string {
 function normalizeOllamaWebSearchResult(
   result: OllamaWebSearchResult,
 ): { title: string; url: string; content: string } | null {
-  const url = normalizeOptionalString(result.url) ?? "";
+  const url = typeof result.url === "string" ? result.url.trim() : "";
   if (!url) {
     return null;
   }
   return {
-    title: normalizeOptionalString(result.title) ?? "",
+    title: typeof result.title === "string" ? result.title.trim() : "",
     url,
-    content: normalizeOptionalString(result.content) ?? "",
+    content: typeof result.content === "string" ? result.content.trim() : "",
   };
 }
 

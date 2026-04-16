@@ -109,16 +109,9 @@ describe("command-registry", () => {
     expect(namesOf(program)).toEqual(["doctor"]);
   });
 
-  it("narrows to the primary command when command help is requested", () => {
+  it("does not narrow to the primary command when help is requested", () => {
     const program = createProgram();
     registerCoreCliCommands(program, testProgramContext, ["node", "openclaw", "doctor", "--help"]);
-
-    expect(namesOf(program)).toEqual(["doctor"]);
-  });
-
-  it("keeps all placeholders for root help", () => {
-    const program = createProgram();
-    registerCoreCliCommands(program, testProgramContext, ["node", "openclaw", "--help"]);
 
     const names = namesOf(program);
     expect(names).toContain("doctor");

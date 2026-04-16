@@ -1,4 +1,3 @@
-import { normalizeLowercaseStringOrEmpty } from "../../../../src/shared/string-coerce.js";
 import { sanitizeAndNormalizeEmbedding } from "./embedding-vectors.js";
 import { debugEmbeddingsLog } from "./embeddings-debug.js";
 import type { EmbeddingProvider, EmbeddingProviderOptions } from "./embeddings.js";
@@ -74,7 +73,7 @@ function resolveSpec(modelId: string): ModelSpec | undefined {
 
 /** Infer family from model ID prefix when not in catalog. */
 function inferFamily(modelId: string): Family {
-  const id = normalizeLowercaseStringOrEmpty(modelId);
+  const id = modelId.toLowerCase();
   if (id.startsWith("amazon.titan-embed-text-v2")) {
     return "titan-v2";
   }

@@ -1,11 +1,10 @@
 import type { Command } from "commander";
 import { getChannelPlugin } from "../../../channels/plugins/index.js";
-import type { ChannelMessageActionName } from "../../../channels/plugins/types.public.js";
-import { normalizeLowercaseStringOrEmpty } from "../../../shared/string-coerce.js";
+import type { ChannelMessageActionName } from "../../../channels/plugins/types.js";
 import type { MessageCliHelpers } from "./helpers.js";
 
 function resolveThreadCreateRequest(opts: Record<string, unknown>) {
-  const channel = normalizeLowercaseStringOrEmpty(opts.channel);
+  const channel = typeof opts.channel === "string" ? opts.channel.trim().toLowerCase() : "";
   if (channel) {
     const request = getChannelPlugin(channel)?.actions?.resolveCliActionRequest?.({
       action: "thread-create",

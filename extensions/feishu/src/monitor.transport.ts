@@ -4,9 +4,11 @@ import * as Lark from "@larksuiteoapi/node-sdk";
 import { createFeishuWSClient } from "./client.js";
 import {
   applyBasicWebhookRequestGuards,
+  isRequestBodyLimitError,
   type RuntimeEnv,
   installRequestBodyLimitGuard,
-  readWebhookBodyOrReject,
+  readRequestBodyWithLimit,
+  requestBodyErrorToText,
   safeEqualSecret,
 } from "./monitor-transport-runtime-api.js";
 import {
@@ -56,7 +58,7 @@ function isFeishuWebhookSignatureValid(params: {
 }): boolean {
   const encryptKey = params.encryptKey?.trim();
   if (!encryptKey) {
-    return false;
+    return true;
   }
 
   const timestampHeader = params.headers["x-lark-request-timestamp"];
@@ -149,10 +151,6 @@ export async function monitorWebhook({
 }: MonitorTransportParams): Promise<void> {
   const log = runtime?.log ?? console.log;
   const error = runtime?.error ?? console.error;
-  const encryptKey = account.encryptKey?.trim();
-  if (!encryptKey) {
-    throw new Error(`Feishu account "${accountId}" webhook mode requires encryptKey`);
-  }
 
   const port = account.config.webhookPort ?? 3000;
   const path = account.config.webhookPath ?? "/feishu/events";
@@ -192,27 +190,20 @@ export async function monitorWebhook({
 
     void (async () => {
       try {
-        const body = await readWebhookBodyOrReject({
-          req,
-          res,
+        const rawBody = await readRequestBodyWithLimit(req, {
           maxBytes: FEISHU_WEBHOOK_MAX_BODY_BYTES,
           timeoutMs: FEISHU_WEBHOOK_BODY_TIMEOUT_MS,
-          profile: "pre-auth",
         });
-        if (!body.ok || res.writableEnded) {
+        if (guard.isTripped() || res.writableEnded) {
           return;
         }
-        if (guard.isTripped()) {
-          return;
-        }
-        const rawBody = body.value;
 
         // Reject invalid signatures before any JSON parsing to keep the auth boundary strict.
         if (
           !isFeishuWebhookSignatureValid({
             headers: req.headers,
             rawBody,
-            encryptKey,
+            encryptKey: account.encryptKey,
           })
         ) {
           respondText(res, 401, "Invalid signature");
@@ -226,7 +217,7 @@ export async function monitorWebhook({
         }
 
         const { isChallenge, challenge } = Lark.generateChallenge(payload, {
-          encryptKey,
+          encryptKey: account.encryptKey ?? "",
         });
         if (isChallenge) {
           res.statusCode = 200;
@@ -244,9 +235,17 @@ export async function monitorWebhook({
           res.end(JSON.stringify(value));
         }
       } catch (err) {
-        error(`feishu[${accountId}]: webhook handler error: ${String(err)}`);
-        if (!res.headersSent) {
-          respondText(res, 500, "Internal Server Error");
+        if (isRequestBodyLimitError(err)) {
+          if (!res.headersSent) {
+            respondText(res, err.statusCode, requestBodyErrorToText(err.code));
+          }
+          return;
+        }
+        if (!guard.isTripped()) {
+          error(`feishu[${accountId}]: webhook handler error: ${String(err)}`);
+          if (!res.headersSent) {
+            respondText(res, 500, "Internal Server Error");
+          }
         }
       } finally {
         guard.dispose();

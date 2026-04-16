@@ -1,10 +1,9 @@
 import { Chalk } from "chalk";
 import type { Logger as TsLogger } from "tslog";
-import { normalizeChatChannelId } from "../channels/ids.js";
 import { isVerbose } from "../global-state.js";
 import { defaultRuntime, type OutputRuntimeEnv, type RuntimeEnv } from "../runtime.js";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 import { clearActiveProgressLine } from "../terminal/progress-line.js";
+import { normalizeMessageChannel } from "../utils/message-channel.js";
 import {
   formatConsoleTimestamp,
   getConsoleSettings,
@@ -30,15 +29,12 @@ export type SubsystemLogger = {
 };
 
 function shouldLogToConsole(level: LogLevel, settings: { level: LogLevel }): boolean {
-  if (level === "silent") {
-    return false;
-  }
   if (settings.level === "silent") {
     return false;
   }
   const current = levelToMinLevel(level);
   const min = levelToMinLevel(settings.level);
-  return current >= min;
+  return current <= min;
 }
 
 type ChalkInstance = InstanceType<typeof Chalk>;
@@ -77,7 +73,7 @@ function formatRuntimeArg(arg: unknown): string {
 }
 
 function isRichConsoleEnv(): boolean {
-  const term = normalizeLowercaseStringOrEmpty(process.env.TERM);
+  const term = (process.env.TERM ?? "").toLowerCase();
   if (process.env.COLORTERM || process.env.TERM_PROGRAM) {
     return true;
   }
@@ -92,7 +88,7 @@ function getColorForConsole(): ChalkInstance {
   if (process.env.NO_COLOR && !hasForceColor) {
     return new Chalk({ level: 0 });
   }
-  const hasTty = process.stdout.isTTY || process.stderr.isTTY;
+  const hasTty = Boolean(process.stdout.isTTY || process.stderr.isTTY);
   return hasTty || isRichConsoleEnv() ? new Chalk({ level: 1 }) : new Chalk({ level: 0 });
 }
 
@@ -104,11 +100,7 @@ const SUBSYSTEM_PREFIXES_TO_DROP = ["gateway", "channels", "providers"] as const
 const SUBSYSTEM_MAX_SEGMENTS = 2;
 
 function isChannelSubsystemPrefix(value: string): boolean {
-  const normalized = normalizeLowercaseStringOrEmpty(value);
-  if (!normalized) {
-    return false;
-  }
-  return normalizeChatChannelId(normalized) === normalized || normalized === "webchat";
+  return normalizeMessageChannel(value) === value;
 }
 
 function pickSubsystemColor(color: ChalkInstance, subsystem: string): ChalkInstance {
@@ -159,10 +151,7 @@ export function stripRedundantSubsystemPrefixForConsole(
     const closeIdx = message.indexOf("]");
     if (closeIdx > 1) {
       const bracketTag = message.slice(1, closeIdx);
-      if (
-        normalizeLowercaseStringOrEmpty(bracketTag) ===
-        normalizeLowercaseStringOrEmpty(displaySubsystem)
-      ) {
+      if (bracketTag.toLowerCase() === displaySubsystem.toLowerCase()) {
         let i = closeIdx + 1;
         while (message[i] === " ") {
           i += 1;
@@ -173,9 +162,7 @@ export function stripRedundantSubsystemPrefixForConsole(
   }
 
   const prefix = message.slice(0, displaySubsystem.length);
-  if (
-    normalizeLowercaseStringOrEmpty(prefix) !== normalizeLowercaseStringOrEmpty(displaySubsystem)
-  ) {
+  if (prefix.toLowerCase() !== displaySubsystem.toLowerCase()) {
     return message;
   }
 

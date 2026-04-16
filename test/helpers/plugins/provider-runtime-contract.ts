@@ -4,7 +4,6 @@ import path from "node:path";
 import type { StreamFn } from "@mariozechner/pi-agent-core";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProviderPlugin, ProviderRuntimeModel } from "../../../src/plugins/types.js";
-import { resolveRelativeBundledPluginPublicModuleId } from "../../../src/test-utils/bundled-plugin-public-surface.js";
 import {
   createProviderUsageFetch,
   makeResponse,
@@ -21,48 +20,24 @@ const getOAuthProvidersMock = vi.hoisted(() =>
     { id: "openai-codex", envApiKey: "OPENAI_API_KEY", oauthTokenEnv: "OPENAI_OAUTH_TOKEN" },
   ]),
 );
-const providerRuntimeContractModules = {
-  anthropicIndexModuleId: resolveRelativeBundledPluginPublicModuleId({
-    fromModuleUrl: import.meta.url,
-    pluginId: "anthropic",
-    artifactBasename: "index.js",
-  }),
-  githubCopilotIndexModuleId: resolveRelativeBundledPluginPublicModuleId({
-    fromModuleUrl: import.meta.url,
-    pluginId: "github-copilot",
-    artifactBasename: "index.js",
-  }),
-  googleIndexModuleId: resolveRelativeBundledPluginPublicModuleId({
-    fromModuleUrl: import.meta.url,
-    pluginId: "google",
-    artifactBasename: "index.js",
-  }),
-  openAIIndexModuleId: resolveRelativeBundledPluginPublicModuleId({
-    fromModuleUrl: import.meta.url,
-    pluginId: "openai",
-    artifactBasename: "index.js",
-  }),
-  openRouterIndexModuleId: resolveRelativeBundledPluginPublicModuleId({
-    fromModuleUrl: import.meta.url,
-    pluginId: "openrouter",
-    artifactBasename: "index.js",
-  }),
-  veniceIndexModuleId: resolveRelativeBundledPluginPublicModuleId({
-    fromModuleUrl: import.meta.url,
-    pluginId: "venice",
-    artifactBasename: "index.js",
-  }),
-  xAIIndexModuleId: resolveRelativeBundledPluginPublicModuleId({
-    fromModuleUrl: import.meta.url,
-    pluginId: "xai",
-    artifactBasename: "index.js",
-  }),
-  zaiIndexModuleId: resolveRelativeBundledPluginPublicModuleId({
-    fromModuleUrl: import.meta.url,
-    pluginId: "zai",
-    artifactBasename: "index.js",
-  }),
-};
+const providerRuntimeContractModules = vi.hoisted(() => ({
+  anthropicIndexModuleUrl: new URL("../../../extensions/anthropic/index.ts", import.meta.url).href,
+  githubCopilotIndexModuleUrl: new URL(
+    "../../../extensions/github-copilot/index.ts",
+    import.meta.url,
+  ).href,
+  googleIndexModuleUrl: new URL("../../../extensions/google/index.ts", import.meta.url).href,
+  openAIIndexModuleUrl: new URL("../../../extensions/openai/index.ts", import.meta.url).href,
+  openAICodexProviderRuntimeModuleId: new URL(
+    "../../../extensions/openai/openai-codex-provider.runtime.js",
+    import.meta.url,
+  ).pathname,
+  openRouterIndexModuleUrl: new URL("../../../extensions/openrouter/index.ts", import.meta.url)
+    .href,
+  veniceIndexModuleUrl: new URL("../../../extensions/venice/index.ts", import.meta.url).href,
+  xAIIndexModuleUrl: new URL("../../../extensions/xai/index.ts", import.meta.url).href,
+  zaiIndexModuleUrl: new URL("../../../extensions/zai/index.ts", import.meta.url).href,
+}));
 
 vi.mock("@mariozechner/pi-ai/oauth", async () => {
   const actual = await vi.importActual<typeof import("@mariozechner/pi-ai/oauth")>(
@@ -75,8 +50,12 @@ vi.mock("@mariozechner/pi-ai/oauth", async () => {
   };
 });
 
+vi.mock(providerRuntimeContractModules.openAICodexProviderRuntimeModuleId, () => ({
+  refreshOpenAICodexToken: refreshOpenAICodexTokenMock,
+}));
+
 async function importBundledProviderPlugin<T>(moduleUrl: string): Promise<T> {
-  return (await import(moduleUrl)) as T;
+  return (await import(`${moduleUrl}?t=${Date.now()}`)) as T;
 }
 
 function createModel(overrides: Partial<ProviderRuntimeModel> & Pick<ProviderRuntimeModel, "id">) {
@@ -109,7 +88,7 @@ const PROVIDER_RUNTIME_CONTRACT_FIXTURES: readonly ProviderRuntimeContractFixtur
     load: async () =>
       await importBundledProviderPlugin<{
         default: Parameters<typeof registerProviderPlugin>[0]["plugin"];
-      }>(providerRuntimeContractModules.anthropicIndexModuleId),
+      }>(providerRuntimeContractModules.anthropicIndexModuleUrl),
   },
   {
     providerIds: ["github-copilot"],
@@ -118,7 +97,7 @@ const PROVIDER_RUNTIME_CONTRACT_FIXTURES: readonly ProviderRuntimeContractFixtur
     load: async () =>
       await importBundledProviderPlugin<{
         default: Parameters<typeof registerProviderPlugin>[0]["plugin"];
-      }>(providerRuntimeContractModules.githubCopilotIndexModuleId),
+      }>(providerRuntimeContractModules.githubCopilotIndexModuleUrl),
   },
   {
     providerIds: ["google", "google-gemini-cli"],
@@ -127,7 +106,7 @@ const PROVIDER_RUNTIME_CONTRACT_FIXTURES: readonly ProviderRuntimeContractFixtur
     load: async () =>
       await importBundledProviderPlugin<{
         default: Parameters<typeof registerProviderPlugin>[0]["plugin"];
-      }>(providerRuntimeContractModules.googleIndexModuleId),
+      }>(providerRuntimeContractModules.googleIndexModuleUrl),
   },
   {
     providerIds: ["openai", "openai-codex"],
@@ -136,7 +115,7 @@ const PROVIDER_RUNTIME_CONTRACT_FIXTURES: readonly ProviderRuntimeContractFixtur
     load: async () =>
       await importBundledProviderPlugin<{
         default: Parameters<typeof registerProviderPlugin>[0]["plugin"];
-      }>(providerRuntimeContractModules.openAIIndexModuleId),
+      }>(providerRuntimeContractModules.openAIIndexModuleUrl),
   },
   {
     providerIds: ["openrouter"],
@@ -145,7 +124,7 @@ const PROVIDER_RUNTIME_CONTRACT_FIXTURES: readonly ProviderRuntimeContractFixtur
     load: async () =>
       await importBundledProviderPlugin<{
         default: Parameters<typeof registerProviderPlugin>[0]["plugin"];
-      }>(providerRuntimeContractModules.openRouterIndexModuleId),
+      }>(providerRuntimeContractModules.openRouterIndexModuleUrl),
   },
   {
     providerIds: ["venice"],
@@ -154,7 +133,7 @@ const PROVIDER_RUNTIME_CONTRACT_FIXTURES: readonly ProviderRuntimeContractFixtur
     load: async () =>
       await importBundledProviderPlugin<{
         default: Parameters<typeof registerProviderPlugin>[0]["plugin"];
-      }>(providerRuntimeContractModules.veniceIndexModuleId),
+      }>(providerRuntimeContractModules.veniceIndexModuleUrl),
   },
   {
     providerIds: ["xai"],
@@ -163,7 +142,7 @@ const PROVIDER_RUNTIME_CONTRACT_FIXTURES: readonly ProviderRuntimeContractFixtur
     load: async () =>
       await importBundledProviderPlugin<{
         default: Parameters<typeof registerProviderPlugin>[0]["plugin"];
-      }>(providerRuntimeContractModules.xAIIndexModuleId),
+      }>(providerRuntimeContractModules.xAIIndexModuleUrl),
   },
   {
     providerIds: ["zai"],
@@ -172,12 +151,11 @@ const PROVIDER_RUNTIME_CONTRACT_FIXTURES: readonly ProviderRuntimeContractFixtur
     load: async () =>
       await importBundledProviderPlugin<{
         default: Parameters<typeof registerProviderPlugin>[0]["plugin"];
-      }>(providerRuntimeContractModules.zaiIndexModuleId),
+      }>(providerRuntimeContractModules.zaiIndexModuleUrl),
   },
 ] as const;
 
 const providerRuntimeContractProviders = new Map<string, ProviderPlugin>();
-let providerRuntimeContractLoadPromise: Promise<void> | null = null;
 
 function requireProviderContractProvider(providerId: string): ProviderPlugin {
   const provider = providerRuntimeContractProviders.get(providerId);
@@ -187,42 +165,32 @@ function requireProviderContractProvider(providerId: string): ProviderPlugin {
   return provider;
 }
 
-async function ensureProviderRuntimeContractProvidersLoaded() {
-  if (!providerRuntimeContractLoadPromise) {
-    providerRuntimeContractLoadPromise = (async () => {
-      providerRuntimeContractProviders.clear();
-      const registeredFixtures = await Promise.all(
-        PROVIDER_RUNTIME_CONTRACT_FIXTURES.map(async (fixture) => {
-          const plugin = await fixture.load();
-          return {
-            fixture,
-            providers: (
-              await registerProviderPlugin({
-                plugin: plugin.default,
-                id: fixture.pluginId,
-                name: fixture.name,
-              })
-            ).providers,
-          };
-        }),
-      );
-      for (const { fixture, providers } of registeredFixtures) {
-        for (const providerId of fixture.providerIds) {
-          providerRuntimeContractProviders.set(
-            providerId,
-            requireRegisteredProvider(providers, providerId, "provider"),
-          );
-        }
-      }
-    })();
-  }
-
-  await providerRuntimeContractLoadPromise;
-}
-
 function installRuntimeHooks() {
   beforeAll(async () => {
-    await ensureProviderRuntimeContractProvidersLoaded();
+    providerRuntimeContractProviders.clear();
+    const registeredFixtures = await Promise.all(
+      PROVIDER_RUNTIME_CONTRACT_FIXTURES.map(async (fixture) => {
+        const plugin = await fixture.load();
+        return {
+          fixture,
+          providers: (
+            await registerProviderPlugin({
+              plugin: plugin.default,
+              id: fixture.pluginId,
+              name: fixture.name,
+            })
+          ).providers,
+        };
+      }),
+    );
+    for (const { fixture, providers } of registeredFixtures) {
+      for (const providerId of fixture.providerIds) {
+        providerRuntimeContractProviders.set(
+          providerId,
+          requireRegisteredProvider(providers, providerId, "provider"),
+        );
+      }
+    }
   }, CONTRACT_SETUP_TIMEOUT_MS);
 
   beforeEach(() => {

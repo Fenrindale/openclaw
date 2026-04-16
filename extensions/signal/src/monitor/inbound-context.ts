@@ -3,7 +3,6 @@ import {
   evaluateSupplementalContextVisibility,
   type ContextVisibilityDecision,
 } from "openclaw/plugin-sdk/security-runtime";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import {
   formatSignalSenderDisplay,
   isSignalSenderAllowed,
@@ -31,7 +30,7 @@ export function resolveSignalQuoteContext(params: {
     channel: "signal",
     accountId: params.accountId,
   });
-  const quoteText = normalizeOptionalString(params.dataMessage?.quote?.text) ?? "";
+  const quoteText = params.dataMessage?.quote?.text?.trim() ?? "";
   const quoteSender = resolveSignalSender({
     sourceNumber: params.dataMessage?.quote?.author ?? null,
     sourceUuid: params.dataMessage?.quote?.authorUuid ?? null,

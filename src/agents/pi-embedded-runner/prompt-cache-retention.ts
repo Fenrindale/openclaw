@@ -1,4 +1,3 @@
-import { normalizeLowercaseStringOrEmpty } from "../../shared/string-coerce.js";
 import { resolveAnthropicCacheRetentionFamily } from "./anthropic-family-cache-semantics.js";
 
 type CacheRetention = "none" | "short" | "long";
@@ -10,7 +9,7 @@ export function isGooglePromptCacheEligible(params: {
   if (params.modelApi !== "google-generative-ai") {
     return false;
   }
-  const normalizedModelId = normalizeLowercaseStringOrEmpty(params.modelId);
+  const normalizedModelId = params.modelId?.trim().toLowerCase() ?? "";
   return normalizedModelId.startsWith("gemini-2.5") || normalizedModelId.startsWith("gemini-3");
 }
 

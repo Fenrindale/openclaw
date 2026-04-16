@@ -1,5 +1,4 @@
 import crypto from "node:crypto";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 import type {
   EndReason,
   GetCallStatusInput,
@@ -171,7 +170,7 @@ export class MockProvider implements VoiceCallProvider {
   }
 
   async getCallStatus(input: GetCallStatusInput): Promise<GetCallStatusResult> {
-    const id = normalizeLowercaseStringOrEmpty(input.providerCallId);
+    const id = input.providerCallId.toLowerCase();
     if (id.includes("stale") || id.includes("ended") || id.includes("completed")) {
       return { status: "completed", isTerminal: true };
     }

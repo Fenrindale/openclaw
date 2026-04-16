@@ -1,5 +1,4 @@
 import { isPrivateNetworkOptInEnabled } from "openclaw/plugin-sdk/ssrf-runtime";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import { resolveMattermostAccount } from "./accounts.js";
 import {
   createMattermostClient,
@@ -66,7 +65,7 @@ export async function resolveMattermostOpaqueTarget(params: {
     params.cfg && (!params.token || !params.baseUrl)
       ? resolveMattermostAccount({ cfg: params.cfg, accountId: params.accountId })
       : null;
-  const token = normalizeOptionalString(params.token) ?? normalizeOptionalString(account?.botToken);
+  const token = params.token?.trim() || account?.botToken?.trim();
   const baseUrl = normalizeMattermostBaseUrl(params.baseUrl ?? account?.baseUrl);
   if (!token || !baseUrl) {
     return null;

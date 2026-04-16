@@ -6,10 +6,17 @@ import {
   shouldAutoApproveDoctorFix,
   type DoctorRepairMode,
 } from "./doctor-repair-mode.js";
-import type { DoctorOptions } from "./doctor.types.js";
 import { guardCancel } from "./onboard-helpers.js";
 
-export type { DoctorOptions } from "./doctor.types.js";
+export type DoctorOptions = {
+  workspaceSuggestions?: boolean;
+  yes?: boolean;
+  nonInteractive?: boolean;
+  deep?: boolean;
+  repair?: boolean;
+  force?: boolean;
+  generateGatewayToken?: boolean;
+};
 
 export type DoctorPrompter = {
   confirm: (params: Parameters<typeof confirm>[0]) => Promise<boolean>;
@@ -35,7 +42,7 @@ export function createDoctorPrompter(params: {
       return false;
     }
     if (!repairMode.canPrompt) {
-      return p.initialValue ?? false;
+      return Boolean(p.initialValue ?? false);
     }
     return guardCancel(
       await confirm({
@@ -60,7 +67,7 @@ export function createDoctorPrompter(params: {
         return false;
       }
       if (!repairMode.canPrompt) {
-        return p.initialValue ?? false;
+        return Boolean(p.initialValue ?? false);
       }
       return guardCancel(
         await confirm({
@@ -78,7 +85,7 @@ export function createDoctorPrompter(params: {
         return false;
       }
       if (!repairMode.canPrompt) {
-        return p.initialValue ?? false;
+        return Boolean(p.initialValue ?? false);
       }
       return guardCancel(
         await confirm({

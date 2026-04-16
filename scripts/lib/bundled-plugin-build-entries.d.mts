@@ -10,7 +10,6 @@ export type BundledPluginBuildEntryParams = {
   env?: NodeJS.ProcessEnv;
 };
 
-export const NON_PACKAGED_BUNDLED_PLUGIN_DIRS: Set<string>;
 export function collectBundledPluginBuildEntries(
   params?: BundledPluginBuildEntryParams,
 ): BundledPluginBuildEntry[];

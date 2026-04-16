@@ -1,11 +1,9 @@
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
-
 export function normalizeMattermostMessagingTarget(raw: string): string | undefined {
   const trimmed = raw.trim();
   if (!trimmed) {
     return undefined;
   }
-  const lower = normalizeLowercaseStringOrEmpty(trimmed);
+  const lower = trimmed.toLowerCase();
   if (lower.startsWith("channel:")) {
     const id = trimmed.slice("channel:".length).trim();
     return id ? `channel:${id}` : undefined;

@@ -18,7 +18,6 @@ export type LegacyConfigMigrationSpec = LegacyConfigMigration & {
 };
 
 import { isSafeExecutableValue } from "../infra/exec-safety.js";
-import { normalizeOptionalString } from "../shared/string-coerce.js";
 import { isRecord } from "../utils.js";
 import { isBlockedObjectKey } from "./prototype-keys.js";
 export { isRecord };
@@ -102,22 +101,23 @@ export const resolveDefaultAgentIdFromRaw = (raw: Record<string, unknown>) => {
       isRecord(entry) &&
       entry.default === true &&
       typeof entry.id === "string" &&
-      normalizeOptionalString(entry.id) !== undefined,
+      entry.id.trim() !== "",
   );
   if (defaultEntry) {
-    return normalizeOptionalString(defaultEntry.id) ?? "main";
+    return defaultEntry.id.trim();
   }
   const routing = getRecord(raw.routing);
-  const routingDefault = normalizeOptionalString(routing?.defaultAgentId) ?? "";
+  const routingDefault =
+    typeof routing?.defaultAgentId === "string" ? routing.defaultAgentId.trim() : "";
   if (routingDefault) {
     return routingDefault;
   }
   const firstEntry = list.find(
     (entry): entry is { id: string } =>
-      isRecord(entry) && normalizeOptionalString(entry.id) !== undefined,
+      isRecord(entry) && typeof entry.id === "string" && entry.id.trim() !== "",
   );
   if (firstEntry) {
-    return normalizeOptionalString(firstEntry.id) ?? "main";
+    return firstEntry.id.trim();
   }
   return "main";
 };

@@ -1,6 +1,6 @@
 import type { ExtensionFactory, SessionManager } from "@mariozechner/pi-coding-agent";
-import type { OpenClawConfig } from "../../config/types.openclaw.js";
-import type { ProviderRuntimeModel } from "../../plugins/provider-runtime-model.types.js";
+import type { OpenClawConfig } from "../../config/config.js";
+import type { ProviderRuntimeModel } from "../../plugins/types.js";
 import { resolveContextWindowInfo } from "../context-window-guard.js";
 import { DEFAULT_CONTEXT_TOKENS } from "../defaults.js";
 import { setCompactionSafeguardRuntime } from "../pi-hooks/compaction-safeguard-runtime.js";
@@ -59,22 +59,14 @@ function buildContextPruningFactory(params: {
     contextWindowTokens: resolveContextWindowTokens(params),
     isToolPrunable: makeToolPrunablePredicate(settings.tools),
     dropThinkingBlocks: transcriptPolicy.dropThinkingBlocks,
-    lastCacheTouchAt: readLastCacheTtlTimestamp(params.sessionManager, {
-      provider: params.provider,
-      modelId: params.modelId,
-    }),
+    lastCacheTouchAt: readLastCacheTtlTimestamp(params.sessionManager),
   });
 
   return contextPruningExtension;
 }
 
 function resolveCompactionMode(cfg?: OpenClawConfig): "default" | "safeguard" {
-  const compaction = cfg?.agents?.defaults?.compaction;
-  // A registered compaction provider requires the safeguard extension path
-  if (compaction?.provider) {
-    return "safeguard";
-  }
-  return compaction?.mode === "safeguard" ? "safeguard" : "default";
+  return cfg?.agents?.defaults?.compaction?.mode === "safeguard" ? "safeguard" : "default";
 }
 
 export function buildEmbeddedExtensionFactories(params: {
@@ -106,7 +98,6 @@ export function buildEmbeddedExtensionFactories(params: {
       qualityGuardMaxRetries: qualityGuardCfg?.maxRetries,
       model: params.model,
       recentTurnsPreserve: compactionCfg?.recentTurnsPreserve,
-      provider: compactionCfg?.provider,
     });
     factories.push(compactionSafeguardExtension);
   }

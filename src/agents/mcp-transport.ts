@@ -1,13 +1,8 @@
-import {
-  SSEClientTransport,
-  type SSEClientTransportOptions,
-} from "@modelcontextprotocol/sdk/client/sse.js";
+import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import type { FetchLike, Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
-import { loadUndiciRuntimeDeps } from "../infra/net/undici-runtime.js";
+import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { logDebug } from "../logger.js";
-import { normalizeOptionalString } from "../shared/string-coerce.js";
 import { resolveMcpTransportConfig } from "./mcp-transport-config.js";
 
 export type ResolvedMcpTransport = {
@@ -24,8 +19,7 @@ function attachStderrLogging(serverName: string, transport: StdioClientTransport
     return undefined;
   }
   const onData = (chunk: Buffer | string) => {
-    const message =
-      normalizeOptionalString(typeof chunk === "string" ? chunk : String(chunk)) ?? "";
+    const message = String(chunk).trim();
     if (!message) {
       return;
     }
@@ -46,17 +40,7 @@ function attachStderrLogging(serverName: string, transport: StdioClientTransport
   };
 }
 
-type SseEventSourceFetch = NonNullable<
-  NonNullable<SSEClientTransportOptions["eventSourceInit"]>["fetch"]
->;
-
-const fetchWithUndici: FetchLike = async (url, init) =>
-  (await loadUndiciRuntimeDeps().fetch(
-    url,
-    init as Parameters<ReturnType<typeof loadUndiciRuntimeDeps>["fetch"]>[1],
-  )) as unknown as Response;
-
-function buildSseEventSourceFetch(headers: Record<string, string>): SseEventSourceFetch {
+function buildSseEventSourceFetch(headers: Record<string, string>) {
   return (url: string | URL, init?: RequestInit) => {
     const sdkHeaders: Record<string, string> = {};
     if (init?.headers) {
@@ -68,10 +52,10 @@ function buildSseEventSourceFetch(headers: Record<string, string>): SseEventSour
         Object.assign(sdkHeaders, init.headers);
       }
     }
-    return fetchWithUndici(url, {
-      ...(init as RequestInit),
+    return fetch(url, {
+      ...init,
       headers: { ...sdkHeaders, ...headers },
-    }) as ReturnType<SseEventSourceFetch>;
+    });
   };
 }
 
@@ -116,8 +100,7 @@ export function resolveMcpTransport(
   return {
     transport: new SSEClientTransport(new URL(resolved.url), {
       requestInit: hasHeaders ? { headers } : undefined,
-      fetch: fetchWithUndici,
-      eventSourceInit: { fetch: buildSseEventSourceFetch(headers) },
+      eventSourceInit: hasHeaders ? { fetch: buildSseEventSourceFetch(headers) } : undefined,
     }),
     description: resolved.description,
     transportType: "sse",

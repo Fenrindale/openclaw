@@ -1,6 +1,5 @@
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 import { normalizeString } from "../record-shared.js";
-import type { SnapshotAriaNode } from "./client.types.js";
+import type { SnapshotAriaNode } from "./client.js";
 import {
   getRoleSnapshotStats,
   type RoleRefMap,
@@ -18,7 +17,7 @@ export type ChromeMcpSnapshotNode = {
 };
 
 function normalizeRole(node: ChromeMcpSnapshotNode): string {
-  const role = normalizeLowercaseStringOrEmpty(node.role);
+  const role = typeof node.role === "string" ? node.role.trim().toLowerCase() : "";
   return role || "generic";
 }
 

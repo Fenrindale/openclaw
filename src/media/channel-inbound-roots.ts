@@ -1,10 +1,14 @@
 import type { MsgContext } from "../auto-reply/templating.js";
 import { getBootstrapChannelPlugin } from "../channels/plugins/bootstrap-registry.js";
-import type { OpenClawConfig } from "../config/types.js";
-import { normalizeOptionalLowercaseString } from "../shared/string-coerce.js";
+import type { OpenClawConfig } from "../config/config.js";
+
+function normalizeChannelId(value?: string | null): string | undefined {
+  const normalized = value?.trim().toLowerCase();
+  return normalized || undefined;
+}
 
 function findChannelMessagingAdapter(channelId?: string | null) {
-  const normalized = normalizeOptionalLowercaseString(channelId);
+  const normalized = normalizeChannelId(channelId);
   if (!normalized) {
     return undefined;
   }

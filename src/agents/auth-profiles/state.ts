@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import { loadJsonFile, saveJsonFile } from "../../infra/json-file.js";
-import { normalizeOptionalString } from "../../shared/string-coerce.js";
 import { AUTH_STORE_VERSION } from "./constants.js";
 import { resolveAuthStatePath } from "./paths.js";
 import type { AuthProfileState, AuthProfileStateStore, ProfileUsageStats } from "./types.js";
@@ -14,7 +13,9 @@ function normalizeAuthProfileOrder(raw: unknown): AuthProfileState["order"] {
       if (!Array.isArray(value)) {
         return acc;
       }
-      const list = value.map((entry) => normalizeOptionalString(entry) ?? "").filter(Boolean);
+      const list = value
+        .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
+        .filter(Boolean);
       if (list.length > 0) {
         acc[provider] = list;
       }

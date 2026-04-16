@@ -1,5 +1,4 @@
 import { createSubsystemLogger } from "../logging/subsystem.js";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 
 let log: ReturnType<typeof createSubsystemLogger> | null = null;
 const loggedEnv = new Set<string>();
@@ -56,7 +55,7 @@ export function isTruthyEnvValue(value?: string): boolean {
   if (typeof value !== "string") {
     return false;
   }
-  switch (normalizeLowercaseStringOrEmpty(value)) {
+  switch (value.trim().toLowerCase()) {
     case "1":
     case "on":
     case "true":

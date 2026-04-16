@@ -1,6 +1,6 @@
-import { getChannelPlugin, getLoadedChannelPlugin } from "../../channels/plugins/index.js";
-import type { ChannelPlugin } from "../../channels/plugins/types.plugin.js";
-import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import { getChannelPlugin } from "../../channels/plugins/index.js";
+import type { ChannelPlugin } from "../../channels/plugins/types.js";
+import type { OpenClawConfig } from "../../config/config.js";
 import { getActivePluginRegistry } from "../../plugins/runtime.js";
 import {
   isDeliverableMessageChannel,
@@ -58,9 +58,8 @@ export function resolveOutboundChannelPlugin(params: {
     return undefined;
   }
 
-  const resolveLoaded = () => getLoadedChannelPlugin(normalized);
   const resolve = () => getChannelPlugin(normalized);
-  const current = resolveLoaded();
+  const current = resolve();
   if (current) {
     return current;
   }
@@ -70,5 +69,5 @@ export function resolveOutboundChannelPlugin(params: {
   }
 
   maybeBootstrapChannelPlugin({ channel: normalized, cfg: params.cfg });
-  return resolveLoaded() ?? resolveDirectFromActiveRegistry(normalized) ?? resolve();
+  return resolve() ?? resolveDirectFromActiveRegistry(normalized);
 }

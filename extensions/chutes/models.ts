@@ -1,9 +1,5 @@
 import type { ModelDefinitionConfig } from "openclaw/plugin-sdk/provider-model-shared";
 import { createSubsystemLogger } from "openclaw/plugin-sdk/runtime-env";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-} from "openclaw/plugin-sdk/text-runtime";
 
 const log = createSubsystemLogger("chutes-models");
 
@@ -479,10 +475,6 @@ interface CacheEntry {
 
 const modelCache = new Map<string, CacheEntry>();
 
-export function clearChutesModelCacheForTests(): void {
-  modelCache.clear();
-}
-
 function pruneExpiredCacheEntries(now: number = Date.now()): void {
   for (const [key, entry] of modelCache.entries()) {
     if (now - entry.time >= CACHE_TTL) {
@@ -510,7 +502,7 @@ function cacheAndReturn(
 }
 
 export async function discoverChutesModels(accessToken?: string): Promise<ModelDefinitionConfig[]> {
-  const trimmedKey = normalizeOptionalString(accessToken) ?? "";
+  const trimmedKey = accessToken?.trim() ?? "";
   const now = Date.now();
   pruneExpiredCacheEntries(now);
   const cached = modelCache.get(trimmedKey);
@@ -562,19 +554,18 @@ export async function discoverChutesModels(accessToken?: string): Promise<ModelD
     const models: ModelDefinitionConfig[] = [];
 
     for (const entry of data) {
-      const id = normalizeOptionalString(entry?.id) ?? "";
+      const id = typeof entry?.id === "string" ? entry.id.trim() : "";
       if (!id || seen.has(id)) {
         continue;
       }
       seen.add(id);
 
-      const lowerId = normalizeLowercaseStringOrEmpty(id);
       const isReasoning =
         entry.supported_features?.includes("reasoning") ||
-        lowerId.includes("r1") ||
-        lowerId.includes("thinking") ||
-        lowerId.includes("reason") ||
-        lowerId.includes("tee");
+        id.toLowerCase().includes("r1") ||
+        id.toLowerCase().includes("thinking") ||
+        id.toLowerCase().includes("reason") ||
+        id.toLowerCase().includes("tee");
 
       const input: Array<"text" | "image"> = (entry.input_modalities || ["text"]).filter(
         (i): i is "text" | "image" => i === "text" || i === "image",

@@ -127,13 +127,12 @@ describe("evaluateSystemRunPolicy", () => {
     expect(denied.errorMessage).toBe("SYSTEM_RUN_DENIED: allowlist miss");
   });
 
-  it("keeps POSIX shell wrapper decisions tied to allowlist analysis", () => {
-    const allowed = expectAllowedDecision(
+  it("treats shell wrappers as allowlist misses", () => {
+    const denied = expectDeniedDecision(
       evaluateSystemRunPolicy(buildPolicyParams({ shellWrapperInvocation: true })),
     );
-    expect(allowed.shellWrapperBlocked).toBe(false);
-    expect(allowed.analysisOk).toBe(true);
-    expect(allowed.allowlistSatisfied).toBe(true);
+    expect(denied.shellWrapperBlocked).toBe(true);
+    expect(denied.errorMessage).toContain("shell wrappers like sh/bash/zsh -c");
   });
 
   it("keeps Windows-specific guidance for cmd.exe wrappers", () => {
@@ -145,16 +144,6 @@ describe("evaluateSystemRunPolicy", () => {
     expect(denied.shellWrapperBlocked).toBe(true);
     expect(denied.windowsShellWrapperBlocked).toBe(true);
     expect(denied.errorMessage).toContain("Windows shell wrappers like cmd.exe /c");
-  });
-
-  it("does not block Windows cmd.exe invocations without inline shell-wrapper transport", () => {
-    const allowed = expectAllowedDecision(
-      evaluateSystemRunPolicy(
-        buildPolicyParams({ isWindows: true, cmdInvocation: true, shellWrapperInvocation: false }),
-      ),
-    );
-    expect(allowed.shellWrapperBlocked).toBe(false);
-    expect(allowed.windowsShellWrapperBlocked).toBe(false);
   });
 
   it("allows execution when policy checks pass", () => {

@@ -25,7 +25,7 @@ describe("group runtime loading", () => {
           Provider: "whatsapp",
         },
       }),
-    ).toContain('You are in the WhatsApp group chat "Ops".');
+    ).toContain('You are in the Whatsapp group chat "Ops".');
     expect(
       groups.buildGroupIntro({
         cfg: {} as OpenClawConfig,
@@ -48,12 +48,9 @@ describe("group runtime loading", () => {
 
   it("loads the group runtime only when requireMention resolution needs it", async () => {
     const groupsRuntimeLoads = vi.fn();
-    vi.doMock("./groups.runtime.js", () => {
+    vi.doMock("./groups.runtime.js", async () => {
       groupsRuntimeLoads();
-      return {
-        getChannelPlugin: () => undefined,
-        normalizeChannelId: (channelId?: string) => channelId?.trim().toLowerCase(),
-      };
+      return await vi.importActual<typeof import("./groups.runtime.js")>("./groups.runtime.js");
     });
     const groups = await import("./groups.js");
 

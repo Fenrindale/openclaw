@@ -1,10 +1,9 @@
 import { resolveDefaultAgentId } from "../agents/agent-scope.js";
 import type { ChatType } from "../channels/chat-type.js";
 import { normalizeChatType } from "../channels/chat-type.js";
-import type { OpenClawConfig } from "../config/types.openclaw.js";
+import type { OpenClawConfig } from "../config/config.js";
 import { shouldLogVerbose } from "../globals.js";
 import { logDebug } from "../logger.js";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 import { listBindings } from "./bindings.js";
 import {
   buildAgentMainSessionKey,
@@ -77,7 +76,7 @@ export function resolveInboundLastRouteSessionKey(params: {
 }
 
 function normalizeToken(value: string | undefined | null): string {
-  return normalizeLowercaseStringOrEmpty(value);
+  return (value ?? "").trim().toLowerCase();
 }
 
 function normalizeId(value: unknown): string {
@@ -678,22 +677,18 @@ export function resolveAgentRoute(input: ResolveAgentRouteInput): ResolvedAgentR
 
   const choose = (agentId: string, matchedBy: ResolvedAgentRoute["matchedBy"]) => {
     const resolvedAgentId = pickFirstExistingAgentId(input.cfg, agentId);
-    const sessionKey = normalizeLowercaseStringOrEmpty(
-      buildAgentSessionKey({
-        agentId: resolvedAgentId,
-        channel,
-        accountId,
-        peer,
-        dmScope,
-        identityLinks,
-      }),
-    );
-    const mainSessionKey = normalizeLowercaseStringOrEmpty(
-      buildAgentMainSessionKey({
-        agentId: resolvedAgentId,
-        mainKey: DEFAULT_MAIN_KEY,
-      }),
-    );
+    const sessionKey = buildAgentSessionKey({
+      agentId: resolvedAgentId,
+      channel,
+      accountId,
+      peer,
+      dmScope,
+      identityLinks,
+    }).toLowerCase();
+    const mainSessionKey = buildAgentMainSessionKey({
+      agentId: resolvedAgentId,
+      mainKey: DEFAULT_MAIN_KEY,
+    }).toLowerCase();
     const route = {
       agentId: resolvedAgentId,
       channel,

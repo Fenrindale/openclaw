@@ -1,6 +1,5 @@
 import type { OpenClawConfig } from "openclaw/plugin-sdk/config-runtime";
 import type { ReplyPayload } from "openclaw/plugin-sdk/reply-runtime";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 import { resolveDefaultSlackAccountId, resolveSlackAccount } from "./accounts.js";
 
 const SLACK_BUTTON_MAX_ITEMS = 5;
@@ -37,7 +36,10 @@ function parseChoice(raw: string, options?: { allowStyle?: boolean }): SlackChoi
   if (options?.allowStyle) {
     const styleDelimiter = value.lastIndexOf(":");
     if (styleDelimiter !== -1) {
-      const maybeStyle = normalizeLowercaseStringOrEmpty(value.slice(styleDelimiter + 1));
+      const maybeStyle = value
+        .slice(styleDelimiter + 1)
+        .trim()
+        .toLowerCase();
       if (
         maybeStyle === "primary" ||
         maybeStyle === "secondary" ||
@@ -136,7 +138,7 @@ function parseSimpleSlackOptions(raw: string): SlackChoice[] | null {
   if (!entries.every((entry) => SLACK_SIMPLE_OPTION_RE.test(entry))) {
     return null;
   }
-  const deduped = new Set(entries.map((entry) => normalizeLowercaseStringOrEmpty(entry)));
+  const deduped = new Set(entries.map((entry) => entry.toLowerCase()));
   if (deduped.size !== entries.length) {
     return null;
   }
@@ -152,7 +154,7 @@ function resolveInteractiveRepliesFromCapabilities(capabilities: unknown): boole
   }
   if (Array.isArray(capabilities)) {
     return capabilities.some(
-      (entry) => normalizeLowercaseStringOrEmpty(String(entry)) === "interactivereplies",
+      (entry) => String(entry).trim().toLowerCase() === "interactivereplies",
     );
   }
   if (typeof capabilities === "object") {
@@ -198,7 +200,7 @@ export function compileSlackInteractiveReplies(payload: ReplyPayload): ReplyPayl
       generatedBlocks.push(section);
     }
     const block =
-      normalizeLowercaseStringOrEmpty(directiveType) === "slack_buttons"
+      directiveType.toLowerCase() === "slack_buttons"
         ? buildButtonsBlock(body)
         : buildSelectBlock(body);
     if (block) {

@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import type { ReplyPayload } from "../auto-reply/reply-payload.js";
+import type { ReplyPayload } from "../auto-reply/types.js";
 import {
   createConversationBindingRecord,
   resolveConversationBindingRecord,
@@ -14,18 +14,14 @@ import { writeJsonAtomic } from "../infra/json-files.js";
 import { type ConversationRef } from "../infra/outbound/session-binding-service.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { resolveGlobalMap, resolveGlobalSingleton } from "../shared/global-singleton.js";
-import {
-  normalizeOptionalLowercaseString,
-  normalizeOptionalString,
-} from "../shared/string-coerce.js";
+import { getActivePluginRegistry } from "./runtime.js";
 import type {
   PluginConversationBinding,
   PluginConversationBindingResolvedEvent,
   PluginConversationBindingResolutionDecision,
   PluginConversationBindingRequestParams,
   PluginConversationBindingRequestResult,
-} from "./conversation-binding.types.js";
-import { getActivePluginRegistry } from "./runtime.js";
+} from "./types.js";
 
 const log = createSubsystemLogger("plugins/binding");
 
@@ -158,7 +154,7 @@ function resolveApprovalsPath(): string {
 }
 
 function normalizeChannel(value: string): string {
-  return normalizeOptionalLowercaseString(value) ?? "";
+  return value.trim().toLowerCase();
 }
 
 function normalizeConversation(params: PluginBindingConversation): PluginBindingConversation {
@@ -166,11 +162,11 @@ function normalizeConversation(params: PluginBindingConversation): PluginBinding
     channel: normalizeChannel(params.channel),
     accountId: params.accountId.trim() || "default",
     conversationId: params.conversationId.trim(),
-    parentConversationId: normalizeOptionalString(params.parentConversationId),
+    parentConversationId: params.parentConversationId?.trim() || undefined,
     threadId:
       typeof params.threadId === "number"
         ? Math.trunc(params.threadId)
-        : normalizeOptionalString(params.threadId?.toString()),
+        : params.threadId?.toString().trim() || undefined,
   };
 }
 
@@ -341,16 +337,16 @@ function loadApprovalsFromDisk(): PluginBindingApprovalsFile {
     return {
       version: 1,
       approvals: parsed.approvals
-        .filter(
-          (entry): entry is PluginBindingApprovalEntry =>
-            entry !== null && typeof entry === "object",
+        .filter((entry): entry is PluginBindingApprovalEntry =>
+          Boolean(entry && typeof entry === "object"),
         )
         .map((entry) => ({
           pluginRoot: typeof entry.pluginRoot === "string" ? entry.pluginRoot : "",
           pluginId: typeof entry.pluginId === "string" ? entry.pluginId : "",
           pluginName: typeof entry.pluginName === "string" ? entry.pluginName : undefined,
           channel: typeof entry.channel === "string" ? normalizeChannel(entry.channel) : "",
-          accountId: normalizeOptionalString(entry.accountId) ?? "default",
+          accountId:
+            typeof entry.accountId === "string" ? entry.accountId.trim() || "default" : "default",
           approvedAt:
             typeof entry.approvedAt === "number" && Number.isFinite(entry.approvedAt)
               ? Math.floor(entry.approvedAt)
@@ -431,8 +427,8 @@ function buildBindingMetadata(params: {
     pluginId: params.pluginId,
     pluginName: params.pluginName,
     pluginRoot: params.pluginRoot,
-    summary: normalizeOptionalString(params.summary),
-    detachHint: normalizeOptionalString(params.detachHint),
+    summary: params.summary?.trim() || undefined,
+    detachHint: params.detachHint?.trim() || undefined,
   };
 }
 
@@ -625,7 +621,7 @@ function resolvePluginBindingDisplayName(binding: {
   pluginId: string;
   pluginName?: string;
 }): string {
-  return normalizeOptionalString(binding.pluginName) || binding.pluginId;
+  return binding.pluginName?.trim() || binding.pluginId;
 }
 
 function buildDetachHintSuffix(detachHint?: string): string {
@@ -808,9 +804,9 @@ export async function requestPluginConversationBinding(params: {
     pluginRoot: params.pluginRoot,
     conversation,
     requestedAt: Date.now(),
-    requestedBySenderId: normalizeOptionalString(params.requestedBySenderId),
-    summary: normalizeOptionalString(params.binding?.summary),
-    detachHint: normalizeOptionalString(params.binding?.detachHint),
+    requestedBySenderId: params.requestedBySenderId?.trim() || undefined,
+    summary: params.binding?.summary?.trim() || undefined,
+    detachHint: params.binding?.detachHint?.trim() || undefined,
   };
   pendingRequests.set(request.id, request);
   logPluginBindingLifecycleEvent({

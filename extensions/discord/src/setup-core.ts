@@ -3,7 +3,6 @@ import type { DiscordGuildEntry, OpenClawConfig } from "openclaw/plugin-sdk/conf
 import type { ChannelSetupDmPolicy, ChannelSetupWizard } from "openclaw/plugin-sdk/setup-runtime";
 import { createStandardChannelSetupStatus } from "openclaw/plugin-sdk/setup-runtime";
 import { formatDocsLink } from "openclaw/plugin-sdk/setup-tools";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import {
   inspectDiscordSetupAccount,
   resolveDiscordSetupAccountConfig,
@@ -114,10 +113,10 @@ export function createDiscordSetupWizardBase(handlers: {
           return {
             accountConfigured: account.configured,
             hasConfiguredValue: account.tokenStatus !== "missing",
-            resolvedValue: normalizeOptionalString(account.token),
+            resolvedValue: account.token?.trim() || undefined,
             envValue:
               accountId === DEFAULT_ACCOUNT_ID
-                ? normalizeOptionalString(process.env.DISCORD_BOT_TOKEN)
+                ? process.env.DISCORD_BOT_TOKEN?.trim() || undefined
                 : undefined,
           };
         },

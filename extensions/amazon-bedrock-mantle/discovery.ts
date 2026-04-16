@@ -1,10 +1,8 @@
 import { createSubsystemLogger } from "openclaw/plugin-sdk/core";
-import { formatErrorMessage } from "openclaw/plugin-sdk/error-runtime";
 import type {
   ModelDefinitionConfig,
   ModelProviderConfig,
 } from "openclaw/plugin-sdk/provider-model-shared";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 
 const log = createSubsystemLogger("bedrock-mantle-discovery");
 
@@ -104,7 +102,7 @@ export async function generateBearerTokenFromIam(params: {
   } catch (error) {
     log.debug?.("Mantle IAM token generation unavailable", {
       region: params.region,
-      error: formatErrorMessage(error),
+      error: error instanceof Error ? error.message : String(error),
     });
     return undefined;
   }
@@ -146,7 +144,7 @@ const REASONING_PATTERNS = [
 ];
 
 function inferReasoningSupport(modelId: string): boolean {
-  const lower = normalizeLowercaseStringOrEmpty(modelId);
+  const lower = modelId.toLowerCase();
   return REASONING_PATTERNS.some((p) => lower.includes(p));
 }
 
@@ -235,7 +233,7 @@ export async function discoverMantleModels(params: {
     return models;
   } catch (error) {
     log.debug?.("Mantle model discovery error", {
-      error: formatErrorMessage(error),
+      error: error instanceof Error ? error.message : String(error),
     });
     return cached?.models ?? [];
   }

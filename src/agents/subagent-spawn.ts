@@ -1,13 +1,12 @@
 import crypto from "node:crypto";
 import { promises as fs } from "node:fs";
-import type { OpenClawConfig } from "../config/types.openclaw.js";
 import type { SubagentLifecycleHookRunner } from "../plugins/hooks.js";
-import { isValidAgentId, normalizeAgentId, parseAgentSessionKey } from "../routing/session-key.js";
 import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-} from "../shared/string-coerce.js";
-import type { BootstrapContextMode } from "./bootstrap-files.js";
+  isValidAgentId,
+  isCronSessionKey,
+  normalizeAgentId,
+  parseAgentSessionKey,
+} from "../routing/session-key.js";
 import {
   mapToolContextToSpawnedRunMetadata,
   normalizeSpawnedRunMetadata,
@@ -21,16 +20,6 @@ import {
 import { resolveSubagentCapabilities } from "./subagent-capabilities.js";
 import { getSubagentDepthFromSessionStore } from "./subagent-depth.js";
 import { countActiveRunsForSession, registerSubagentRun } from "./subagent-registry.js";
-import { resolveSubagentSpawnAcceptedNote } from "./subagent-spawn-accepted-note.js";
-export {
-  SUBAGENT_SPAWN_ACCEPTED_NOTE,
-  SUBAGENT_SPAWN_SESSION_ACCEPTED_NOTE,
-} from "./subagent-spawn-accepted-note.js";
-import {
-  resolveConfiguredSubagentRunTimeoutSeconds,
-  resolveSubagentModelAndThinkingPlan,
-  splitModelRef,
-} from "./subagent-spawn-plan.js";
 import {
   ADMIN_SCOPE,
   AGENT_LANE_SUBAGENT,
@@ -38,10 +27,12 @@ import {
   buildSubagentSystemPrompt,
   callGateway,
   emitSessionLifecycleEvent,
+  formatThinkingLevels,
   getGlobalHookRunner,
   loadConfig,
   mergeSessionEntry,
   normalizeDeliveryContext,
+  normalizeThinkLevel,
   pruneLegacyStoreKeys,
   resolveAgentConfig,
   resolveDisplaySessionKey,
@@ -49,18 +40,16 @@ import {
   resolveInternalSessionKey,
   resolveMainSessionAlias,
   resolveSandboxRuntimeStatus,
+  resolveSubagentSpawnModelSelection,
   updateSessionStore,
   isAdminOnlyMethod,
 } from "./subagent-spawn.runtime.js";
-import {
-  SUBAGENT_SPAWN_MODES,
-  SUBAGENT_SPAWN_SANDBOX_MODES,
-  type SpawnSubagentMode,
-  type SpawnSubagentSandboxMode,
-} from "./subagent-spawn.types.js";
+import { readStringParam } from "./tools/common.js";
 
-export { SUBAGENT_SPAWN_MODES, SUBAGENT_SPAWN_SANDBOX_MODES } from "./subagent-spawn.types.js";
-export type { SpawnSubagentMode, SpawnSubagentSandboxMode } from "./subagent-spawn.types.js";
+export const SUBAGENT_SPAWN_MODES = ["run", "session"] as const;
+export type SpawnSubagentMode = (typeof SUBAGENT_SPAWN_MODES)[number];
+export const SUBAGENT_SPAWN_SANDBOX_MODES = ["inherit", "require"] as const;
+export type SpawnSubagentSandboxMode = (typeof SUBAGENT_SPAWN_SANDBOX_MODES)[number];
 
 export { decodeStrictBase64 };
 
@@ -91,7 +80,6 @@ export type SpawnSubagentParams = {
   mode?: SpawnSubagentMode;
   cleanup?: "delete" | "keep";
   sandbox?: SpawnSubagentSandboxMode;
-  lightContext?: boolean;
   expectsCompletionMessage?: boolean;
   attachments?: Array<{
     name: string;
@@ -116,6 +104,11 @@ export type SpawnSubagentContext = {
   workspaceDir?: string;
 };
 
+export const SUBAGENT_SPAWN_ACCEPTED_NOTE =
+  "Auto-announce is push-based. After spawning children, do NOT call sessions_list, sessions_history, exec sleep, or any polling tool. Wait for completion events to arrive as user messages, track expected child session keys, and only send your final answer after ALL expected completions arrive. If a child completion event arrives AFTER your final answer, reply ONLY with NO_REPLY.";
+export const SUBAGENT_SPAWN_SESSION_ACCEPTED_NOTE =
+  "thread-bound session stays active after this task; continue in-thread for follow-ups.";
+
 export type SpawnSubagentResult = {
   status: "accepted" | "forbidden" | "error";
   childSessionKey?: string;
@@ -132,7 +125,20 @@ export type SpawnSubagentResult = {
   };
 };
 
-export { splitModelRef } from "./subagent-spawn-plan.js";
+export function splitModelRef(ref?: string) {
+  if (!ref) {
+    return { provider: undefined, model: undefined };
+  }
+  const trimmed = ref.trim();
+  if (!trimmed) {
+    return { provider: undefined, model: undefined };
+  }
+  const [provider, model] = trimmed.split("/", 2);
+  if (model) {
+    return { provider, model };
+  }
+  return { provider: undefined, model: trimmed };
+}
 
 async function updateSubagentSessionStore(
   storePath: string,
@@ -174,7 +180,7 @@ function loadSubagentConfig() {
 }
 
 async function persistInitialChildSessionRuntimeModel(params: {
-  cfg: OpenClawConfig;
+  cfg: ReturnType<typeof loadConfig>;
   childSessionKey: string;
   resolvedModel?: string;
 }): Promise<string | undefined> {
@@ -205,7 +211,7 @@ async function persistInitialChildSessionRuntimeModel(params: {
 }
 
 function sanitizeMountPathHint(value?: string): string | undefined {
-  const trimmed = normalizeOptionalString(value);
+  const trimmed = value?.trim();
   if (!trimmed) {
     return undefined;
   }
@@ -394,10 +400,15 @@ export async function spawnSubagentDirect(
   // When agent omits runTimeoutSeconds, use the config default.
   // Falls back to 0 (no timeout) if config key is also unset,
   // preserving current behavior for existing deployments.
-  const runTimeoutSeconds = resolveConfiguredSubagentRunTimeoutSeconds({
-    cfg,
-    runTimeoutSeconds: params.runTimeoutSeconds,
-  });
+  const cfgSubagentTimeout =
+    typeof cfg?.agents?.defaults?.subagents?.runTimeoutSeconds === "number" &&
+    Number.isFinite(cfg.agents.defaults.subagents.runTimeoutSeconds)
+      ? Math.max(0, Math.floor(cfg.agents.defaults.subagents.runTimeoutSeconds))
+      : 0;
+  const runTimeoutSeconds =
+    typeof params.runTimeoutSeconds === "number" && Number.isFinite(params.runTimeoutSeconds)
+      ? Math.max(0, Math.floor(params.runTimeoutSeconds))
+      : cfgSubagentTimeout;
   let modelApplied = false;
   let threadBindingReady = false;
   const { mainKey, alias } = resolveMainSessionAlias(cfg);
@@ -455,11 +466,11 @@ export async function spawnSubagentDirect(
       cfg?.agents?.defaults?.subagents?.allowAgents ??
       [];
     const allowAny = allowAgents.some((value) => value.trim() === "*");
-    const normalizedTargetId = normalizeLowercaseStringOrEmpty(targetAgentId);
+    const normalizedTargetId = targetAgentId.toLowerCase();
     const allowSet = new Set(
       allowAgents
         .filter((value) => value.trim() && value.trim() !== "*")
-        .map((value) => normalizeLowercaseStringOrEmpty(normalizeAgentId(value))),
+        .map((value) => normalizeAgentId(value).toLowerCase()),
     );
     if (!allowAny && !allowSet.has(normalizedTargetId)) {
       const allowedText = allowSet.size > 0 ? Array.from(allowSet).join(", ") : "none";
@@ -499,20 +510,30 @@ export async function spawnSubagentDirect(
     maxSpawnDepth,
   });
   const targetAgentConfig = resolveAgentConfig(cfg, targetAgentId);
-  const plan = resolveSubagentModelAndThinkingPlan({
+  const resolvedModel = resolveSubagentSpawnModelSelection({
     cfg,
-    targetAgentId,
-    targetAgentConfig,
+    agentId: targetAgentId,
     modelOverride,
-    thinkingOverrideRaw,
   });
-  if (plan.status === "error") {
-    return {
-      status: "error",
-      error: plan.error,
-    };
+
+  const resolvedThinkingDefaultRaw =
+    readStringParam(targetAgentConfig?.subagents ?? {}, "thinking") ??
+    readStringParam(cfg.agents?.defaults?.subagents ?? {}, "thinking");
+
+  let thinkingOverride: string | undefined;
+  const thinkingCandidateRaw = thinkingOverrideRaw || resolvedThinkingDefaultRaw;
+  if (thinkingCandidateRaw) {
+    const normalized = normalizeThinkLevel(thinkingCandidateRaw);
+    if (!normalized) {
+      const { provider, model } = splitModelRef(resolvedModel);
+      const hint = formatThinkingLevels(provider, model);
+      return {
+        status: "error",
+        error: `Invalid thinking level "${thinkingCandidateRaw}". Use one of: ${hint}.`,
+      };
+    }
+    thinkingOverride = normalized;
   }
-  const { resolvedModel, thinkingOverride } = plan;
   const patchChildSession = async (patch: Record<string, unknown>): Promise<string | undefined> => {
     try {
       await callSubagentGateway({
@@ -530,8 +551,13 @@ export async function spawnSubagentDirect(
     spawnDepth: childDepth,
     subagentRole: childCapabilities.role === "main" ? null : childCapabilities.role,
     subagentControlScope: childCapabilities.controlScope,
-    ...plan.initialSessionPatch,
   };
+  if (resolvedModel) {
+    initialChildSessionPatch.model = resolvedModel;
+  }
+  if (thinkingOverride !== undefined) {
+    initialChildSessionPatch.thinkingLevel = thinkingOverride === "off" ? null : thinkingOverride;
+  }
 
   const initialPatchError = await patchChildSession(initialChildSessionPatch);
   if (initialPatchError) {
@@ -646,10 +672,6 @@ export async function spawnSubagentDirect(
     childSystemPrompt = `${childSystemPrompt}\n\n${materializedAttachments.systemPromptSuffix}`;
   }
 
-  const bootstrapContextMode: BootstrapContextMode | undefined = params.lightContext
-    ? "lightweight"
-    : undefined;
-
   const childTaskMessage = [
     `[Subagent Context] You are running as a subagent (depth ${childDepth}/${maxSpawnDepth}). Results auto-announce to your requester; do not busy-poll for status.`,
     spawnMode === "session"
@@ -720,12 +742,6 @@ export async function spawnSubagentDirect(
         thinking: thinkingOverride,
         timeout: runTimeoutSeconds,
         label: label || undefined,
-        ...(bootstrapContextMode
-          ? {
-              bootstrapContextMode,
-              bootstrapContextRunKind: "default" as const,
-            }
-          : {}),
         ...publicSpawnedMetadata,
       },
       timeoutMs: 10_000,
@@ -881,15 +897,23 @@ export async function spawnSubagentDirect(
     label: label || undefined,
   });
 
+  // Check if we're in a cron isolated session - don't add "do not poll" note
+  // because cron sessions end immediately after the agent produces a response,
+  // so the agent needs to wait for subagent results to keep the turn alive.
+  const isCronSession = isCronSessionKey(ctx.agentSessionKey);
+  const note =
+    spawnMode === "session"
+      ? SUBAGENT_SPAWN_SESSION_ACCEPTED_NOTE
+      : isCronSession
+        ? undefined
+        : SUBAGENT_SPAWN_ACCEPTED_NOTE;
+
   return {
     status: "accepted",
     childSessionKey,
     runId: childRunId,
     mode: spawnMode,
-    note: resolveSubagentSpawnAcceptedNote({
-      spawnMode,
-      agentSessionKey: ctx.agentSessionKey,
-    }),
+    note,
     modelApplied: resolvedModel ? modelApplied : undefined,
     attachments: attachmentsReceipt,
   };

@@ -30,13 +30,11 @@ import { createNonExitingRuntime, logVerbose } from "openclaw/plugin-sdk/runtime
 import { resolveOpenProviderRuntimeGroupPolicy } from "openclaw/plugin-sdk/runtime-group-policy";
 import { logDebug, logError } from "openclaw/plugin-sdk/text-runtime";
 import { resolveDiscordMaxLinesPerMessage } from "../accounts.js";
-import { createDiscordRestClient } from "../client.js";
 import {
   parseDiscordComponentCustomIdForCarbon,
   parseDiscordModalCustomIdForCarbon,
 } from "../component-custom-id.js";
 import { resolveDiscordComponentEntry, resolveDiscordModalEntry } from "../components-registry.js";
-import { resolveDiscordConversationIdentity } from "../conversation-identity.js";
 import {
   dispatchDiscordPluginInteractiveHandler,
   type DiscordInteractiveHandlerContext,
@@ -154,16 +152,6 @@ function resolveDiscordComponentChatType(interactionCtx: ComponentInteractionCon
     return "group";
   }
   return "channel";
-}
-
-export function resolveDiscordComponentOriginatingTo(
-  interactionCtx: Pick<ComponentInteractionContext, "isDirectMessage" | "userId" | "channelId">,
-) {
-  return resolveDiscordConversationIdentity({
-    isDirectMessage: interactionCtx.isDirectMessage,
-    userId: interactionCtx.userId,
-    channelId: interactionCtx.channelId,
-  });
 }
 
 async function dispatchPluginDiscordInteractiveEvent(params: {
@@ -475,8 +463,7 @@ async function dispatchDiscordComponentEvent(params: {
     MessageSid: interaction.rawData.id,
     Timestamp: timestamp,
     OriginatingChannel: "discord" as const,
-    OriginatingTo:
-      resolveDiscordComponentOriginatingTo(interactionCtx) ?? `channel:${interactionCtx.channelId}`,
+    OriginatingTo: `channel:${interactionCtx.channelId}`,
   });
 
   await recordInboundSession({
@@ -487,8 +474,7 @@ async function dispatchDiscordComponentEvent(params: {
       ? {
           sessionKey: route.mainSessionKey,
           channel: "discord",
-          to:
-            resolveDiscordComponentOriginatingTo(interactionCtx) ?? `user:${interactionCtx.userId}`,
+          to: `user:${interactionCtx.userId}`,
           accountId,
           mainDmOwnerPin: pinnedMainDmOwner
             ? {
@@ -526,11 +512,6 @@ async function dispatchDiscordComponentEvent(params: {
     fallbackLimit: 2000,
   });
   const token = ctx.token ?? "";
-  const feedbackRest = createDiscordRestClient({
-    cfg: ctx.cfg,
-    token,
-    accountId,
-  }).rest;
   const mediaLocalRoots = getAgentScopedMediaLocalRoots(ctx.cfg, agentId);
   const replyToMode =
     ctx.discordConfig?.replyToMode ?? ctx.cfg.channels?.discord?.replyToMode ?? "off";
@@ -573,7 +554,7 @@ async function dispatchDiscordComponentEvent(params: {
       onReplyStart: async () => {
         try {
           const { sendTyping } = await loadTypingRuntime();
-          await sendTyping({ rest: feedbackRest, channelId: typingChannelId });
+          await sendTyping({ client: interaction.client, channelId: typingChannelId });
         } catch (err) {
           logVerbose(`discord: typing failed for component reply: ${String(err)}`);
         }

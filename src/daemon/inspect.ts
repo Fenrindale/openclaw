@@ -1,6 +1,5 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 import {
   GATEWAY_SERVICE_KIND,
   GATEWAY_SERVICE_MARKER,
@@ -54,7 +53,7 @@ export function renderGatewayServiceCleanupHints(
 type Marker = (typeof EXTRA_MARKERS)[number];
 
 function detectMarker(content: string): Marker | null {
-  const lower = normalizeLowercaseStringOrEmpty(content);
+  const lower = content.toLowerCase();
   for (const marker of EXTRA_MARKERS) {
     if (lower.includes(marker)) {
       return marker;
@@ -65,7 +64,7 @@ function detectMarker(content: string): Marker | null {
 
 export function detectMarkerLineWithGateway(contents: string): Marker | null {
   // Join line continuations (trailing backslash) into single lines
-  const lower = normalizeLowercaseStringOrEmpty(contents.replace(/\\\r?\n\s*/g, " "));
+  const lower = contents.replace(/\\\r?\n\s*/g, " ").toLowerCase();
   for (const line of lower.split(/\r?\n/)) {
     if (!line.includes("gateway")) {
       continue;
@@ -80,10 +79,10 @@ export function detectMarkerLineWithGateway(contents: string): Marker | null {
 }
 
 function hasGatewayServiceMarker(content: string): boolean {
-  const lower = normalizeLowercaseStringOrEmpty(content);
+  const lower = content.toLowerCase();
   const markerKeys = ["openclaw_service_marker"];
   const kindKeys = ["openclaw_service_kind"];
-  const markerValues = [normalizeLowercaseStringOrEmpty(GATEWAY_SERVICE_MARKER)];
+  const markerValues = [GATEWAY_SERVICE_MARKER.toLowerCase()];
   const hasMarkerKey = markerKeys.some((key) => lower.includes(key));
   const hasKindKey = kindKeys.some((key) => lower.includes(key));
   const hasMarkerValue = markerValues.some((value) => lower.includes(value));
@@ -91,7 +90,7 @@ function hasGatewayServiceMarker(content: string): boolean {
     hasMarkerKey &&
     hasKindKey &&
     hasMarkerValue &&
-    lower.includes(normalizeLowercaseStringOrEmpty(GATEWAY_SERVICE_KIND))
+    lower.includes(GATEWAY_SERVICE_KIND.toLowerCase())
   );
 }
 
@@ -99,7 +98,7 @@ function isOpenClawGatewayLaunchdService(label: string, contents: string): boole
   if (hasGatewayServiceMarker(contents)) {
     return true;
   }
-  const lowerContents = normalizeLowercaseStringOrEmpty(contents);
+  const lowerContents = contents.toLowerCase();
   if (!lowerContents.includes("gateway")) {
     return false;
   }
@@ -113,15 +112,15 @@ function isOpenClawGatewaySystemdService(name: string, contents: string): boolea
   if (!name.startsWith("openclaw-gateway")) {
     return false;
   }
-  return normalizeLowercaseStringOrEmpty(contents).includes("gateway");
+  return contents.toLowerCase().includes("gateway");
 }
 
 function isOpenClawGatewayTaskName(name: string): boolean {
-  const normalized = normalizeLowercaseStringOrEmpty(name);
+  const normalized = name.trim().toLowerCase();
   if (!normalized) {
     return false;
   }
-  const defaultName = normalizeLowercaseStringOrEmpty(resolveGatewayWindowsTaskName());
+  const defaultName = resolveGatewayWindowsTaskName().toLowerCase();
   return normalized === defaultName || normalized.startsWith("openclaw gateway");
 }
 
@@ -142,7 +141,7 @@ function isIgnoredSystemdName(name: string): boolean {
 }
 
 function isLegacyLabel(label: string): boolean {
-  const lower = normalizeLowercaseStringOrEmpty(label);
+  const lower = label.toLowerCase();
   return lower.includes("clawdbot");
 }
 
@@ -296,7 +295,7 @@ function parseSchtasksList(output: string): ScheduledTaskInfo[] {
     if (idx <= 0) {
       continue;
     }
-    const key = normalizeLowercaseStringOrEmpty(line.slice(0, idx));
+    const key = line.slice(0, idx).trim().toLowerCase();
     const value = line.slice(idx + 1).trim();
     if (!value) {
       continue;
@@ -414,8 +413,8 @@ export async function findExtraGatewayServices(
       if (isOpenClawGatewayTaskName(name)) {
         continue;
       }
-      const lowerName = normalizeLowercaseStringOrEmpty(name);
-      const lowerCommand = normalizeLowercaseStringOrEmpty(task.taskToRun ?? "");
+      const lowerName = name.toLowerCase();
+      const lowerCommand = task.taskToRun?.toLowerCase() ?? "";
       let marker: Marker | null = null;
       for (const candidate of EXTRA_MARKERS) {
         if (lowerName.includes(candidate) || lowerCommand.includes(candidate)) {

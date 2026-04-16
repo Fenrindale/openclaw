@@ -1,5 +1,4 @@
 import { redactToolDetail } from "../logging/redact.js";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 import { shortenHomeInString } from "../utils.js";
 import {
   defaultTitle,
@@ -47,7 +46,7 @@ export function resolveToolDisplay(params: {
   meta?: string;
 }): ToolDisplay {
   const name = normalizeToolName(params.name);
-  const key = normalizeLowercaseStringOrEmpty(name);
+  const key = name.toLowerCase();
   const spec = TOOL_MAP[key];
   const emoji = spec?.emoji ?? FALLBACK.emoji ?? "🧩";
   const title = spec?.title ?? defaultTitle(name);

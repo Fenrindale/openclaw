@@ -4,7 +4,6 @@ import {
   formatErrorMessage,
   readErrorName,
 } from "openclaw/plugin-sdk/error-runtime";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 
 const TELEGRAM_NETWORK_ORIGIN = Symbol("openclaw.telegram.network-origin");
 
@@ -114,7 +113,7 @@ function normalizeTelegramNetworkMethod(method?: string | null): string | null {
   if (!trimmed) {
     return null;
   }
-  return normalizeLowercaseStringOrEmpty(trimmed);
+  return trimmed.toLowerCase();
 }
 
 export function tagTelegramNetworkError(err: unknown, origin: TelegramNetworkErrorOrigin): void {
@@ -255,7 +254,7 @@ export function isRecoverableTelegramNetworkError(
       return true;
     }
 
-    const message = normalizeLowercaseStringOrEmpty(formatErrorMessage(candidate));
+    const message = formatErrorMessage(candidate).trim().toLowerCase();
     if (message && ALWAYS_RECOVERABLE_MESSAGES.has(message)) {
       return true;
     }

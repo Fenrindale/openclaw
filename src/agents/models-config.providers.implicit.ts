@@ -1,4 +1,4 @@
-import type { OpenClawConfig } from "../config/types.openclaw.js";
+import type { OpenClawConfig } from "../config/config.js";
 import { formatErrorMessage } from "../infra/errors.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import {
@@ -341,19 +341,15 @@ export async function resolveImplicitProviders(
 ): Promise<NonNullable<OpenClawConfig["models"]>["providers"]> {
   const providers: Record<string, ProviderConfig> = {};
   const env = params.env ?? process.env;
-  let authStore: ReturnType<typeof ensureAuthProfileStore> | undefined;
-  const getAuthStore = () =>
-    (authStore ??= ensureAuthProfileStore(params.agentDir, {
-      allowKeychainPrompt: false,
-    }));
+  const authStore = ensureAuthProfileStore(params.agentDir, {
+    allowKeychainPrompt: false,
+  });
   const context: ImplicitProviderContext = {
     ...params,
-    get authStore() {
-      return getAuthStore();
-    },
+    authStore,
     env,
-    resolveProviderApiKey: createProviderApiKeyResolver(env, getAuthStore, params.config),
-    resolveProviderAuth: createProviderAuthResolver(env, getAuthStore, params.config),
+    resolveProviderApiKey: createProviderApiKeyResolver(env, authStore, params.config),
+    resolveProviderAuth: createProviderAuthResolver(env, authStore, params.config),
   };
   const discoveryProviders = await resolvePluginDiscoveryProviders({
     config: params.config,

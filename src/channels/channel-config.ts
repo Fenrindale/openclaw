@@ -1,5 +1,3 @@
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
-
 export type ChannelMatchSource = "direct" | "parent" | "wildcard";
 
 export type ChannelEntryMatch<T> = {
@@ -34,7 +32,9 @@ export function resolveChannelMatchConfig<
 }
 
 export function normalizeChannelSlug(value: string): string {
-  return normalizeLowercaseStringOrEmpty(value)
+  return value
+    .trim()
+    .toLowerCase()
     .replace(/^#/, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");

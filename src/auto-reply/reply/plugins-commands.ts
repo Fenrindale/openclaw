@@ -1,8 +1,3 @@
-import {
-  normalizeOptionalLowercaseString,
-  normalizeOptionalString,
-} from "../../shared/string-coerce.js";
-
 export type PluginsCommand =
   | { action: "list" }
   | { action: "inspect"; name?: string }
@@ -17,13 +12,13 @@ export function parsePluginsCommand(raw: string): PluginsCommand | null {
     return null;
   }
 
-  const tail = normalizeOptionalString(match?.[1]) ?? "";
+  const tail = match[1]?.trim() ?? "";
   if (!tail) {
     return { action: "list" };
   }
 
   const [rawAction, ...rest] = tail.split(/\s+/);
-  const action = normalizeOptionalLowercaseString(rawAction);
+  const action = rawAction?.trim().toLowerCase();
   const name = rest.join(" ").trim();
 
   if (action === "list") {

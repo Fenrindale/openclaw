@@ -6,10 +6,6 @@ import {
   tryReadSecretFileSync,
 } from "openclaw/plugin-sdk/channel-core";
 import { normalizeResolvedSecretInputString } from "openclaw/plugin-sdk/secret-input";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-} from "openclaw/plugin-sdk/text-runtime";
 import type { CoreConfig, IrcAccountConfig, IrcNickServConfig } from "./types.js";
 
 const TRUTHY_ENV = new Set(["true", "1", "yes", "on"]);
@@ -34,7 +30,7 @@ function parseTruthy(value?: string): boolean {
   if (!value) {
     return false;
   }
-  return TRUTHY_ENV.has(normalizeLowercaseStringOrEmpty(value));
+  return TRUTHY_ENV.has(value.trim().toLowerCase());
 }
 
 function parseIntEnv(value?: string): number | undefined {
@@ -115,7 +111,7 @@ function resolveNickServConfig(accountId: string, nickserv?: IrcNickServConfig):
 
   const merged: IrcNickServConfig = {
     ...base,
-    service: normalizeOptionalString(base.service),
+    service: base.service?.trim() || undefined,
     passwordFile: passwordFile || undefined,
     password: resolvedPassword || undefined,
     registerEmail: base.registerEmail?.trim() || envRegisterEmail || undefined,
@@ -190,7 +186,7 @@ export function resolveIrcAccount(params: {
     return {
       accountId,
       enabled,
-      name: normalizeOptionalString(merged.name),
+      name: merged.name?.trim() || undefined,
       configured: Boolean(host && nick),
       host,
       port,

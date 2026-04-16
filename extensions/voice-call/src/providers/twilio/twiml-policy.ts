@@ -1,4 +1,3 @@
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import type { WebhookContext } from "../../types.js";
 
 export type TwimlResponseKind = "empty" | "pause" | "queue" | "stored" | "stream";
@@ -41,8 +40,11 @@ function isOutboundDirection(direction: string | null): boolean {
 
 export function readTwimlRequestView(ctx: WebhookContext): TwimlRequestView {
   const params = new URLSearchParams(ctx.rawBody);
-  const type = normalizeOptionalString(ctx.query?.type);
-  const callIdFromQuery = normalizeOptionalString(ctx.query?.callId);
+  const type = typeof ctx.query?.type === "string" ? ctx.query.type.trim() : undefined;
+  const callIdFromQuery =
+    typeof ctx.query?.callId === "string" && ctx.query.callId.trim()
+      ? ctx.query.callId.trim()
+      : undefined;
 
   return {
     callStatus: params.get("CallStatus"),

@@ -21,8 +21,8 @@ import { normalizeProviderId } from "../../agents/model-selection.js";
 import { resolveDefaultAgentWorkspaceDir } from "../../agents/workspace.js";
 import { formatCliCommand } from "../../cli/command-format.js";
 import { parseDurationMs } from "../../cli/parse-duration.js";
+import type { OpenClawConfig } from "../../config/config.js";
 import { logConfigUpdated } from "../../config/logging.js";
-import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { applyAuthProfileConfig } from "../../plugins/provider-auth-helpers.js";
 import { resolvePluginProviders } from "../../plugins/providers.runtime.js";
 import type {
@@ -31,10 +31,6 @@ import type {
   ProviderPlugin,
 } from "../../plugins/types.js";
 import type { RuntimeEnv } from "../../runtime.js";
-import {
-  normalizeOptionalString,
-  normalizeStringifiedOptionalString,
-} from "../../shared/string-coerce.js";
 import { stylePromptHint, stylePromptMessage } from "../../terminal/prompt-style.js";
 import { createClackPrompter } from "../../wizard/clack-prompter.js";
 import { validateAnthropicSetupToken } from "../auth-token.js";
@@ -192,7 +188,7 @@ async function pickProviderAuthMethod(params: {
         hint: method.hint,
       })),
     })
-    .then((id) => params.provider.auth.find((method) => method.id === id) ?? null);
+    .then((id) => params.provider.auth.find((method) => method.id === String(id)) ?? null);
 }
 
 async function pickProviderTokenMethod(params: {
@@ -224,7 +220,7 @@ async function pickProviderTokenMethod(params: {
         hint: method.hint,
       })),
     })
-    .then((id) => tokenMethods.find((method) => method.id === id) ?? null);
+    .then((id) => tokenMethods.find((method) => method.id === String(id)) ?? null);
 }
 
 async function persistProviderAuthResult(params: {
@@ -376,13 +372,12 @@ export async function modelsAuthPasteTokenCommand(
   runtime: RuntimeEnv,
 ) {
   const { agentDir } = await resolveModelsAuthContext();
-  const rawProvider = normalizeOptionalString(opts.provider);
+  const rawProvider = opts.provider?.trim();
   if (!rawProvider) {
     throw new Error("Missing --provider.");
   }
   const provider = normalizeProviderId(rawProvider);
-  const profileId =
-    normalizeOptionalString(opts.profileId) || resolveDefaultTokenProfileId(provider);
+  const profileId = opts.profileId?.trim() || resolveDefaultTokenProfileId(provider);
 
   const tokenInput = await text({
     message: `Paste token for ${provider}`,
@@ -399,15 +394,15 @@ export async function modelsAuthPasteTokenCommand(
   });
   const token =
     provider === "anthropic"
-      ? tokenInput.replaceAll(/\s+/g, "").trim()
-      : (normalizeOptionalString(tokenInput) ?? "");
+      ? String(tokenInput ?? "")
+          .replaceAll(/\s+/g, "")
+          .trim()
+      : String(tokenInput ?? "").trim();
 
-  const expires = normalizeStringifiedOptionalString(opts.expiresIn)
-    ? Date.now() +
-      parseDurationMs(normalizeStringifiedOptionalString(opts.expiresIn) ?? "", {
-        defaultUnit: "d",
-      })
-    : undefined;
+  const expires =
+    opts.expiresIn?.trim() && opts.expiresIn.trim().length > 0
+      ? Date.now() + parseDurationMs(String(opts.expiresIn ?? "").trim(), { defaultUnit: "d" })
+      : undefined;
 
   upsertAuthProfile({
     profileId,
@@ -450,10 +445,12 @@ export async function modelsAuthAddCommand(_opts: Record<string, never>, runtime
   const providerId =
     provider === "custom"
       ? normalizeProviderId(
-          await text({
-            message: "Provider id",
-            validate: (value) => (value?.trim() ? undefined : "Required"),
-          }),
+          String(
+            await text({
+              message: "Provider id",
+              validate: (value) => (value?.trim() ? undefined : "Required"),
+            }),
+          ),
         )
       : provider;
 
@@ -479,7 +476,7 @@ export async function modelsAuthAddCommand(_opts: Record<string, never>, runtime
       const prompter = createClackPrompter();
       const method = tokenMethods.find((candidate) => candidate.id === methodId);
       if (!method) {
-        throw new Error(`Unknown token auth method "${methodId}".`);
+        throw new Error(`Unknown token auth method "${String(methodId)}".`);
       }
       await runProviderAuthMethod({
         config,
@@ -495,12 +492,12 @@ export async function modelsAuthAddCommand(_opts: Record<string, never>, runtime
   }
 
   const profileIdDefault = resolveDefaultTokenProfileId(providerId);
-  const profileId = (
+  const profileId = String(
     await text({
       message: "Profile id",
       initialValue: profileIdDefault,
       validate: (value) => (value?.trim() ? undefined : "Required"),
-    })
+    }),
   ).trim();
 
   const wantsExpiry = await confirm({
@@ -508,19 +505,19 @@ export async function modelsAuthAddCommand(_opts: Record<string, never>, runtime
     initialValue: false,
   });
   const expiresIn = wantsExpiry
-    ? (
+    ? String(
         await text({
           message: "Expires in (duration)",
           initialValue: "365d",
           validate: (value) => {
             try {
-              parseDurationMs(value ?? "", { defaultUnit: "d" });
+              parseDurationMs(String(value ?? ""), { defaultUnit: "d" });
               return undefined;
             } catch {
               return "Invalid duration (e.g. 365d, 12h, 30m)";
             }
           },
-        })
+        }),
       ).trim()
     : undefined;
 
@@ -605,7 +602,7 @@ export async function modelsAuthLoginCommand(opts: LoginOptions, runtime: Runtim
           hint: provider.docsPath ? `Docs: ${provider.docsPath}` : undefined,
         })),
       })
-      .then((id) => resolveProviderMatch(authProviders, id)));
+      .then((id) => resolveProviderMatch(authProviders, String(id))));
 
   if (!selectedProvider) {
     throw new Error("Unknown provider. Use --provider <id> to pick a provider plugin.");

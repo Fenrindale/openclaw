@@ -1,4 +1,4 @@
-import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import type { OpenClawConfig } from "../../config/config.js";
 import {
   resolveAccountEntry,
   resolveNormalizedAccountEntry,
@@ -8,7 +8,6 @@ import {
   normalizeAccountId,
   normalizeOptionalAccountId,
 } from "../../routing/session-key.js";
-import { normalizeOptionalString } from "../../shared/string-coerce.js";
 import type { ChannelAccountSnapshot } from "./types.core.js";
 
 export function createAccountListHelpers(
@@ -188,8 +187,11 @@ export function describeAccountSnapshot<
   extra?: Record<string, unknown> | undefined;
 }): ChannelAccountSnapshot {
   return {
-    accountId: params.account.accountId ?? DEFAULT_ACCOUNT_ID,
-    name: normalizeOptionalString(params.account.name),
+    accountId: String(params.account.accountId ?? DEFAULT_ACCOUNT_ID),
+    name:
+      typeof params.account.name === "string" && params.account.name.trim()
+        ? params.account.name
+        : undefined,
     enabled: params.account.enabled !== false,
     configured: params.configured,
     ...params.extra,

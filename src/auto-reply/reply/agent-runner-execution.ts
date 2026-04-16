@@ -4,10 +4,6 @@ import {
   hasOutboundReplyContent,
   resolveSendableOutboundReplyParts,
 } from "openclaw/plugin-sdk/reply-payload";
-import {
-  buildOAuthRefreshFailureLoginCommand,
-  classifyOAuthRefreshFailure,
-} from "../../agents/auth-profiles/oauth-refresh-failure.js";
 import { resolveBootstrapWarningSignaturesSeen } from "../../agents/bootstrap-budget.js";
 import { runCliAgent } from "../../agents/cli-runner.js";
 import { getCliSessionBinding } from "../../agents/cli-session.js";
@@ -23,8 +19,8 @@ import {
   isOverloadedErrorMessage,
   isRateLimitErrorMessage,
   isTransientHttpError,
+  sanitizeUserFacingText,
 } from "../../agents/pi-embedded-helpers.js";
-import { sanitizeUserFacingText } from "../../agents/pi-embedded-helpers/sanitize-user-facing-text.js";
 import { isLikelyExecutionAckPrompt } from "../../agents/pi-embedded-runner/run/incomplete-turn.js";
 import { runEmbeddedPiAgent } from "../../agents/pi-embedded.js";
 import {
@@ -38,12 +34,6 @@ import { emitAgentEvent, registerAgentRunContext } from "../../infra/agent-event
 import { formatErrorMessage } from "../../infra/errors.js";
 import { CommandLaneClearedError, GatewayDrainingError } from "../../process/command-queue.js";
 import { defaultRuntime } from "../../runtime.js";
-import {
-  hasNonEmptyString,
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-  readStringValue,
-} from "../../shared/string-coerce.js";
 import { sanitizeForLog } from "../../terminal/ansi.js";
 import {
   isMarkdownCapableMessageChannel,
@@ -58,14 +48,11 @@ import {
   isSilentReplyPrefixText,
   isSilentReplyText,
   SILENT_REPLY_TOKEN,
-  startsWithSilentToken,
-  stripLeadingSilentToken,
 } from "../tokens.js";
 import type { GetReplyOptions, ReplyPayload } from "../types.js";
 import { resolveRunAuthProfile } from "./agent-runner-auth-profile.js";
 import {
   buildEmbeddedRunExecutionParams,
-  resolveQueuedReplyRuntimeConfig,
   resolveModelFallbackOptions,
 } from "./agent-runner-utils.js";
 import { type BlockReplyPipeline } from "./block-reply-pipeline.js";
@@ -113,7 +100,6 @@ type FallbackSelectionState = Pick<
   SessionEntry,
   | "providerOverride"
   | "modelOverride"
-  | "modelOverrideSource"
   | "authProfileOverride"
   | "authProfileOverrideSource"
   | "authProfileOverrideCompactionCount"
@@ -122,7 +108,6 @@ type FallbackSelectionState = Pick<
 const FALLBACK_SELECTION_STATE_KEYS = [
   "providerOverride",
   "modelOverride",
-  "modelOverrideSource",
   "authProfileOverride",
   "authProfileOverrideSource",
   "authProfileOverrideCompactionCount",
@@ -146,12 +131,6 @@ function setFallbackSelectionStateField(
         return true;
       }
       return false;
-    case "modelOverrideSource":
-      if (entry.modelOverrideSource !== value) {
-        entry.modelOverrideSource = value as SessionEntry["modelOverrideSource"];
-        return true;
-      }
-      return false;
     case "authProfileOverride":
       if (entry.authProfileOverride !== value) {
         entry.authProfileOverride = value as SessionEntry["authProfileOverride"];
@@ -172,14 +151,12 @@ function setFallbackSelectionStateField(
       }
       return false;
   }
-  throw new Error("Unsupported fallback selection state key");
 }
 
 function snapshotFallbackSelectionState(entry: SessionEntry): FallbackSelectionState {
   return {
     providerOverride: entry.providerOverride,
     modelOverride: entry.modelOverride,
-    modelOverrideSource: entry.modelOverrideSource,
     authProfileOverride: entry.authProfileOverride,
     authProfileOverrideSource: entry.authProfileOverrideSource,
     authProfileOverrideCompactionCount: entry.authProfileOverrideCompactionCount,
@@ -195,33 +172,9 @@ function buildFallbackSelectionState(params: {
   return {
     providerOverride: params.provider,
     modelOverride: params.model,
-    modelOverrideSource: "auto",
     authProfileOverride: params.authProfileId,
     authProfileOverrideSource: params.authProfileId ? params.authProfileIdSource : undefined,
     authProfileOverrideCompactionCount: undefined,
-  };
-}
-
-export function applyFallbackCandidateSelectionToEntry(params: {
-  entry: SessionEntry;
-  run: FollowupRun["run"];
-  provider: string;
-  model: string;
-  now?: number;
-}): { updated: boolean; nextState?: FallbackSelectionState } {
-  if (params.provider === params.run.provider && params.model === params.run.model) {
-    return { updated: false };
-  }
-  const scopedAuthProfile = resolveRunAuthProfile(params.run, params.provider);
-  const nextState = buildFallbackSelectionState({
-    provider: params.provider,
-    model: params.model,
-    authProfileId: scopedAuthProfile.authProfileId,
-    authProfileIdSource: scopedAuthProfile.authProfileIdSource,
-  });
-  return {
-    updated: applyFallbackSelectionState(params.entry, nextState, params.now),
-    nextState,
   };
 }
 
@@ -311,16 +264,8 @@ function isPureTransientRateLimitSummary(err: unknown): boolean {
   );
 }
 
-function isPureBillingSummary(err: unknown): boolean {
-  return (
-    isFallbackSummaryError(err) &&
-    err.attempts.length > 0 &&
-    err.attempts.every((attempt) => attempt.reason === "billing")
-  );
-}
-
 function isToolResultTurnMismatchError(message: string): boolean {
-  const lower = normalizeLowercaseStringOrEmpty(message);
+  const lower = message.toLowerCase();
   return (
     lower.includes("toolresult") &&
     lower.includes("tooluse") &&
@@ -329,51 +274,9 @@ function isToolResultTurnMismatchError(message: string): boolean {
   );
 }
 
-function collapseRepeatedFailureDetail(message: string): string {
-  const parts = message
-    .split(/\s+\|\s+/u)
-    .map((part) => part.trim())
-    .filter(Boolean);
-  if (parts.length >= 2 && parts.every((part) => part === parts[0])) {
-    return parts[0];
-  }
-  return message.trim();
-}
-
-const SAFE_MISSING_API_KEY_PROVIDERS = new Set(["anthropic", "google", "openai", "openai-codex"]);
-
-function buildMissingApiKeyFailureText(message: string): string | null {
-  const normalizedMessage = collapseRepeatedFailureDetail(message);
-  const providerMatch = normalizedMessage.match(/No API key found for provider "([^"]+)"/u);
-  const provider = providerMatch?.[1]?.trim().toLowerCase();
-  if (!provider) {
-    return null;
-  }
-  if (provider === "openai" && normalizedMessage.includes("OpenAI Codex OAuth")) {
-    return "⚠️ Missing API key for OpenAI on the gateway. Use `openai-codex/gpt-5.4` for OAuth, or set `OPENAI_API_KEY`, then try again.";
-  }
-  if (SAFE_MISSING_API_KEY_PROVIDERS.has(provider)) {
-    return `⚠️ Missing API key for provider "${provider}". Configure the gateway auth for that provider, then try again.`;
-  }
-  return "⚠️ Missing API key for the selected provider on the gateway. Configure provider auth, then try again.";
-}
-
 function buildExternalRunFailureText(message: string): string {
-  const normalizedMessage = collapseRepeatedFailureDetail(message);
-  if (isToolResultTurnMismatchError(normalizedMessage)) {
+  if (isToolResultTurnMismatchError(message)) {
     return "⚠️ Session history got out of sync. Please try again, or use /new to start a fresh session.";
-  }
-  const missingApiKeyFailure = buildMissingApiKeyFailureText(normalizedMessage);
-  if (missingApiKeyFailure) {
-    return missingApiKeyFailure;
-  }
-  const oauthRefreshFailure = classifyOAuthRefreshFailure(normalizedMessage);
-  if (oauthRefreshFailure) {
-    const loginCommand = buildOAuthRefreshFailureLoginCommand(oauthRefreshFailure.provider);
-    if (oauthRefreshFailure.reason) {
-      return `⚠️ Model login expired on the gateway${oauthRefreshFailure.provider ? ` for ${oauthRefreshFailure.provider}` : ""}. Re-auth with \`${loginCommand}\`, then try again.`;
-    }
-    return `⚠️ Model login failed on the gateway${oauthRefreshFailure.provider ? ` for ${oauthRefreshFailure.provider}` : ""}. Please try again. If this keeps happening, re-auth with \`${loginCommand}\`.`;
   }
   return "⚠️ Something went wrong while processing your request. Please try again, or use /new to start a fresh session.";
 }
@@ -479,29 +382,28 @@ function applyOpenAIGptChatReplyGuard(params: {
     );
 
   for (const payload of params.payloads) {
-    const text = normalizeOptionalString(payload.text);
     if (
-      !text ||
+      !payload.text?.trim() ||
       payload.isError ||
       payload.isReasoning ||
       payload.mediaUrl ||
       (payload.mediaUrls?.length ?? 0) > 0 ||
       payload.interactive ||
-      text.includes("```")
+      payload.text.includes("```")
     ) {
       continue;
     }
 
     if (isAckTurn) {
-      payload.text = shortenChattyFinalReplyText(text, {
+      payload.text = shortenChattyFinalReplyText(payload.text, {
         maxChars: GPT_CHAT_BREVITY_ACK_MAX_CHARS,
         maxSentences: GPT_CHAT_BREVITY_ACK_MAX_SENTENCES,
       });
       continue;
     }
 
-    if (allowSoftCap && scoreChattyFinalReplyText(text) >= 4) {
-      payload.text = shortenChattyFinalReplyText(text, {
+    if (allowSoftCap && scoreChattyFinalReplyText(payload.text) >= 4) {
+      payload.text = shortenChattyFinalReplyText(payload.text, {
         maxChars: GPT_CHAT_BREVITY_SOFT_MAX_CHARS,
         maxSentences: GPT_CHAT_BREVITY_SOFT_MAX_SENTENCES,
       });
@@ -591,29 +493,12 @@ export async function runAgentTurnWithFallback(params: {
   let autoCompactionCount = 0;
   // Track payloads sent directly (not via pipeline) during tool flush to avoid duplicates.
   const directlySentBlockKeys = new Set<string>();
-  const runtimeConfig = resolveQueuedReplyRuntimeConfig(params.followupRun.run.config);
-  const effectiveRun =
-    runtimeConfig === params.followupRun.run.config
-      ? params.followupRun.run
-      : {
-          ...params.followupRun.run,
-          config: runtimeConfig,
-        };
 
   const runId = params.opts?.runId ?? crypto.randomUUID();
   const normalizeReplyMediaPaths = createReplyMediaPathNormalizer({
-    cfg: runtimeConfig,
+    cfg: params.followupRun.run.config,
     sessionKey: params.sessionKey,
     workspaceDir: params.followupRun.run.workspaceDir,
-    messageProvider: params.followupRun.run.messageProvider,
-    accountId: params.followupRun.originatingAccountId ?? params.followupRun.run.agentAccountId,
-    groupId: params.followupRun.run.groupId,
-    groupChannel: params.followupRun.run.groupChannel,
-    groupSpace: params.followupRun.run.groupSpace,
-    requesterSenderId: params.followupRun.run.senderId,
-    requesterSenderName: params.followupRun.run.senderName,
-    requesterSenderUsername: params.followupRun.run.senderUsername,
-    requesterSenderE164: params.followupRun.run.senderE164,
   });
   let didNotifyAgentRunStart = false;
   const notifyAgentRunStart = () => {
@@ -646,54 +531,31 @@ export async function runAgentTurnWithFallback(params: {
   let bootstrapPromptWarningSignaturesSeen = resolveBootstrapWarningSignaturesSeen(
     params.getActiveSessionEntry()?.systemPromptReport,
   );
-  const persistFallbackCandidateSelection = async (
-    provider: string,
-    model: string,
-  ): Promise<(() => Promise<void>) | undefined> => {
+  const persistFallbackCandidateSelection = async (provider: string, model: string) => {
     if (
       !params.sessionKey ||
       !params.activeSessionStore ||
       (provider === params.followupRun.run.provider && model === params.followupRun.run.model)
     ) {
-      return undefined;
+      return;
     }
 
     const activeSessionEntry =
       params.getActiveSessionEntry() ?? params.activeSessionStore[params.sessionKey];
     if (!activeSessionEntry) {
-      return undefined;
-    }
-
-    // Don't overwrite a user-initiated model override (e.g. from /models or
-    // /model) with the fallback model.  The user's explicit selection should
-    // survive transient primary-model failures so subsequent messages still
-    // target the model the user chose.  Fallback persistence is only
-    // appropriate when the override was itself set by a previous fallback
-    // ("auto") or when there is no override yet.
-    //
-    // `modelOverrideSource` was added later, so older persisted sessions can
-    // carry a user-selected override without the source field.  Treat any
-    // entry with a `modelOverride` but missing `modelOverrideSource` as legacy
-    // user state, matching the backward-compat treatment in
-    // session-reset-service.
-    const isUserModelOverride =
-      activeSessionEntry.modelOverrideSource === "user" ||
-      (activeSessionEntry.modelOverrideSource === undefined &&
-        Boolean(normalizeOptionalString(activeSessionEntry.modelOverride)));
-    if (isUserModelOverride) {
-      return undefined;
+      return;
     }
 
     const previousState = snapshotFallbackSelectionState(activeSessionEntry);
-    const applied = applyFallbackCandidateSelectionToEntry({
-      entry: activeSessionEntry,
-      run: params.followupRun.run,
+    const scopedAuthProfile = resolveRunAuthProfile(params.followupRun.run, provider);
+    const nextState = buildFallbackSelectionState({
       provider,
       model,
+      authProfileId: scopedAuthProfile.authProfileId,
+      authProfileIdSource: scopedAuthProfile.authProfileIdSource,
     });
-    const nextState = applied.nextState;
-    if (!applied.updated || !nextState) {
-      return undefined;
+    if (!applyFallbackSelectionState(activeSessionEntry, nextState)) {
+      return;
     }
     params.activeSessionStore[params.sessionKey] = activeSessionEntry;
 
@@ -768,9 +630,6 @@ export async function runAgentTurnWithFallback(params: {
         ) {
           return { skip: true };
         }
-        if (text && startsWithSilentToken(text, SILENT_REPLY_TOKEN)) {
-          text = stripLeadingSilentToken(text, SILENT_REPLY_TOKEN);
-        }
         if (!text) {
           // Allow media-only payloads (e.g. tool result screenshots) through.
           if (reply.hasMedia) {
@@ -839,7 +698,7 @@ export async function runAgentTurnWithFallback(params: {
             );
           }
 
-          if (isCliProvider(provider, runtimeConfig)) {
+          if (isCliProvider(provider, params.followupRun.run.config)) {
             const startedAt = Date.now();
             notifyAgentRunStart();
             emitAgentEvent({
@@ -867,7 +726,7 @@ export async function runAgentTurnWithFallback(params: {
                   agentId: params.followupRun.run.agentId,
                   sessionFile: params.followupRun.run.sessionFile,
                   workspaceDir: params.followupRun.run.workspaceDir,
-                  config: runtimeConfig,
+                  config: params.followupRun.run.config,
                   prompt: params.commandBody,
                   provider,
                   model,
@@ -886,10 +745,8 @@ export async function runAgentTurnWithFallback(params: {
                     ],
                   images: params.opts?.images,
                   imageOrder: params.opts?.imageOrder,
-                  skillsSnapshot: params.followupRun.run.skillsSnapshot,
                   messageProvider: params.followupRun.run.messageProvider,
                   agentAccountId: params.followupRun.run.agentAccountId,
-                  senderIsOwner: params.followupRun.run.senderIsOwner,
                   abortSignal: params.replyOperation?.abortSignal ?? params.opts?.abortSignal,
                   replyOperation: params.replyOperation,
                 });
@@ -900,7 +757,7 @@ export async function runAgentTurnWithFallback(params: {
                 // CLI backends don't emit streaming assistant events, so we need to
                 // emit one with the final text so server-chat can populate its buffer
                 // and send the response to TUI/WebSocket clients.
-                const cliText = normalizeOptionalString(result.payloads?.[0]?.text);
+                const cliText = result.payloads?.[0]?.text?.trim();
                 if (cliText) {
                   emitAgentEvent({
                     runId,
@@ -963,7 +820,7 @@ export async function runAgentTurnWithFallback(params: {
           }
           const { embeddedContext, senderContext, runBaseParams } = buildEmbeddedRunExecutionParams(
             {
-              run: effectiveRun,
+              run: params.followupRun.run,
               sessionCtx: params.sessionCtx,
               hasRepliedRef: params.opts?.hasRepliedRef,
               provider,
@@ -981,9 +838,8 @@ export async function runAgentTurnWithFallback(params: {
                 trigger: params.isHeartbeat ? "heartbeat" : "user",
                 groupId: resolveGroupSessionKey(params.sessionCtx)?.id,
                 groupChannel:
-                  normalizeOptionalString(params.sessionCtx.GroupChannel) ??
-                  normalizeOptionalString(params.sessionCtx.GroupSubject),
-                groupSpace: normalizeOptionalString(params.sessionCtx.GroupSpace),
+                  params.sessionCtx.GroupChannel?.trim() ?? params.sessionCtx.GroupSubject?.trim(),
+                groupSpace: params.sessionCtx.GroupSpace?.trim() ?? undefined,
                 ...senderContext,
                 ...runBaseParams,
                 prompt: params.commandBody,
@@ -1045,8 +901,8 @@ export async function runAgentTurnWithFallback(params: {
                   // Trigger typing when tools start executing.
                   // Must await to ensure typing indicator starts before tool summaries are emitted.
                   if (evt.stream === "tool") {
-                    const phase = readStringValue(evt.data.phase) ?? "";
-                    const name = readStringValue(evt.data.name);
+                    const phase = typeof evt.data.phase === "string" ? evt.data.phase : "";
+                    const name = typeof evt.data.name === "string" ? evt.data.name : undefined;
                     if (phase === "start" || phase === "update") {
                       await params.typingSignals.signalToolStart();
                       await params.opts?.onToolStart?.({ name, phase });
@@ -1054,70 +910,85 @@ export async function runAgentTurnWithFallback(params: {
                   }
                   if (evt.stream === "item") {
                     await params.opts?.onItemEvent?.({
-                      itemId: readStringValue(evt.data.itemId),
-                      kind: readStringValue(evt.data.kind),
-                      title: readStringValue(evt.data.title),
-                      name: readStringValue(evt.data.name),
-                      phase: readStringValue(evt.data.phase),
-                      status: readStringValue(evt.data.status),
-                      summary: readStringValue(evt.data.summary),
-                      progressText: readStringValue(evt.data.progressText),
-                      approvalId: readStringValue(evt.data.approvalId),
-                      approvalSlug: readStringValue(evt.data.approvalSlug),
+                      itemId: typeof evt.data.itemId === "string" ? evt.data.itemId : undefined,
+                      kind: typeof evt.data.kind === "string" ? evt.data.kind : undefined,
+                      title: typeof evt.data.title === "string" ? evt.data.title : undefined,
+                      name: typeof evt.data.name === "string" ? evt.data.name : undefined,
+                      phase: typeof evt.data.phase === "string" ? evt.data.phase : undefined,
+                      status: typeof evt.data.status === "string" ? evt.data.status : undefined,
+                      summary: typeof evt.data.summary === "string" ? evt.data.summary : undefined,
+                      progressText:
+                        typeof evt.data.progressText === "string"
+                          ? evt.data.progressText
+                          : undefined,
+                      approvalId:
+                        typeof evt.data.approvalId === "string" ? evt.data.approvalId : undefined,
+                      approvalSlug:
+                        typeof evt.data.approvalSlug === "string"
+                          ? evt.data.approvalSlug
+                          : undefined,
                     });
                   }
                   if (evt.stream === "plan") {
                     await params.opts?.onPlanUpdate?.({
-                      phase: readStringValue(evt.data.phase),
-                      title: readStringValue(evt.data.title),
-                      explanation: readStringValue(evt.data.explanation),
+                      phase: typeof evt.data.phase === "string" ? evt.data.phase : undefined,
+                      title: typeof evt.data.title === "string" ? evt.data.title : undefined,
+                      explanation:
+                        typeof evt.data.explanation === "string" ? evt.data.explanation : undefined,
                       steps: Array.isArray(evt.data.steps)
                         ? evt.data.steps.filter((step): step is string => typeof step === "string")
                         : undefined,
-                      source: readStringValue(evt.data.source),
+                      source: typeof evt.data.source === "string" ? evt.data.source : undefined,
                     });
                   }
                   if (evt.stream === "approval") {
                     await params.opts?.onApprovalEvent?.({
-                      phase: readStringValue(evt.data.phase),
-                      kind: readStringValue(evt.data.kind),
-                      status: readStringValue(evt.data.status),
-                      title: readStringValue(evt.data.title),
-                      itemId: readStringValue(evt.data.itemId),
-                      toolCallId: readStringValue(evt.data.toolCallId),
-                      approvalId: readStringValue(evt.data.approvalId),
-                      approvalSlug: readStringValue(evt.data.approvalSlug),
-                      command: readStringValue(evt.data.command),
-                      host: readStringValue(evt.data.host),
-                      reason: readStringValue(evt.data.reason),
-                      message: readStringValue(evt.data.message),
+                      phase: typeof evt.data.phase === "string" ? evt.data.phase : undefined,
+                      kind: typeof evt.data.kind === "string" ? evt.data.kind : undefined,
+                      status: typeof evt.data.status === "string" ? evt.data.status : undefined,
+                      title: typeof evt.data.title === "string" ? evt.data.title : undefined,
+                      itemId: typeof evt.data.itemId === "string" ? evt.data.itemId : undefined,
+                      toolCallId:
+                        typeof evt.data.toolCallId === "string" ? evt.data.toolCallId : undefined,
+                      approvalId:
+                        typeof evt.data.approvalId === "string" ? evt.data.approvalId : undefined,
+                      approvalSlug:
+                        typeof evt.data.approvalSlug === "string"
+                          ? evt.data.approvalSlug
+                          : undefined,
+                      command: typeof evt.data.command === "string" ? evt.data.command : undefined,
+                      host: typeof evt.data.host === "string" ? evt.data.host : undefined,
+                      reason: typeof evt.data.reason === "string" ? evt.data.reason : undefined,
+                      message: typeof evt.data.message === "string" ? evt.data.message : undefined,
                     });
                   }
                   if (evt.stream === "command_output") {
                     await params.opts?.onCommandOutput?.({
-                      itemId: readStringValue(evt.data.itemId),
-                      phase: readStringValue(evt.data.phase),
-                      title: readStringValue(evt.data.title),
-                      toolCallId: readStringValue(evt.data.toolCallId),
-                      name: readStringValue(evt.data.name),
-                      output: readStringValue(evt.data.output),
-                      status: readStringValue(evt.data.status),
+                      itemId: typeof evt.data.itemId === "string" ? evt.data.itemId : undefined,
+                      phase: typeof evt.data.phase === "string" ? evt.data.phase : undefined,
+                      title: typeof evt.data.title === "string" ? evt.data.title : undefined,
+                      toolCallId:
+                        typeof evt.data.toolCallId === "string" ? evt.data.toolCallId : undefined,
+                      name: typeof evt.data.name === "string" ? evt.data.name : undefined,
+                      output: typeof evt.data.output === "string" ? evt.data.output : undefined,
+                      status: typeof evt.data.status === "string" ? evt.data.status : undefined,
                       exitCode:
                         typeof evt.data.exitCode === "number" || evt.data.exitCode === null
                           ? evt.data.exitCode
                           : undefined,
                       durationMs:
                         typeof evt.data.durationMs === "number" ? evt.data.durationMs : undefined,
-                      cwd: readStringValue(evt.data.cwd),
+                      cwd: typeof evt.data.cwd === "string" ? evt.data.cwd : undefined,
                     });
                   }
                   if (evt.stream === "patch") {
                     await params.opts?.onPatchSummary?.({
-                      itemId: readStringValue(evt.data.itemId),
-                      phase: readStringValue(evt.data.phase),
-                      title: readStringValue(evt.data.title),
-                      toolCallId: readStringValue(evt.data.toolCallId),
-                      name: readStringValue(evt.data.name),
+                      itemId: typeof evt.data.itemId === "string" ? evt.data.itemId : undefined,
+                      phase: typeof evt.data.phase === "string" ? evt.data.phase : undefined,
+                      title: typeof evt.data.title === "string" ? evt.data.title : undefined,
+                      toolCallId:
+                        typeof evt.data.toolCallId === "string" ? evt.data.toolCallId : undefined,
+                      name: typeof evt.data.name === "string" ? evt.data.name : undefined,
                       added: Array.isArray(evt.data.added)
                         ? evt.data.added.filter(
                             (entry): entry is string => typeof entry === "string",
@@ -1133,17 +1004,18 @@ export async function runAgentTurnWithFallback(params: {
                             (entry): entry is string => typeof entry === "string",
                           )
                         : undefined,
-                      summary: readStringValue(evt.data.summary),
+                      summary: typeof evt.data.summary === "string" ? evt.data.summary : undefined,
                     });
                   }
                   // Track auto-compaction and notify higher layers.
                   if (evt.stream === "compaction") {
-                    const phase = readStringValue(evt.data.phase) ?? "";
+                    const phase = typeof evt.data.phase === "string" ? evt.data.phase : "";
                     if (phase === "start") {
                       // Keep custom compaction callbacks active, but gate the
                       // fallback user-facing notice behind explicit opt-in.
                       const notifyUser =
-                        runtimeConfig?.agents?.defaults?.compaction?.notifyUser === true;
+                        params.followupRun.run.config.agents?.defaults?.compaction?.notifyUser ===
+                        true;
                       if (params.opts?.onCompactionStart) {
                         await params.opts.onCompactionStart();
                       } else if (notifyUser && params.opts?.onBlockReply) {
@@ -1258,12 +1130,12 @@ export async function runAgentTurnWithFallback(params: {
       fallbackModel = fallbackResult.model;
       fallbackAttempts = Array.isArray(fallbackResult.attempts)
         ? fallbackResult.attempts.map((attempt) => ({
-            provider: attempt.provider,
-            model: attempt.model,
-            error: attempt.error,
-            reason: attempt.reason || undefined,
+            provider: String(attempt.provider ?? ""),
+            model: String(attempt.model ?? ""),
+            error: String(attempt.error ?? ""),
+            reason: attempt.reason ? String(attempt.reason) : undefined,
             status: typeof attempt.status === "number" ? attempt.status : undefined,
-            code: attempt.code || undefined,
+            code: attempt.code ? String(attempt.code) : undefined,
           }))
         : [];
 
@@ -1337,9 +1209,7 @@ export async function runAgentTurnWithFallback(params: {
         continue;
       }
       const message = formatErrorMessage(err);
-      const isBilling = isFallbackSummaryError(err)
-        ? isPureBillingSummary(err)
-        : isBillingErrorMessage(message);
+      const isBilling = isBillingErrorMessage(message);
       const isContextOverflow = !isBilling && isLikelyContextOverflowError(message);
       const isCompactionFailure = !isBilling && isCompactionFailureError(message);
       const isSessionCorruption = /function call turn comes immediately after/i.test(message);
@@ -1513,7 +1383,7 @@ export async function runAgentTurnWithFallback(params: {
   // See #26905: Slack DM sessions silently swallowed messages when context
   // overflow errors were returned as embedded error payloads.
   const finalEmbeddedError = runResult?.meta?.error;
-  const hasPayloadText = runResult?.payloads?.some((p) => normalizeOptionalString(p.text));
+  const hasPayloadText = runResult?.payloads?.some((p) => p.text?.trim());
   if (finalEmbeddedError && !hasPayloadText) {
     const errorMsg = finalEmbeddedError.message ?? "";
     if (isContextOverflowError(errorMsg)) {
@@ -1548,9 +1418,8 @@ export async function runAgentTurnWithFallback(params: {
     if (!hasNonErrorContent) {
       const metaErrorMsg = finalEmbeddedError?.message ?? "";
       const rawErrorPayloadText =
-        runResult.payloads?.find(
-          (p) => p.isError && hasNonEmptyString(p.text) && !p.text.startsWith("⚠️"),
-        )?.text ?? "";
+        runResult.payloads?.find((p) => p.isError && p.text?.trim() && !p.text.startsWith("⚠️"))
+          ?.text ?? "";
       const errorCandidate = metaErrorMsg || rawErrorPayloadText;
       if (
         errorCandidate &&

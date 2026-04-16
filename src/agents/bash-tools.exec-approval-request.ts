@@ -1,5 +1,4 @@
 import type { ExecAsk, ExecSecurity, SystemRunApprovalPlan } from "../infra/exec-approvals.js";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 import {
   DEFAULT_APPROVAL_REQUEST_TIMEOUT_MS,
   DEFAULT_APPROVAL_TIMEOUT_MS,
@@ -91,7 +90,11 @@ export async function registerExecApprovalRequest(
 ): Promise<ExecApprovalRegistration> {
   // Two-phase registration is critical: the ID must be registered server-side
   // before exec returns `approval-pending`, otherwise `/approve` can race and orphan.
-  const registrationResult = await callGatewayTool(
+  const registrationResult = await callGatewayTool<{
+    id?: string;
+    expiresAtMs?: number;
+    decision?: string;
+  }>(
     "exec.approval.request",
     { timeoutMs: DEFAULT_APPROVAL_REQUEST_TIMEOUT_MS },
     buildExecApprovalRequestToolParams(params),
@@ -117,7 +120,7 @@ export async function waitForExecApprovalDecision(id: string): Promise<string | 
     return parseDecision(decisionResult).value;
   } catch (err) {
     // Timeout/cleanup path: treat missing/expired as no decision so askFallback applies.
-    const message = normalizeLowercaseStringOrEmpty(String(err));
+    const message = String(err).toLowerCase();
     if (message.includes("approval expired or not found")) {
       return null;
     }

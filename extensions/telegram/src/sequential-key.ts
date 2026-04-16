@@ -1,10 +1,4 @@
 import { type Message, type UserFromGetMe } from "@grammyjs/types";
-import {
-  listChatCommands,
-  maybeResolveTextAlias,
-  normalizeCommandBody,
-} from "openclaw/plugin-sdk/command-auth";
-import { parseExecApprovalCommandText } from "openclaw/plugin-sdk/infra-runtime";
 import { isAbortRequestText } from "openclaw/plugin-sdk/reply-runtime";
 import { isBtwRequestText } from "openclaw/plugin-sdk/reply-runtime";
 import { resolveTelegramForumThreadId } from "./bot/helpers.js";
@@ -20,31 +14,10 @@ export type TelegramSequentialKeyContext = {
     edited_message?: Message;
     channel_post?: Message;
     edited_channel_post?: Message;
-    callback_query?: { message?: Message; data?: string };
+    callback_query?: { message?: Message };
     message_reaction?: { chat?: { id?: number } };
   };
 };
-
-function resolveStatusCommandControlLane(params: {
-  rawText?: string;
-  botUsername?: string;
-}): boolean {
-  // Only read-only status commands should bypass the per-topic lane. Commands
-  // like /export-session stay on the normal lane because they materialize
-  // session state to disk and should not interleave with an active turn.
-  const normalizedBody = normalizeCommandBody(
-    params.rawText?.trim() ?? "",
-    params.botUsername ? { botUsername: params.botUsername } : undefined,
-  );
-  const alias = maybeResolveTextAlias(normalizedBody);
-  if (!alias) {
-    return false;
-  }
-  const command = listChatCommands().find((entry) =>
-    entry.textAliases.some((candidate) => candidate.trim().toLowerCase() === alias),
-  );
-  return command?.category === "status" && command.key !== "export-session";
-}
 
 export function getTelegramSequentialKey(ctx: TelegramSequentialKeyContext): string {
   const reaction = ctx.update?.message_reaction;
@@ -69,12 +42,6 @@ export function getTelegramSequentialKey(ctx: TelegramSequentialKeyContext): str
     }
     return "telegram:control";
   }
-  if (resolveStatusCommandControlLane({ rawText, botUsername })) {
-    if (typeof chatId === "number") {
-      return `telegram:${chatId}:control`;
-    }
-    return "telegram:control";
-  }
   if (isBtwRequestText(rawText, botUsername ? { botUsername } : undefined)) {
     const messageId = msg?.message_id;
     if (typeof chatId === "number" && typeof messageId === "number") {
@@ -84,13 +51,6 @@ export function getTelegramSequentialKey(ctx: TelegramSequentialKeyContext): str
       return `telegram:${chatId}:btw`;
     }
     return "telegram:btw";
-  }
-  const callbackData = ctx.update?.callback_query?.data;
-  if (callbackData && parseExecApprovalCommandText(callbackData) !== null) {
-    if (typeof chatId === "number") {
-      return `telegram:${chatId}:approval`;
-    }
-    return "telegram:approval";
   }
   const isGroup = msg?.chat?.type === "group" || msg?.chat?.type === "supergroup";
   const messageThreadId = msg?.message_thread_id;

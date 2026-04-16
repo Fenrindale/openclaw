@@ -1,15 +1,9 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { GoogleGenAI } from "@google/genai";
 import { isProviderApiKeyConfigured } from "openclaw/plugin-sdk/provider-auth";
 import { resolveApiKeyForProvider } from "openclaw/plugin-sdk/provider-auth-runtime";
-import {
-  createProviderOperationDeadline,
-  resolveProviderOperationTimeoutMs,
-  waitProviderOperationPollInterval,
-} from "openclaw/plugin-sdk/provider-http";
-import { resolvePreferredOpenClawTmpDir } from "openclaw/plugin-sdk/temp-path";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import type {
   GeneratedVideoAsset,
   VideoGenerationProvider,
@@ -27,12 +21,12 @@ const GOOGLE_VIDEO_MAX_DURATION_SECONDS =
   GOOGLE_VIDEO_ALLOWED_DURATION_SECONDS[GOOGLE_VIDEO_ALLOWED_DURATION_SECONDS.length - 1];
 
 function resolveConfiguredGoogleVideoBaseUrl(req: VideoGenerationRequest): string | undefined {
-  const configured = normalizeOptionalString(req.cfg?.models?.providers?.google?.baseUrl);
+  const configured = req.cfg?.models?.providers?.google?.baseUrl?.trim();
   return configured ? normalizeGoogleApiBaseUrl(configured) : undefined;
 }
 
 function parseVideoSize(size: string | undefined): { width: number; height: number } | undefined {
-  const trimmed = normalizeOptionalString(size);
+  const trimmed = size?.trim();
   if (!trimmed) {
     return undefined;
   }
@@ -52,7 +46,7 @@ function resolveAspectRatio(params: {
   aspectRatio?: string;
   size?: string;
 }): "16:9" | "9:16" | undefined {
-  const direct = normalizeOptionalString(params.aspectRatio);
+  const direct = params.aspectRatio?.trim();
   if (direct === "16:9" || direct === "9:16") {
     return direct;
   }
@@ -109,7 +103,7 @@ function resolveInputImage(req: VideoGenerationRequest) {
   }
   return {
     imageBytes: input.buffer.toString("base64"),
-    mimeType: normalizeOptionalString(input.mimeType) || "image/png",
+    mimeType: input.mimeType?.trim() || "image/png",
   };
 }
 
@@ -120,7 +114,7 @@ function resolveInputVideo(req: VideoGenerationRequest) {
   }
   return {
     videoBytes: input.buffer.toString("base64"),
-    mimeType: normalizeOptionalString(input.mimeType) || "video/mp4",
+    mimeType: input.mimeType?.trim() || "video/mp4",
   };
 }
 
@@ -129,9 +123,7 @@ async function downloadGeneratedVideo(params: {
   file: unknown;
   index: number;
 }): Promise<GeneratedVideoAsset> {
-  const tempDir = await mkdtemp(
-    path.join(resolvePreferredOpenClawTmpDir(), "openclaw-google-video-"),
-  );
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "openclaw-google-video-"));
   const downloadPath = path.join(tempDir, `video-${params.index + 1}.mp4`);
   try {
     await params.client.files.download({
@@ -230,26 +222,20 @@ export function buildGoogleVideoGenerationProvider(): VideoGenerationProvider {
 
       const configuredBaseUrl = resolveConfiguredGoogleVideoBaseUrl(req);
       const durationSeconds = resolveDurationSeconds(req.durationSeconds);
-      const deadline = createProviderOperationDeadline({
-        timeoutMs: req.timeoutMs,
-        label: "Google video generation",
-      });
       const client = new GoogleGenAI({
         apiKey: auth.apiKey,
         httpOptions: {
           ...(configuredBaseUrl ? { baseUrl: configuredBaseUrl } : {}),
-          timeout: resolveProviderOperationTimeoutMs({
-            deadline,
-            defaultTimeoutMs: DEFAULT_TIMEOUT_MS,
-          }),
+          timeout: req.timeoutMs ?? DEFAULT_TIMEOUT_MS,
         },
       });
       let operation = await client.models.generateVideos({
-        model: normalizeOptionalString(req.model) || DEFAULT_GOOGLE_VIDEO_MODEL,
+        model: req.model?.trim() || DEFAULT_GOOGLE_VIDEO_MODEL,
         prompt: req.prompt,
         image: resolveInputImage(req),
         video: resolveInputVideo(req),
         config: {
+          numberOfVideos: 1,
           ...(typeof durationSeconds === "number" ? { durationSeconds } : {}),
           ...(resolveAspectRatio({ aspectRatio: req.aspectRatio, size: req.size })
             ? { aspectRatio: resolveAspectRatio({ aspectRatio: req.aspectRatio, size: req.size }) }
@@ -265,8 +251,7 @@ export function buildGoogleVideoGenerationProvider(): VideoGenerationProvider {
         if (attempt >= MAX_POLL_ATTEMPTS) {
           throw new Error("Google video generation did not finish in time");
         }
-        await waitProviderOperationPollInterval({ deadline, pollIntervalMs: POLL_INTERVAL_MS });
-        resolveProviderOperationTimeoutMs({ deadline, defaultTimeoutMs: DEFAULT_TIMEOUT_MS });
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
         operation = await client.operations.getVideosOperation({ operation });
       }
       if (operation.error) {
@@ -282,7 +267,7 @@ export function buildGoogleVideoGenerationProvider(): VideoGenerationProvider {
           if (inline?.videoBytes) {
             return {
               buffer: Buffer.from(inline.videoBytes, "base64"),
-              mimeType: normalizeOptionalString(inline.mimeType) || "video/mp4",
+              mimeType: inline.mimeType?.trim() || "video/mp4",
               fileName: `video-${index + 1}.mp4`,
             };
           }
@@ -298,7 +283,7 @@ export function buildGoogleVideoGenerationProvider(): VideoGenerationProvider {
       );
       return {
         videos,
-        model: normalizeOptionalString(req.model) || DEFAULT_GOOGLE_VIDEO_MODEL,
+        model: req.model?.trim() || DEFAULT_GOOGLE_VIDEO_MODEL,
         metadata: operation.name
           ? {
               operationName: operation.name,

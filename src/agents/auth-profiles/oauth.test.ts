@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../../config/config.js";
 import type { AuthProfileStore } from "./types.js";
 
@@ -16,7 +16,8 @@ vi.mock("../../plugins/provider-runtime.runtime.js", () => ({
 
 let resolveApiKeyForProfile: typeof import("./oauth.js").resolveApiKeyForProfile;
 
-async function loadOAuthModuleForTest() {
+async function loadFreshOAuthModuleForTest() {
+  vi.resetModules();
   ({ resolveApiKeyForProfile } = await import("./oauth.js"));
 }
 
@@ -109,14 +110,11 @@ async function expectResolvedApiKey(params: {
   });
 }
 
-beforeAll(loadOAuthModuleForTest);
-
-afterAll(() => {
-  vi.doUnmock("../cli-credentials.js");
-  vi.doUnmock("../../plugins/provider-runtime.runtime.js");
-});
-
 describe("resolveApiKeyForProfile config compatibility", () => {
+  beforeEach(async () => {
+    await loadFreshOAuthModuleForTest();
+  });
+
   it("accepts token credentials when config mode is oauth", async () => {
     const profileId = "anthropic:token";
     const store: AuthProfileStore = {
@@ -203,6 +201,10 @@ describe("resolveApiKeyForProfile config compatibility", () => {
 });
 
 describe("resolveApiKeyForProfile token expiry handling", () => {
+  beforeEach(async () => {
+    await loadFreshOAuthModuleForTest();
+  });
+
   it("accepts token credentials when expires is undefined", async () => {
     const profileId = "anthropic:token-no-expiry";
     const result = await resolveWithConfig({
@@ -299,6 +301,10 @@ describe("resolveApiKeyForProfile token expiry handling", () => {
 });
 
 describe("resolveApiKeyForProfile secret refs", () => {
+  beforeEach(async () => {
+    await loadFreshOAuthModuleForTest();
+  });
+
   it("resolves api_key keyRef from env", async () => {
     const profileId = "openai:default";
     const previous = process.env.OPENAI_API_KEY;

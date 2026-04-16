@@ -3,7 +3,6 @@ import type {
   ProviderRuntimeModel,
 } from "openclaw/plugin-sdk/plugin-entry";
 import { cloneFirstTemplateModel } from "openclaw/plugin-sdk/provider-model-shared";
-import { normalizeOptionalLowercaseString } from "openclaw/plugin-sdk/text-runtime";
 
 const GOOGLE_GEMINI_CLI_PROVIDER_ID = "google-gemini-cli";
 const GEMINI_2_5_PRO_PREFIX = "gemini-2.5-pro";
@@ -55,7 +54,7 @@ function cloneGoogleTemplateModel(params: {
 }
 
 function isGoogleGeminiCliProvider(providerId: string): boolean {
-  return normalizeOptionalLowercaseString(providerId) === GOOGLE_GEMINI_CLI_PROVIDER_ID;
+  return providerId.trim().toLowerCase() === GOOGLE_GEMINI_CLI_PROVIDER_ID;
 }
 
 function templateIdsForProvider(
@@ -106,7 +105,7 @@ export function resolveGoogleGeminiForwardCompatModel(params: {
   ctx: ProviderResolveDynamicModelContext;
 }): ProviderRuntimeModel | undefined {
   const trimmed = params.ctx.modelId.trim();
-  const lower = normalizeOptionalLowercaseString(trimmed) ?? "";
+  const lower = trimmed.toLowerCase();
 
   let family: GoogleForwardCompatFamily;
   let patch: Partial<ProviderRuntimeModel> | undefined;
@@ -151,9 +150,7 @@ export function resolveGoogleGeminiForwardCompatModel(params: {
       googleTemplateIds: GEMMA_TEMPLATE_IDS,
       cliTemplateIds: GEMMA_TEMPLATE_IDS,
     };
-    if (lower.startsWith("gemma-4")) {
-      patch = { reasoning: true };
-    }
+    patch = { reasoning: false };
   } else {
     return undefined;
   }
@@ -180,7 +177,7 @@ export function resolveGoogleGeminiForwardCompatModel(params: {
 }
 
 export function isModernGoogleModel(modelId: string): boolean {
-  const lower = normalizeOptionalLowercaseString(modelId) ?? "";
+  const lower = modelId.trim().toLowerCase();
   return (
     lower.startsWith("gemini-2.5") || lower.startsWith("gemini-3") || lower.startsWith(GEMMA_PREFIX)
   );

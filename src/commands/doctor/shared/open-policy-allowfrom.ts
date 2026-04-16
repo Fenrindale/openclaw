@@ -1,11 +1,10 @@
-import type { OpenClawConfig } from "../../../config/types.openclaw.js";
-import { normalizeOptionalString } from "../../../shared/string-coerce.js";
+import type { OpenClawConfig } from "../../../config/config.js";
 import { sanitizeForLog } from "../../../terminal/ansi.js";
 import { resolveAllowFromMode, type AllowFromMode } from "./allow-from-mode.js";
 import { asObjectRecord } from "./object.js";
 
 function hasWildcard(list?: Array<string | number>) {
-  return list?.some((v) => normalizeOptionalString(String(v)) === "*") ?? false;
+  return list?.some((v) => String(v).trim() === "*") ?? false;
 }
 
 export function collectOpenPolicyAllowFromWarnings(params: {

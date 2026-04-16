@@ -1,8 +1,4 @@
 import { createHash } from "node:crypto";
-import {
-  normalizeOptionalString,
-  normalizeStringifiedOptionalString,
-} from "openclaw/plugin-sdk/text-runtime";
 import type { MattermostInteractiveButtonInput } from "./interactions.js";
 import {
   loadSessionStore,
@@ -39,14 +35,14 @@ export type MattermostModelPickerRenderedView = {
 };
 
 function splitModelRef(modelRef?: string | null): { provider: string; model: string } | null {
-  const trimmed = normalizeOptionalString(modelRef);
+  const trimmed = modelRef?.trim();
   const match = trimmed?.match(/^([^/]+)\/(.+)$/u);
   if (!match) {
     return null;
   }
   const provider = normalizeProviderId(match[1]);
   // Mattermost copy should normalize accidental whitespace around the model.
-  const model = normalizeOptionalString(match[2]);
+  const model = match[2].trim();
   if (!provider || !model) {
     return null;
   }
@@ -132,7 +128,7 @@ function buildButton(params: {
             ownerUserId: params.ownerUserId,
             provider: normalizeProviderId(params.provider ?? ""),
             page: normalizePage(params.page),
-            model: normalizeStringifiedOptionalString(params.model) ?? "",
+            model: String(params.model ?? "").trim(),
           };
 
   return {
@@ -183,8 +179,8 @@ export function parseMattermostModelPickerContext(
     return null;
   }
 
-  const ownerUserId = normalizeOptionalString(readContextString(context, "ownerUserId")) ?? "";
-  const action = normalizeOptionalString(readContextString(context, "action")) ?? "";
+  const ownerUserId = readContextString(context, "ownerUserId").trim();
+  const action = readContextString(context, "action").trim();
   if (!ownerUserId) {
     return null;
   }
@@ -209,7 +205,7 @@ export function parseMattermostModelPickerContext(
   }
 
   if (action === "select") {
-    const model = normalizeOptionalString(readContextString(context, "model")) ?? "";
+    const model = readContextString(context, "model").trim();
     if (!model) {
       return null;
     }

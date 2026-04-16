@@ -1,19 +1,20 @@
-import type { OpenClawConfig } from "openclaw/plugin-sdk/config-runtime";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  auditDiscordChannelPermissionsWithFetcher,
-  collectDiscordAuditChannelIdsForGuilds,
-} from "./audit-core.js";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+const sendModule = await import("./send.js");
 const fetchChannelPermissionsDiscordMock = vi.fn();
+vi.spyOn(sendModule, "fetchChannelPermissionsDiscord").mockImplementation(
+  fetchChannelPermissionsDiscordMock,
+);
 
-function readDiscordGuilds(cfg: OpenClawConfig) {
-  const guilds = cfg.channels?.discord?.guilds;
-  expect(guilds).toBeDefined();
-  return guilds ?? {};
-}
+let auditDiscordChannelPermissions: typeof import("./audit.js").auditDiscordChannelPermissions;
+let collectDiscordAuditChannelIds: typeof import("./audit.js").collectDiscordAuditChannelIds;
 
 describe("discord audit", () => {
+  beforeAll(async () => {
+    ({ collectDiscordAuditChannelIds, auditDiscordChannelPermissions } =
+      await import("./audit.js"));
+  });
+
   beforeEach(() => {
     fetchChannelPermissionsDiscordMock.mockReset();
   });
@@ -36,9 +37,12 @@ describe("discord audit", () => {
           },
         },
       },
-    } as unknown as OpenClawConfig;
+    } as unknown as import("openclaw/plugin-sdk/config-runtime").OpenClawConfig;
 
-    const collected = collectDiscordAuditChannelIdsForGuilds(readDiscordGuilds(cfg));
+    const collected = collectDiscordAuditChannelIds({
+      cfg,
+      accountId: "default",
+    });
     expect(collected.channelIds).toEqual(["111", "222"]);
     expect(collected.unresolvedChannels).toBe(1);
 
@@ -55,12 +59,11 @@ describe("discord audit", () => {
       isDm: false,
     });
 
-    const audit = await auditDiscordChannelPermissionsWithFetcher({
+    const audit = await auditDiscordChannelPermissions({
       token: "t",
       accountId: "default",
       channelIds: collected.channelIds,
       timeoutMs: 1000,
-      fetchChannelPermissions: fetchChannelPermissionsDiscordMock,
     });
     expect(audit.ok).toBe(false);
     expect(audit.channels).toHaveLength(2);
@@ -85,9 +88,9 @@ describe("discord audit", () => {
           },
         },
       },
-    } as unknown as OpenClawConfig;
+    } as unknown as import("openclaw/plugin-sdk/config-runtime").OpenClawConfig;
 
-    const collected = collectDiscordAuditChannelIdsForGuilds(readDiscordGuilds(cfg));
+    const collected = collectDiscordAuditChannelIds({ cfg, accountId: "default" });
     expect(collected.channelIds).toEqual(["111"]);
     expect(collected.unresolvedChannels).toBe(0);
   });
@@ -108,9 +111,9 @@ describe("discord audit", () => {
           },
         },
       },
-    } as unknown as OpenClawConfig;
+    } as unknown as import("openclaw/plugin-sdk/config-runtime").OpenClawConfig;
 
-    const collected = collectDiscordAuditChannelIdsForGuilds(readDiscordGuilds(cfg));
+    const collected = collectDiscordAuditChannelIds({ cfg, accountId: "default" });
     expect(collected.channelIds).toEqual([]);
     expect(collected.unresolvedChannels).toBe(0);
   });
@@ -135,9 +138,9 @@ describe("discord audit", () => {
           },
         },
       },
-    } as unknown as OpenClawConfig;
+    } as unknown as import("openclaw/plugin-sdk/config-runtime").OpenClawConfig;
 
-    const collected = collectDiscordAuditChannelIdsForGuilds(readDiscordGuilds(cfg));
+    const collected = collectDiscordAuditChannelIds({ cfg, accountId: "default" });
     expect(collected.channelIds).toEqual(["111"]);
     expect(collected.unresolvedChannels).toBe(1);
   });

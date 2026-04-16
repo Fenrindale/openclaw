@@ -2,7 +2,6 @@ import { execFile, type ExecFileOptionsWithStringEncoding } from "node:child_pro
 import { access, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import type { BlueBubblesParticipant } from "./monitor-normalize.js";
 
 const execFileAsync = promisify(execFile) as ExecFileRunner;
@@ -314,7 +313,7 @@ export async function enrichBlueBubblesParticipantsWithContactNames(
     try {
       const resolved = await lookup([...pendingPhoneKeys]);
       for (const phoneKey of pendingPhoneKeys) {
-        const name = normalizeOptionalString(resolved.get(phoneKey));
+        const name = resolved.get(phoneKey)?.trim() || undefined;
         writeCacheEntry(phoneKey, name, nowMs);
         if (name) {
           cachedNames.set(phoneKey, name);

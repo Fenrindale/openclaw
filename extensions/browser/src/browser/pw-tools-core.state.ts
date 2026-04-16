@@ -1,4 +1,3 @@
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import { devices as playwrightDevices } from "playwright-core";
 import { ensurePageState, getPageForTargetId } from "./pw-session.js";
 import { withPageScopedCdpClient } from "./pw-session.page-cdp.js";
@@ -10,7 +9,7 @@ export async function setOfflineViaPlaywright(opts: {
 }): Promise<void> {
   const page = await getPageForTargetId(opts);
   ensurePageState(page);
-  await page.context().setOffline(opts.offline);
+  await page.context().setOffline(Boolean(opts.offline));
 }
 
 export async function setExtraHTTPHeadersViaPlaywright(opts: {
@@ -36,8 +35,8 @@ export async function setHttpCredentialsViaPlaywright(opts: {
     await page.context().setHTTPCredentials(null);
     return;
   }
-  const username = opts.username ?? "";
-  const password = opts.password ?? "";
+  const username = String(opts.username ?? "");
+  const password = String(opts.password ?? "");
   if (!username) {
     throw new Error("username is required (or set clear=true)");
   }
@@ -70,7 +69,7 @@ export async function setGeolocationViaPlaywright(opts: {
     accuracy: typeof opts.accuracy === "number" ? opts.accuracy : undefined,
   });
   const origin =
-    normalizeOptionalString(opts.origin) ||
+    opts.origin?.trim() ||
     (() => {
       try {
         return new URL(page.url()).origin;
@@ -100,7 +99,7 @@ export async function setLocaleViaPlaywright(opts: {
 }): Promise<void> {
   const page = await getPageForTargetId(opts);
   ensurePageState(page);
-  const locale = normalizeOptionalString(opts.locale) ?? "";
+  const locale = String(opts.locale ?? "").trim();
   if (!locale) {
     throw new Error("locale is required");
   }
@@ -128,7 +127,7 @@ export async function setTimezoneViaPlaywright(opts: {
 }): Promise<void> {
   const page = await getPageForTargetId(opts);
   ensurePageState(page);
-  const timezoneId = normalizeOptionalString(opts.timezoneId) ?? "";
+  const timezoneId = String(opts.timezoneId ?? "").trim();
   if (!timezoneId) {
     throw new Error("timezoneId is required");
   }
@@ -160,7 +159,7 @@ export async function setDeviceViaPlaywright(opts: {
 }): Promise<void> {
   const page = await getPageForTargetId(opts);
   ensurePageState(page);
-  const name = normalizeOptionalString(opts.name) ?? "";
+  const name = String(opts.name ?? "").trim();
   if (!name) {
     throw new Error("device name is required");
   }

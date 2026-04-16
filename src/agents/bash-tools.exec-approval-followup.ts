@@ -4,14 +4,13 @@ import {
 } from "../infra/outbound/best-effort-delivery.js";
 import { sendMessage } from "../infra/outbound/message.js";
 import { isCronSessionKey, isSubagentSessionKey } from "../sessions/session-key-utils.js";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 import { isGatewayMessageChannel, normalizeMessageChannel } from "../utils/message-channel.js";
 import {
   formatExecDeniedUserMessage,
   isExecDeniedResultText,
   parseExecApprovalResultText,
 } from "./exec-approval-result.js";
-import { sanitizeUserFacingText } from "./pi-embedded-helpers/sanitize-user-facing-text.js";
+import { sanitizeUserFacingText } from "./pi-embedded-helpers/errors.js";
 import { callGatewayTool } from "./tools/gateway.js";
 
 type ExecApprovalFollowupParams = {
@@ -91,7 +90,7 @@ function formatDirectExecApprovalFollowupText(
   }
 
   if (parsed.kind === "finished") {
-    const metadata = normalizeLowercaseStringOrEmpty(parsed.metadata);
+    const metadata = parsed.metadata.toLowerCase();
     const body = sanitizeUserFacingText(parsed.body, {
       errorContext: !metadata.includes("code 0"),
     }).trim();

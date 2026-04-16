@@ -1,5 +1,4 @@
 import { Cron } from "croner";
-import { normalizeOptionalString } from "../shared/string-coerce.js";
 import { parseAbsoluteTimeMs } from "./parse.js";
 import type { CronSchedule } from "./types.js";
 
@@ -7,7 +6,7 @@ const CRON_EVAL_CACHE_MAX = 512;
 const cronEvalCache = new Map<string, Cron>();
 
 function resolveCronTimezone(tz?: string) {
-  const trimmed = normalizeOptionalString(tz) ?? "";
+  const trimmed = typeof tz === "string" ? tz.trim() : "";
   if (trimmed) {
     return trimmed;
   }

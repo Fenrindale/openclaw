@@ -1,6 +1,5 @@
 import { hasApprovalTurnSourceRoute } from "../../infra/approval-turn-source.js";
 import type { ExecApprovalDecision } from "../../infra/exec-approvals.js";
-import { normalizeOptionalString } from "../../shared/string-coerce.js";
 import type {
   ExecApprovalIdLookupResult,
   ExecApprovalManager,
@@ -113,7 +112,7 @@ export async function handleApprovalWaitDecision<TPayload>(params: {
   inputId: unknown;
   respond: RespondFn;
 }): Promise<void> {
-  const id = normalizeOptionalString(params.inputId) ?? "";
+  const id = typeof params.inputId === "string" ? params.inputId.trim() : "";
   if (!id) {
     params.respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "id is required"));
     return;

@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import path from "node:path";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 import { expandHomePrefix } from "./home-dir.js";
 
 export function isDriveLessWindowsRootedPath(value: string): boolean {
@@ -51,7 +50,7 @@ function resolveWindowsExecutableExtensions(
       ".EXE;.CMD;.BAT;.COM"
     )
       .split(";")
-      .map((ext) => normalizeLowercaseStringOrEmpty(ext)),
+      .map((ext) => ext.toLowerCase()),
   ];
 }
 
@@ -65,7 +64,7 @@ function resolveWindowsExecutableExtSet(env: NodeJS.ProcessEnv | undefined): Set
       ".EXE;.CMD;.BAT;.COM"
     )
       .split(";")
-      .map((ext) => normalizeLowercaseStringOrEmpty(ext))
+      .map((ext) => ext.toLowerCase())
       .filter(Boolean),
   );
 }
@@ -77,7 +76,7 @@ export function isExecutableFile(filePath: string): boolean {
       return false;
     }
     if (process.platform === "win32") {
-      const ext = normalizeLowercaseStringOrEmpty(path.extname(filePath));
+      const ext = path.extname(filePath).toLowerCase();
       if (!ext) {
         return true;
       }

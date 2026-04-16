@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const loadConfigMock = vi.fn<typeof import("../../config/config.js").loadConfig>();
 const applyPluginAutoEnableMock =
@@ -27,10 +27,12 @@ vi.mock("../../agents/agent-scope.js", () => ({
 }));
 
 describe("resolvePluginRuntimeLoadContext", () => {
-  beforeEach(async () => {
-    vi.resetModules();
+  beforeAll(async () => {
     ({ resolvePluginRuntimeLoadContext, buildPluginRuntimeLoadOptions } =
       await import("./load-context.js"));
+  });
+
+  beforeEach(() => {
     loadConfigMock.mockReset();
     applyPluginAutoEnableMock.mockReset();
     resolveAgentWorkspaceDirMock.mockClear();

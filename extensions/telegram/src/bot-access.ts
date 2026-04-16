@@ -5,7 +5,6 @@ import {
   type AllowlistMatch,
 } from "openclaw/plugin-sdk/allow-from";
 import { createSubsystemLogger } from "openclaw/plugin-sdk/runtime-env";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 
 export type NormalizedAllowFrom = {
   entries: string[];
@@ -41,9 +40,7 @@ function warnInvalidAllowFromEntries(entries: string[]) {
 }
 
 export const normalizeAllowFrom = (list?: Array<string | number>): NormalizedAllowFrom => {
-  const entries = (list ?? [])
-    .map((value) => normalizeOptionalString(String(value)) ?? "")
-    .filter(Boolean);
+  const entries = (list ?? []).map((value) => String(value).trim()).filter(Boolean);
   const hasWildcard = entries.includes("*");
   const normalized = entries
     .filter((value) => value !== "*")

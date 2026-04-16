@@ -1,5 +1,4 @@
 import type { User } from "@buape/carbon";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import type { PluralKitMessageInfo } from "../pluralkit.js";
 import { formatDiscordUserTag } from "./format.js";
 
@@ -49,13 +48,13 @@ export function resolveDiscordSenderIdentity(params: {
     return {
       id: memberId,
       name: memberName,
-      tag: normalizeOptionalString(pkMember?.name),
+      tag: pkMember?.name?.trim() || undefined,
       label,
       isPluralKit: true,
       pluralkit: {
         memberId,
         memberName,
-        systemId: normalizeOptionalString(pkSystem?.id),
+        systemId: pkSystem?.id?.trim() || undefined,
         systemName,
       },
     };

@@ -1,9 +1,3 @@
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalLowercaseString,
-  normalizeOptionalString,
-} from "../shared/string-coerce.js";
-
 export type ParsedAgentSessionKey = {
   agentId: string;
   rest: string;
@@ -28,7 +22,7 @@ export type RawSessionConversationRef = {
 export function parseAgentSessionKey(
   sessionKey: string | undefined | null,
 ): ParsedAgentSessionKey | null {
-  const raw = normalizeOptionalLowercaseString(sessionKey);
+  const raw = (sessionKey ?? "").trim().toLowerCase();
   if (!raw) {
     return null;
   }
@@ -39,7 +33,7 @@ export function parseAgentSessionKey(
   if (parts[0] !== "agent") {
     return null;
   }
-  const agentId = normalizeOptionalString(parts[1]);
+  const agentId = parts[1]?.trim();
   const rest = parts.slice(2).join(":");
   if (!agentId || !rest) {
     return null;
@@ -60,23 +54,23 @@ export function isCronSessionKey(sessionKey: string | undefined | null): boolean
   if (!parsed) {
     return false;
   }
-  return normalizeOptionalLowercaseString(parsed.rest)?.startsWith("cron:") === true;
+  return parsed.rest.toLowerCase().startsWith("cron:");
 }
 
 export function isSubagentSessionKey(sessionKey: string | undefined | null): boolean {
-  const raw = normalizeOptionalString(sessionKey);
+  const raw = (sessionKey ?? "").trim();
   if (!raw) {
     return false;
   }
-  if (normalizeOptionalLowercaseString(raw)?.startsWith("subagent:")) {
+  if (raw.toLowerCase().startsWith("subagent:")) {
     return true;
   }
   const parsed = parseAgentSessionKey(raw);
-  return normalizeOptionalLowercaseString(parsed?.rest)?.startsWith("subagent:") === true;
+  return Boolean((parsed?.rest ?? "").toLowerCase().startsWith("subagent:"));
 }
 
 export function getSubagentDepth(sessionKey: string | undefined | null): number {
-  const raw = normalizeOptionalLowercaseString(sessionKey);
+  const raw = (sessionKey ?? "").trim().toLowerCase();
   if (!raw) {
     return 0;
   }
@@ -84,27 +78,32 @@ export function getSubagentDepth(sessionKey: string | undefined | null): number 
 }
 
 export function isAcpSessionKey(sessionKey: string | undefined | null): boolean {
-  const raw = normalizeOptionalString(sessionKey);
+  const raw = (sessionKey ?? "").trim();
   if (!raw) {
     return false;
   }
-  const normalized = normalizeLowercaseStringOrEmpty(raw);
+  const normalized = raw.toLowerCase();
   if (normalized.startsWith("acp:")) {
     return true;
   }
   const parsed = parseAgentSessionKey(raw);
-  return normalizeOptionalLowercaseString(parsed?.rest)?.startsWith("acp:") === true;
+  return Boolean((parsed?.rest ?? "").toLowerCase().startsWith("acp:"));
+}
+
+function normalizeSessionConversationChannel(value: string | undefined | null): string | undefined {
+  const trimmed = (value ?? "").trim().toLowerCase();
+  return trimmed || undefined;
 }
 
 export function parseThreadSessionSuffix(
   sessionKey: string | undefined | null,
 ): ParsedThreadSessionSuffix {
-  const raw = normalizeOptionalString(sessionKey);
+  const raw = (sessionKey ?? "").trim();
   if (!raw) {
     return { baseSessionKey: undefined, threadId: undefined };
   }
 
-  const lowerRaw = normalizeLowercaseStringOrEmpty(raw);
+  const lowerRaw = raw.toLowerCase();
   const threadMarker = ":thread:";
   const threadIndex = lowerRaw.lastIndexOf(threadMarker);
   const markerIndex = threadIndex;
@@ -112,7 +111,7 @@ export function parseThreadSessionSuffix(
 
   const baseSessionKey = markerIndex === -1 ? raw : raw.slice(0, markerIndex);
   const threadIdRaw = markerIndex === -1 ? undefined : raw.slice(markerIndex + marker.length);
-  const threadId = normalizeOptionalString(threadIdRaw);
+  const threadId = threadIdRaw?.trim() || undefined;
 
   return { baseSessionKey, threadId };
 }
@@ -120,27 +119,30 @@ export function parseThreadSessionSuffix(
 export function parseRawSessionConversationRef(
   sessionKey: string | undefined | null,
 ): RawSessionConversationRef | null {
-  const raw = normalizeOptionalString(sessionKey);
+  const raw = (sessionKey ?? "").trim();
   if (!raw) {
     return null;
   }
 
   const rawParts = raw.split(":").filter(Boolean);
   const bodyStartIndex =
-    rawParts.length >= 3 && normalizeOptionalLowercaseString(rawParts[0]) === "agent" ? 2 : 0;
+    rawParts.length >= 3 && rawParts[0]?.trim().toLowerCase() === "agent" ? 2 : 0;
   const parts = rawParts.slice(bodyStartIndex);
   if (parts.length < 3) {
     return null;
   }
 
-  const channel = normalizeOptionalLowercaseString(parts[0]);
-  const kind = normalizeOptionalLowercaseString(parts[1]);
+  const channel = normalizeSessionConversationChannel(parts[0]);
+  const kind = parts[1]?.trim().toLowerCase();
   if (!channel || (kind !== "group" && kind !== "channel")) {
     return null;
   }
 
-  const rawId = normalizeOptionalString(parts.slice(2).join(":"));
-  const prefix = normalizeOptionalString(rawParts.slice(0, bodyStartIndex + 2).join(":"));
+  const rawId = parts.slice(2).join(":").trim();
+  const prefix = rawParts
+    .slice(0, bodyStartIndex + 2)
+    .join(":")
+    .trim();
   if (!rawId || !prefix) {
     return null;
   }
@@ -155,7 +157,7 @@ export function resolveThreadParentSessionKey(
   if (!threadId) {
     return null;
   }
-  const parent = normalizeOptionalString(baseSessionKey);
+  const parent = baseSessionKey?.trim();
   if (!parent) {
     return null;
   }

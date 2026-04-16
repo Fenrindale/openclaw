@@ -1,4 +1,3 @@
-import { normalizeOptionalString } from "../shared/string-coerce.js";
 import {
   resolveGatewayDiscoveryEndpoint,
   type GatewayBonjourBeacon,
@@ -26,14 +25,13 @@ export function buildGatewayDiscoveryTarget(
 ): GatewayDiscoveryTarget {
   const endpoint = resolveGatewayDiscoveryEndpoint(beacon);
   const sshPort = pickSshPort(beacon);
-  const sshUser = normalizeOptionalString(opts?.sshUser) ?? "";
+  const sshUser = opts?.sshUser?.trim() ?? "";
   const baseSshTarget = endpoint ? (sshUser ? `${sshUser}@${endpoint.host}` : endpoint.host) : null;
   const sshTarget =
     baseSshTarget && sshPort && sshPort !== 22 ? `${baseSshTarget}:${sshPort}` : baseSshTarget;
   return {
-    title:
-      normalizeOptionalString(beacon.displayName || beacon.instanceName || "Gateway") ?? "Gateway",
-    domain: normalizeOptionalString(beacon.domain || "local.") ?? "local.",
+    title: (beacon.displayName || beacon.instanceName || "Gateway").trim(),
+    domain: (beacon.domain || "local.").trim(),
     endpoint,
     wsUrl: endpoint?.wsUrl ?? null,
     sshPort,

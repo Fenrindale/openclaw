@@ -1,5 +1,5 @@
+import type { OpenClawConfig } from "../config/config.js";
 import { resolveGatewayPort } from "../config/config.js";
-import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { isValidEnvSecretRefId, type SecretInput } from "../config/types.secrets.js";
 import {
   maybeAddTailnetOriginToControlUiAllowedOrigins,
@@ -11,8 +11,6 @@ import { findTailscaleBinary } from "../infra/tailscale.js";
 import type { RuntimeEnv } from "../runtime.js";
 import { resolveDefaultSecretProviderAlias } from "../secrets/ref-contract.js";
 import { validateIPv4AddressInput } from "../shared/net/ipv4.js";
-import { normalizeOptionalString, readStringValue } from "../shared/string-coerce.js";
-import { normalizeStringEntries } from "../shared/string-normalization.js";
 import { note } from "../terminal/note.js";
 import { buildGatewayAuthConfig } from "./configure.gateway-auth.js";
 import { confirm, select, text } from "./configure.shared.js";
@@ -42,7 +40,7 @@ export async function promptGatewayConfig(
     }),
     runtime,
   );
-  const port = Number.parseInt(portRaw, 10);
+  const port = Number.parseInt(String(portRaw), 10);
 
   let bind = guardCancel(
     await select({
@@ -88,7 +86,7 @@ export async function promptGatewayConfig(
       }),
       runtime,
     );
-    customBindHost = readStringValue(input);
+    customBindHost = typeof input === "string" ? input : undefined;
   }
 
   let authMode = guardCancel(
@@ -129,12 +127,14 @@ export async function promptGatewayConfig(
   let tailscaleResetOnExit = false;
   if (tailscaleMode !== "off") {
     note(TAILSCALE_DOCS_LINES.join("\n"), "Tailscale");
-    tailscaleResetOnExit = guardCancel(
-      await confirm({
-        message: "Reset Tailscale serve/funnel on exit?",
-        initialValue: false,
-      }),
-      runtime,
+    tailscaleResetOnExit = Boolean(
+      guardCancel(
+        await confirm({
+          message: "Reset Tailscale serve/funnel on exit?",
+          initialValue: false,
+        }),
+        runtime,
+      ),
     );
   }
 
@@ -195,7 +195,7 @@ export async function promptGatewayConfig(
           initialValue: "OPENCLAW_GATEWAY_TOKEN",
           placeholder: "OPENCLAW_GATEWAY_TOKEN",
           validate: (value) => {
-            const candidate = normalizeOptionalString(value) ?? "";
+            const candidate = String(value ?? "").trim();
             if (!isValidEnvSecretRefId(candidate)) {
               return "Use an env var name like OPENCLAW_GATEWAY_TOKEN.";
             }
@@ -208,7 +208,7 @@ export async function promptGatewayConfig(
         }),
         runtime,
       );
-      const envVarName = normalizeOptionalString(envVar) ?? "";
+      const envVarName = String(envVar ?? "").trim();
       gatewayToken = {
         source: "env",
         provider: resolveDefaultSecretProviderAlias(cfg, "env", {
@@ -238,7 +238,7 @@ export async function promptGatewayConfig(
       }),
       runtime,
     );
-    gatewayPassword = normalizeOptionalString(password) ?? "";
+    gatewayPassword = String(password ?? "").trim();
   }
 
   if (authMode === "trusted-proxy") {
@@ -272,7 +272,10 @@ export async function promptGatewayConfig(
       runtime,
     );
     const requiredHeaders = requiredHeadersRaw
-      ? normalizeStringEntries(requiredHeadersRaw.split(","))
+      ? String(requiredHeadersRaw)
+          .split(",")
+          .map((h) => h.trim())
+          .filter(Boolean)
       : [];
 
     const allowUsersRaw = guardCancel(
@@ -282,14 +285,19 @@ export async function promptGatewayConfig(
       }),
       runtime,
     );
-    const allowUsers = allowUsersRaw ? normalizeStringEntries(allowUsersRaw.split(",")) : [];
+    const allowUsers = allowUsersRaw
+      ? String(allowUsersRaw)
+          .split(",")
+          .map((u) => u.trim())
+          .filter(Boolean)
+      : [];
 
     const trustedProxiesRaw = guardCancel(
       await text({
         message: "Trusted proxy IPs (comma-separated)",
         placeholder: "10.0.1.10,192.168.1.5",
         validate: (value) => {
-          if (!normalizeOptionalString(value)) {
+          if (!value || String(value).trim() === "") {
             return "At least one trusted proxy IP is required";
           }
           return undefined;
@@ -297,10 +305,13 @@ export async function promptGatewayConfig(
       }),
       runtime,
     );
-    trustedProxies = normalizeStringEntries(trustedProxiesRaw.split(","));
+    trustedProxies = String(trustedProxiesRaw)
+      .split(",")
+      .map((ip) => ip.trim())
+      .filter(Boolean);
 
     trustedProxyConfig = {
-      userHeader: normalizeOptionalString(userHeader) ?? "",
+      userHeader: String(userHeader).trim(),
       requiredHeaders: requiredHeaders.length > 0 ? requiredHeaders : undefined,
       allowUsers: allowUsers.length > 0 ? allowUsers : undefined,
     };

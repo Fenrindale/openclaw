@@ -1,4 +1,4 @@
-import type { ReplyPayload } from "../auto-reply/reply-payload.js";
+import type { ReplyPayload } from "../auto-reply/types.js";
 import {
   buildApprovalInteractiveReply,
   type ExecApprovalReplyDecision,
@@ -9,7 +9,6 @@ import {
   type PluginApprovalRequest,
   type PluginApprovalResolved,
 } from "../infra/plugin-approvals.js";
-import { normalizeOptionalString } from "../shared/string-coerce.js";
 
 const DEFAULT_ALLOWED_DECISIONS = ["allow-once", "allow-always", "deny"] as const;
 
@@ -35,9 +34,9 @@ export function buildApprovalPendingReplyPayload(params: {
         approvalId: params.approvalId,
         approvalSlug: params.approvalSlug,
         approvalKind: params.approvalKind ?? "exec",
-        agentId: normalizeOptionalString(params.agentId),
+        agentId: params.agentId?.trim() || undefined,
         allowedDecisions,
-        sessionKey: normalizeOptionalString(params.sessionKey),
+        sessionKey: params.sessionKey?.trim() || undefined,
         state: "pending",
       },
       ...params.channelData,

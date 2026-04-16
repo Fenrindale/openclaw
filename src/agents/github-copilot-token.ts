@@ -1,7 +1,6 @@
 import path from "node:path";
 import { resolveStateDir } from "../config/paths.js";
 import { loadJsonFile, saveJsonFile } from "../infra/json-file.js";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 import { buildCopilotIdeHeaders } from "./copilot-dynamic-headers.js";
 import { resolveProviderEndpoint } from "./provider-attribution.js";
 
@@ -70,7 +69,7 @@ function resolveCopilotProxyHost(proxyEp: string): string | null {
     if (url.protocol !== "http:" && url.protocol !== "https:") {
       return null;
     }
-    return normalizeLowercaseStringOrEmpty(url.hostname);
+    return url.hostname.toLowerCase();
   } catch {
     return null;
   }

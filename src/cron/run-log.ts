@@ -2,11 +2,6 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { parseByteSize } from "../cli/parse-bytes.js";
 import type { CronConfig } from "../config/types.cron.js";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-  normalizeStringifiedOptionalString,
-} from "../shared/string-coerce.js";
 import type { CronDeliveryStatus, CronRunStatus, CronRunTelemetry } from "./types.js";
 
 export type CronRunLogEntry = {
@@ -94,10 +89,7 @@ export function resolveCronRunLogPruneOptions(cfg?: CronConfig["runLog"]): {
   let maxBytes = DEFAULT_CRON_RUN_LOG_MAX_BYTES;
   if (cfg?.maxBytes !== undefined) {
     try {
-      const configuredMaxBytes = normalizeStringifiedOptionalString(cfg.maxBytes);
-      if (configuredMaxBytes) {
-        maxBytes = parseByteSize(configuredMaxBytes, { defaultUnit: "b" });
-      }
+      maxBytes = parseByteSize(String(cfg.maxBytes).trim(), { defaultUnit: "b" });
     } catch {
       maxBytes = DEFAULT_CRON_RUN_LOG_MAX_BYTES;
     }
@@ -247,7 +239,7 @@ function normalizeDeliveryStatuses(opts?: {
 }
 
 function parseAllRunLogEntries(raw: string, opts?: { jobId?: string }): CronRunLogEntry[] {
-  const jobId = normalizeOptionalString(opts?.jobId);
+  const jobId = opts?.jobId?.trim() || undefined;
   if (!raw.trim()) {
     return [];
   }
@@ -355,7 +347,7 @@ function filterRunLogEntries(
     if (!opts.query) {
       return true;
     }
-    return normalizeLowercaseStringOrEmpty(opts.queryTextForEntry(entry)).includes(opts.query);
+    return opts.queryTextForEntry(entry).toLowerCase().includes(opts.query);
   });
 }
 
@@ -368,7 +360,7 @@ export async function readCronRunLogEntriesPage(
   const raw = await fs.readFile(path.resolve(filePath), "utf-8").catch(() => "");
   const statuses = normalizeRunStatuses(opts);
   const deliveryStatuses = normalizeDeliveryStatuses(opts);
-  const query = normalizeLowercaseStringOrEmpty(opts?.query);
+  const query = opts?.query?.trim().toLowerCase() ?? "";
   const sortDir: CronRunLogSortDir = opts?.sortDir === "asc" ? "asc" : "desc";
   const all = parseAllRunLogEntries(raw, { jobId: opts?.jobId });
   const filtered = filterRunLogEntries(all, {
@@ -401,7 +393,7 @@ export async function readCronRunLogEntriesPageAll(
   const limit = Math.max(1, Math.min(200, Math.floor(opts.limit ?? 50)));
   const statuses = normalizeRunStatuses(opts);
   const deliveryStatuses = normalizeDeliveryStatuses(opts);
-  const query = normalizeLowercaseStringOrEmpty(opts.query);
+  const query = opts.query?.trim().toLowerCase() ?? "";
   const sortDir: CronRunLogSortDir = opts.sortDir === "asc" ? "asc" : "desc";
   const runsDir = path.resolve(path.dirname(path.resolve(opts.storePath)), "runs");
   const files = await fs.readdir(runsDir, { withFileTypes: true }).catch(() => []);

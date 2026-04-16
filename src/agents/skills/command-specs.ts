@@ -1,10 +1,6 @@
-import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import type { OpenClawConfig } from "../../config/config.js";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
 import { loadEnabledClaudeBundleCommands } from "../../plugins/bundle-commands.js";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalLowercaseString,
-} from "../../shared/string-coerce.js";
 import { resolveEffectiveAgentSkillFilter } from "./agent-filter.js";
 import type { SkillEligibilityContext, SkillCommandSpec, SkillEntry } from "./types.js";
 import {
@@ -31,7 +27,8 @@ function debugSkillCommandOnce(
 }
 
 function sanitizeSkillCommandName(raw: string): string {
-  const normalized = normalizeLowercaseStringOrEmpty(raw)
+  const normalized = raw
+    .toLowerCase()
     .replace(/[^a-z0-9_]+/g, "_")
     .replace(/_+/g, "_")
     .replace(/^_+|_+$/g, "");
@@ -40,7 +37,7 @@ function sanitizeSkillCommandName(raw: string): string {
 }
 
 function resolveUniqueSkillCommandName(base: string, used: Set<string>): string {
-  const normalizedBase = normalizeLowercaseStringOrEmpty(base);
+  const normalizedBase = base.toLowerCase();
   if (!used.has(normalizedBase)) {
     return base;
   }
@@ -49,7 +46,7 @@ function resolveUniqueSkillCommandName(base: string, used: Set<string>): string 
     const maxBaseLength = Math.max(1, SKILL_COMMAND_MAX_LENGTH - suffix.length);
     const trimmedBase = base.slice(0, maxBaseLength);
     const candidate = `${trimmedBase}${suffix}`;
-    const candidateKey = normalizeLowercaseStringOrEmpty(candidate);
+    const candidateKey = candidate.toLowerCase();
     if (!used.has(candidateKey)) {
       return candidate;
     }
@@ -88,7 +85,7 @@ export function buildWorkspaceSkillCommandSpecs(
   const userInvocable = eligible.filter((entry) => entry.invocation?.userInvocable !== false);
   const used = new Set<string>();
   for (const reserved of opts?.reservedNames ?? []) {
-    used.add(normalizeLowercaseStringOrEmpty(reserved));
+    used.add(reserved.toLowerCase());
   }
 
   const specs: SkillCommandSpec[] = [];
@@ -110,16 +107,20 @@ export function buildWorkspaceSkillCommandSpecs(
         { rawName, deduped: `/${unique}` },
       );
     }
-    used.add(normalizeLowercaseStringOrEmpty(unique));
+    used.add(unique.toLowerCase());
     const rawDescription = entry.skill.description?.trim() || rawName;
     const description =
       rawDescription.length > SKILL_COMMAND_DESCRIPTION_MAX_LENGTH
         ? rawDescription.slice(0, SKILL_COMMAND_DESCRIPTION_MAX_LENGTH - 1) + "…"
         : rawDescription;
     const dispatch = (() => {
-      const kindRaw = normalizeLowercaseStringOrEmpty(
-        entry.frontmatter?.["command-dispatch"] ?? entry.frontmatter?.["command_dispatch"] ?? "",
-      );
+      const kindRaw = (
+        entry.frontmatter?.["command-dispatch"] ??
+        entry.frontmatter?.["command_dispatch"] ??
+        ""
+      )
+        .trim()
+        .toLowerCase();
       if (!kindRaw || kindRaw !== "tool") {
         return undefined;
       }
@@ -138,9 +139,13 @@ export function buildWorkspaceSkillCommandSpecs(
         return undefined;
       }
 
-      const argModeRaw = normalizeOptionalLowercaseString(
-        entry.frontmatter?.["command-arg-mode"] ?? entry.frontmatter?.["command_arg_mode"] ?? "",
-      );
+      const argModeRaw = (
+        entry.frontmatter?.["command-arg-mode"] ??
+        entry.frontmatter?.["command_arg_mode"] ??
+        ""
+      )
+        .trim()
+        .toLowerCase();
       const argMode = !argModeRaw || argModeRaw === "raw" ? "raw" : null;
       if (!argMode) {
         debugSkillCommandOnce(
@@ -182,7 +187,7 @@ export function buildWorkspaceSkillCommandSpecs(
         { rawName: entry.rawName, deduped: `/${unique}` },
       );
     }
-    used.add(normalizeLowercaseStringOrEmpty(unique));
+    used.add(unique.toLowerCase());
     const description =
       entry.description.length > SKILL_COMMAND_DESCRIPTION_MAX_LENGTH
         ? entry.description.slice(0, SKILL_COMMAND_DESCRIPTION_MAX_LENGTH - 1) + "…"

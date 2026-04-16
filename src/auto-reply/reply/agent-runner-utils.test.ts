@@ -4,8 +4,7 @@ import type { FollowupRun } from "./queue.js";
 const hoisted = vi.hoisted(() => {
   const resolveRunModelFallbacksOverrideMock = vi.fn();
   const getChannelPluginMock = vi.fn();
-  const isReasoningTagProviderMock = vi.fn();
-  return { resolveRunModelFallbacksOverrideMock, getChannelPluginMock, isReasoningTagProviderMock };
+  return { resolveRunModelFallbacksOverrideMock, getChannelPluginMock };
 });
 
 vi.mock("../../agents/agent-scope.js", () => ({
@@ -17,16 +16,11 @@ vi.mock("../../channels/plugins/index.js", () => ({
   getChannelPlugin: (...args: unknown[]) => hoisted.getChannelPluginMock(...args),
 }));
 
-vi.mock("../../utils/provider-utils.js", () => ({
-  isReasoningTagProvider: (...args: unknown[]) => hoisted.isReasoningTagProviderMock(...args),
-}));
-
 const {
   buildThreadingToolContext,
   buildEmbeddedRunBaseParams,
   buildEmbeddedRunContexts,
   resolveModelFallbackOptions,
-  resolveEnforceFinalTag,
   resolveProviderScopedAuthProfile,
 } = await import("./agent-runner-utils.js");
 
@@ -58,8 +52,6 @@ describe("agent-runner-utils", () => {
   beforeEach(() => {
     hoisted.resolveRunModelFallbacksOverrideMock.mockClear();
     hoisted.getChannelPluginMock.mockReset();
-    hoisted.isReasoningTagProviderMock.mockReset();
-    hoisted.isReasoningTagProviderMock.mockReturnValue(false);
   });
 
   it("resolves model fallback options from run context", () => {
@@ -136,14 +128,23 @@ describe("agent-runner-utils", () => {
   });
 
   it("does not force final-tag enforcement for minimax providers", () => {
-    const run = makeRun();
-
-    expect(resolveEnforceFinalTag(run, "minimax", "MiniMax-M2.7")).toBe(false);
-    expect(hoisted.isReasoningTagProviderMock).toHaveBeenCalledWith("minimax", {
-      config: run.config,
-      workspaceDir: run.workspaceDir,
-      modelId: "MiniMax-M2.7",
+    const run = makeRun({ workspaceDir: process.cwd() });
+    const authProfile = resolveProviderScopedAuthProfile({
+      provider: "minimax",
+      primaryProvider: "minimax",
+      authProfileId: "profile-minimax",
+      authProfileIdSource: "user",
     });
+
+    const resolved = buildEmbeddedRunBaseParams({
+      run,
+      provider: "minimax",
+      model: "MiniMax-M2.7",
+      runId: "run-1",
+      authProfile,
+    });
+
+    expect(resolved.enforceFinalTag).toBe(false);
   });
 
   it("builds embedded contexts and scopes auth profile by provider", () => {

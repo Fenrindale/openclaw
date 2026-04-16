@@ -711,8 +711,5 @@
         "minimum": 1
       }
     }
-  },
-  "configContracts": {
-    "compatibilityMigrationPaths": ["plugins.entries.voice-call.config"]
   }
 }

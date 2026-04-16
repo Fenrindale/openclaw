@@ -19,7 +19,6 @@ import {
 import type { UpdateStepProgress, UpdateStepResult } from "../../infra/update-runner.js";
 import { runCommandWithTimeout } from "../../process/exec.js";
 import { defaultRuntime } from "../../runtime.js";
-import { normalizeLowercaseStringOrEmpty } from "../../shared/string-coerce.js";
 import { theme } from "../../terminal/theme.js";
 import { pathExists } from "../../utils.js";
 
@@ -130,7 +129,7 @@ function resolveDefaultGitDir(): string {
 }
 
 export function resolveNodeRunner(): string {
-  const base = normalizeLowercaseStringOrEmpty(path.basename(process.execPath));
+  const base = path.basename(process.execPath).toLowerCase();
   if (base === "node" || base === "node.exe") {
     return process.execPath;
   }
@@ -278,7 +277,7 @@ export async function tryWriteCompletionCache(root: string, jsonMode: boolean): 
   }
 
   if (result.status !== 0 && !jsonMode) {
-    const stderr = (result.stderr ?? "").trim();
+    const stderr = (result.stderr ?? "").toString().trim();
     const detail = stderr ? ` (${stderr})` : "";
     defaultRuntime.log(theme.warn(`Completion cache update failed${detail}.`));
   }

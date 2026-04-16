@@ -1,4 +1,3 @@
-import { normalizeOptionalLowercaseString } from "openclaw/plugin-sdk/text-runtime";
 import type { ZalouserGroupConfig } from "./types.js";
 
 type ZalouserGroups = Record<string, ZalouserGroupConfig>;
@@ -8,7 +7,7 @@ function toGroupCandidate(value?: string | null): string {
 }
 
 export function normalizeZalouserGroupSlug(raw?: string | null): string {
-  const trimmed = normalizeOptionalLowercaseString(raw) ?? "";
+  const trimmed = raw?.trim().toLowerCase() ?? "";
   if (!trimmed) {
     return "";
   }

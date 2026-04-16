@@ -1,5 +1,4 @@
 import type { Command } from "commander";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import { callBrowserRequest, type BrowserParentOpts } from "../browser-cli-shared.js";
 import {
   danger,
@@ -58,7 +57,8 @@ export function registerBrowserFilesAndDownloadsCommands(
 ) {
   const resolveTimeoutAndTarget = (opts: { timeoutMs?: unknown; targetId?: unknown }) => {
     const timeoutMs = Number.isFinite(opts.timeoutMs) ? Number(opts.timeoutMs) : undefined;
-    const targetId = normalizeOptionalString(opts.targetId);
+    const targetId =
+      typeof opts.targetId === "string" ? opts.targetId.trim() || undefined : undefined;
     return { timeoutMs, targetId };
   };
 
@@ -109,9 +109,9 @@ export function registerBrowserFilesAndDownloadsCommands(
         path: "/hooks/file-chooser",
         body: {
           paths: normalizedPaths,
-          ref: normalizeOptionalString(opts.ref),
-          inputRef: normalizeOptionalString(opts.inputRef),
-          element: normalizeOptionalString(opts.element),
+          ref: opts.ref?.trim() || undefined,
+          inputRef: opts.inputRef?.trim() || undefined,
+          element: opts.element?.trim() || undefined,
           targetId,
           timeoutMs,
         },
@@ -137,7 +137,7 @@ export function registerBrowserFilesAndDownloadsCommands(
       await runDownloadCommand(cmd, opts, {
         path: "/wait/download",
         body: {
-          path: normalizeOptionalString(outPath),
+          path: outPath?.trim() || undefined,
         },
       });
     });
@@ -193,7 +193,7 @@ export function registerBrowserFilesAndDownloadsCommands(
         path: "/hooks/dialog",
         body: {
           accept,
-          promptText: normalizeOptionalString(opts.prompt),
+          promptText: opts.prompt?.trim() || undefined,
           targetId,
           timeoutMs,
         },

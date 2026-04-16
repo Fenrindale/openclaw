@@ -1,7 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import type { OpenClawConfig } from "../api.js";
 import { resolveMemoryWikiConfig } from "./config.js";
 import { renderWikiMarkdown } from "./markdown.js";
 import {
@@ -13,30 +12,6 @@ import {
 import { createMemoryWikiTestHarness } from "./test-helpers.js";
 
 const { createVault } = createMemoryWikiTestHarness();
-
-async function resolveBridgeMissingArtifactsStatus() {
-  const config = resolveMemoryWikiConfig(
-    {
-      vaultMode: "bridge",
-      bridge: {
-        enabled: true,
-        readMemoryArtifacts: true,
-      },
-    },
-    { homedir: "/Users/tester" },
-  );
-
-  return resolveMemoryWikiStatus(config, {
-    appConfig: {
-      agents: {
-        list: [{ id: "main", default: true, workspace: "/tmp/workspace" }],
-      },
-    } as OpenClawConfig,
-    listPublicArtifacts: async () => [],
-    pathExists: async () => true,
-    resolveCommand: async () => null,
-  });
-}
 
 describe("resolveMemoryWikiStatus", () => {
   it("reports missing vault and missing requested obsidian cli", async () => {
@@ -82,13 +57,6 @@ describe("resolveMemoryWikiStatus", () => {
     });
 
     expect(status.warnings.map((warning) => warning.code)).toContain("unsafe-local-disabled");
-  });
-
-  it("warns when bridge mode has no exported memory artifacts", async () => {
-    const status = await resolveBridgeMissingArtifactsStatus();
-
-    expect(status.bridgePublicArtifactCount).toBe(0);
-    expect(status.warnings.map((warning) => warning.code)).toContain("bridge-artifacts-missing");
   });
 
   it("counts source provenance from the vault", async () => {
@@ -170,13 +138,12 @@ describe("renderMemoryWikiStatus", () => {
       vaultExists: false,
       bridge: {
         enabled: false,
-        readMemoryArtifacts: true,
+        readMemoryCore: true,
         indexDreamReports: true,
         indexDailyNotes: true,
         indexMemoryRoot: true,
         followMemoryEvents: true,
       },
-      bridgePublicArtifactCount: null,
       obsidianCli: {
         enabled: true,
         requested: true,
@@ -236,13 +203,5 @@ describe("memory wiki doctor", () => {
     expect(report.fixes.map((fix) => fix.code)).toEqual(["vault-missing", "obsidian-cli-missing"]);
     expect(rendered).toContain("Suggested fixes:");
     expect(rendered).toContain("openclaw wiki init");
-  });
-
-  it("suggests bridge fixes when no public artifacts are exported", async () => {
-    const status = await resolveBridgeMissingArtifactsStatus();
-    const report = buildMemoryWikiDoctorReport(status);
-
-    expect(report.fixes.map((fix) => fix.code)).toContain("bridge-artifacts-missing");
-    expect(renderMemoryWikiDoctor(report)).toContain("exports public artifacts");
   });
 });

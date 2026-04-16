@@ -1,7 +1,5 @@
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
-
 export function isStatusCommand(body: string) {
-  const trimmed = normalizeLowercaseStringOrEmpty(body);
+  const trimmed = body.trim().toLowerCase();
   if (!trimmed) {
     return false;
   }

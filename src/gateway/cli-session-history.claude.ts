@@ -8,7 +8,6 @@ import {
   type ToolContentBlock,
 } from "../chat/tool-content.js";
 import type { SessionEntry } from "../config/sessions.js";
-import { normalizeOptionalString } from "../shared/string-coerce.js";
 import { attachOpenClawTranscriptMeta } from "./session-utils.fs.js";
 
 export const CLAUDE_CLI_PROVIDER = "claude-cli";
@@ -39,7 +38,7 @@ type TranscriptLikeMessage = Record<string, unknown>;
 type ToolNameRegistry = Map<string, string>;
 
 function resolveHistoryHomeDir(homeDir?: string): string {
-  return normalizeOptionalString(homeDir) || process.env.HOME || os.homedir();
+  return homeDir?.trim() || process.env.HOME || os.homedir();
 }
 
 function resolveClaudeProjectsDir(homeDir?: string): string {
@@ -49,17 +48,15 @@ function resolveClaudeProjectsDir(homeDir?: string): string {
 export function resolveClaudeCliBindingSessionId(
   entry: SessionEntry | undefined,
 ): string | undefined {
-  const bindingSessionId = normalizeOptionalString(
-    entry?.cliSessionBindings?.[CLAUDE_CLI_PROVIDER]?.sessionId,
-  );
+  const bindingSessionId = entry?.cliSessionBindings?.[CLAUDE_CLI_PROVIDER]?.sessionId?.trim();
   if (bindingSessionId) {
     return bindingSessionId;
   }
-  const legacyMapSessionId = normalizeOptionalString(entry?.cliSessionIds?.[CLAUDE_CLI_PROVIDER]);
+  const legacyMapSessionId = entry?.cliSessionIds?.[CLAUDE_CLI_PROVIDER]?.trim();
   if (legacyMapSessionId) {
     return legacyMapSessionId;
   }
-  const legacyClaudeSessionId = normalizeOptionalString(entry?.claudeCliSessionId);
+  const legacyClaudeSessionId = entry?.claudeCliSessionId?.trim();
   return legacyClaudeSessionId || undefined;
 }
 
@@ -120,8 +117,8 @@ function normalizeClaudeCliContent(
     const block = cloneJsonValue(item as ToolContentBlock);
     const type = typeof block.type === "string" ? block.type : "";
     if (type === "tool_use") {
-      const id = normalizeOptionalString(block.id) ?? "";
-      const name = normalizeOptionalString(block.name) ?? "";
+      const id = typeof block.id === "string" ? block.id.trim() : "";
+      const name = typeof block.name === "string" ? block.name.trim() : "";
       if (id && name) {
         toolNameRegistry.set(id, name);
       }
@@ -234,7 +231,7 @@ function parseClaudeCliHistoryEntry(
   const baseMeta = {
     importedFrom: CLAUDE_CLI_PROVIDER,
     cliSessionId,
-    ...(normalizeOptionalString(entry.uuid) ? { externalId: entry.uuid } : {}),
+    ...(typeof entry.uuid === "string" && entry.uuid.trim() ? { externalId: entry.uuid } : {}),
   };
 
   const content =
@@ -262,8 +259,10 @@ function parseClaudeCliHistoryEntry(
       content,
       api: "anthropic-messages",
       provider: CLAUDE_CLI_PROVIDER,
-      ...(normalizeOptionalString(entry.message.model) ? { model: entry.message.model } : {}),
-      ...(normalizeOptionalString(entry.message.stop_reason)
+      ...(typeof entry.message.model === "string" && entry.message.model.trim()
+        ? { model: entry.message.model }
+        : {}),
+      ...(typeof entry.message.stop_reason === "string" && entry.message.stop_reason.trim()
         ? { stopReason: entry.message.stop_reason }
         : {}),
       ...(resolveClaudeCliUsage(entry.message.usage)

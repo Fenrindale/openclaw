@@ -4,7 +4,6 @@ import {
   type ProviderCatalogContext,
 } from "openclaw/plugin-sdk/plugin-entry";
 import { createProviderApiKeyAuthMethod } from "openclaw/plugin-sdk/provider-auth-api-key";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 import {
   applyStepFunPlanConfig,
   applyStepFunPlanConfigCn,
@@ -39,7 +38,7 @@ function inferRegionFromBaseUrl(baseUrl: string | undefined): StepFunRegion | un
     return undefined;
   }
   try {
-    const host = normalizeLowercaseStringOrEmpty(new URL(baseUrl).hostname);
+    const host = new URL(baseUrl).hostname.toLowerCase();
     if (host === "api.stepfun.com") {
       return "cn";
     }

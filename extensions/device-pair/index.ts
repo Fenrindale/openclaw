@@ -2,10 +2,6 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-} from "openclaw/plugin-sdk/text-runtime";
-import {
   clearDeviceBootstrapTokens,
   definePluginEntry,
   issueDeviceBootstrapToken,
@@ -143,7 +139,7 @@ const QR_CHANNEL_SENDERS: Record<string, QrChannelSender> = {
 };
 
 function normalizeUrl(raw: string, schemeFallback: "ws" | "wss"): string | null {
-  const candidate = normalizeOptionalString(raw);
+  const candidate = raw.trim();
   if (!candidate) {
     return null;
   }
@@ -151,7 +147,7 @@ function normalizeUrl(raw: string, schemeFallback: "ws" | "wss"): string | null 
   if (parsedUrl) {
     return parsedUrl;
   }
-  const hostPort = normalizeOptionalString(candidate.split("/", 1)[0]) ?? "";
+  const hostPort = candidate.split("/", 1)[0]?.trim() ?? "";
   return hostPort ? `${schemeFallback}://${hostPort}` : null;
 }
 
@@ -229,12 +225,12 @@ function pickMatchingIPv4(predicate: (address: string) => boolean): string | nul
     }
     for (const entry of entries) {
       const family = entry?.family;
-      // Keep the numeric check for older Node runtimes that reported family as 4.
-      const isIpv4 = family === "IPv4" || (family as unknown) === 4;
+      // Check for IPv4 (string "IPv4" on Node 18+, number 4 on older)
+      const isIpv4 = family === "IPv4" || String(family) === "4";
       if (!entry || entry.internal || !isIpv4) {
         continue;
       }
-      const address = normalizeOptionalString(entry.address) ?? "";
+      const address = entry.address?.trim() ?? "";
       if (!address) {
         continue;
       }
@@ -285,7 +281,10 @@ function resolveAuthLabel(cfg: OpenClawPluginApi["config"]): ResolveAuthLabelRes
 
 function pickFirstDefined(candidates: Array<unknown>): string | null {
   for (const value of candidates) {
-    const trimmed = normalizeOptionalString(value);
+    if (typeof value !== "string") {
+      continue;
+    }
+    const trimmed = value.trim();
     if (trimmed) {
       return trimmed;
     }
@@ -313,9 +312,8 @@ async function resolveGatewayUrl(api: OpenClawPluginApi): Promise<ResolveUrlResu
   const scheme = resolveScheme(cfg);
   const port = resolveGatewayPort(cfg);
 
-  const configuredPublicUrl = normalizeOptionalString(pluginCfg.publicUrl);
-  if (configuredPublicUrl) {
-    const url = normalizeUrl(configuredPublicUrl, scheme);
+  if (typeof pluginCfg.publicUrl === "string" && pluginCfg.publicUrl.trim()) {
+    const url = normalizeUrl(pluginCfg.publicUrl, scheme);
     if (url) {
       return { url, source: "plugins.entries.device-pair.config.publicUrl" };
     }
@@ -331,8 +329,8 @@ async function resolveGatewayUrl(api: OpenClawPluginApi): Promise<ResolveUrlResu
     return { url: `wss://${host}`, source: `gateway.tailscale.mode=${tailscaleMode}` };
   }
 
-  const remoteUrl = normalizeOptionalString(cfg.gateway?.remote?.url);
-  if (remoteUrl) {
+  const remoteUrl = cfg.gateway?.remote?.url;
+  if (typeof remoteUrl === "string" && remoteUrl.trim()) {
     const url = normalizeUrl(remoteUrl, scheme);
     if (url) {
       return { url, source: "gateway.remote.url" };
@@ -480,19 +478,14 @@ function canSendQrPngToChannel(channel: string): boolean {
 
 function resolveQrReplyTarget(ctx: QrCommandContext): string {
   if (ctx.channel === "discord") {
-    const senderId = normalizeOptionalString(ctx.senderId) ?? "";
+    const senderId = ctx.senderId?.trim() ?? "";
     if (senderId) {
       return senderId.startsWith("user:") || senderId.startsWith("channel:")
         ? senderId
         : `user:${senderId}`;
     }
   }
-  return (
-    normalizeOptionalString(ctx.senderId) ||
-    normalizeOptionalString(ctx.from) ||
-    normalizeOptionalString(ctx.to) ||
-    ""
-  );
+  return ctx.senderId?.trim() || ctx.from?.trim() || ctx.to?.trim() || "";
 }
 
 const PAIR_SETUP_NON_ISSUING_ACTIONS = new Set([
@@ -528,7 +521,7 @@ async function sendQrPngToSupportedChannel(params: {
   qrFilePath: string;
 }): Promise<boolean> {
   const mediaLocalRoots = [path.dirname(params.qrFilePath)];
-  const accountId = normalizeOptionalString(params.ctx.accountId) || undefined;
+  const accountId = params.ctx.accountId?.trim() || undefined;
   const sender = QR_CHANNEL_SENDERS[params.ctx.channel];
   if (!sender) {
     return false;
@@ -564,9 +557,9 @@ export default definePluginEntry({
       description: "Generate setup codes and approve device pairing requests.",
       acceptsArgs: true,
       handler: async (ctx) => {
-        const args = normalizeOptionalString(ctx.args) ?? "";
+        const args = ctx.args?.trim() ?? "";
         const tokens = args.split(/\s+/).filter(Boolean);
-        const action = normalizeLowercaseStringOrEmpty(tokens[0]);
+        const action = tokens[0]?.toLowerCase() ?? "";
         const gatewayClientScopes = Array.isArray(ctx.gatewayClientScopes)
           ? ctx.gatewayClientScopes
           : undefined;
@@ -586,7 +579,7 @@ export default definePluginEntry({
         }
 
         if (action === "notify") {
-          const notifyAction = normalizeLowercaseStringOrEmpty(tokens[1]) || "status";
+          const notifyAction = tokens[1]?.trim().toLowerCase() ?? "status";
           return await handleNotifyCommand({
             api,
             ctx,
@@ -601,7 +594,7 @@ export default definePluginEntry({
           const list = await listDevicePairing();
           const selected = selectPendingApprovalRequest({
             pending: list.pending,
-            requested: normalizeOptionalString(tokens[1]),
+            requested: tokens[1]?.trim(),
           });
           if (selected.reply) {
             return selected.reply;
@@ -653,7 +646,9 @@ export default definePluginEntry({
               autoNotifyArmed = await armPairNotifyOnce({ api, ctx });
             } catch (err) {
               api.logger.warn?.(
-                `device-pair: failed to arm one-shot pairing notify (${(err as Error)?.message ?? err})`,
+                `device-pair: failed to arm one-shot pairing notify (${String(
+                  (err as Error)?.message ?? err,
+                )})`,
               );
             }
           }
@@ -691,7 +686,9 @@ export default definePluginEntry({
               }
             } catch (err) {
               api.logger.warn?.(
-                `device-pair: QR image send failed channel=${channel}, falling back (${(err as Error)?.message ?? err})`,
+                `device-pair: QR image send failed channel=${channel}, falling back (${String(
+                  (err as Error)?.message ?? err,
+                )})`,
               );
               await revokeDeviceBootstrapToken({ token: payload.bootstrapToken }).catch(() => {});
               payload = await issueSetupPayload(urlResult.url);
@@ -712,7 +709,9 @@ export default definePluginEntry({
               qrDataUrl = await renderQrDataUrl(setupCode);
             } catch (err) {
               api.logger.warn?.(
-                `device-pair: webchat QR render failed, falling back (${(err as Error)?.message ?? err})`,
+                `device-pair: webchat QR render failed, falling back (${String(
+                  (err as Error)?.message ?? err,
+                )})`,
               );
               await revokeDeviceBootstrapToken({ token: payload.bootstrapToken }).catch(() => {});
               payload = await issueSetupPayload(urlResult.url);
@@ -745,11 +744,7 @@ export default definePluginEntry({
           };
         }
         const channel = ctx.channel;
-        const target =
-          normalizeOptionalString(ctx.senderId) ||
-          normalizeOptionalString(ctx.from) ||
-          normalizeOptionalString(ctx.to) ||
-          "";
+        const target = ctx.senderId?.trim() || ctx.from?.trim() || ctx.to?.trim() || "";
         const payload = await issueSetupPayload(urlResult.url);
 
         if (channel === "telegram" && target) {
@@ -785,7 +780,9 @@ export default definePluginEntry({
             return { text: encodeSetupCode(payload) };
           } catch (err) {
             api.logger.warn?.(
-              `device-pair: telegram split send failed, falling back to single message (${(err as Error)?.message ?? err})`,
+              `device-pair: telegram split send failed, falling back to single message (${String(
+                (err as Error)?.message ?? err,
+              )})`,
             );
           }
         }

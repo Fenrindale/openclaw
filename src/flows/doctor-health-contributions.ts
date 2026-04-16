@@ -12,7 +12,6 @@ import { formatCliCommand } from "../cli/command-format.js";
 import {
   maybeRepairLegacyOAuthProfileIds,
   noteAuthProfileHealth,
-  noteLegacyCodexProviderOverride,
 } from "../commands/doctor-auth.js";
 import { noteBootstrapFileSize } from "../commands/doctor-bootstrap-size.js";
 import { noteChromeMcpBrowserReadiness } from "../commands/doctor-browser.js";
@@ -50,9 +49,9 @@ import { MEMORY_SYSTEM_PROMPT, shouldSuggestMemorySystem } from "../commands/doc
 import { noteOpenAIOAuthTlsPrerequisites } from "../commands/oauth-tls-preflight.js";
 import { applyWizardMetadata, randomToken } from "../commands/onboard-helpers.js";
 import { ensureSystemdUserLingerInteractive } from "../commands/systemd-linger.js";
+import type { OpenClawConfig } from "../config/config.js";
 import { CONFIG_PATH, readConfigFileSnapshot, writeConfigFile } from "../config/config.js";
 import { logConfigUpdated } from "../config/logging.js";
-import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { resolveSecretInputRef } from "../config/types.secrets.js";
 import { resolveGatewayService } from "../daemon/service.js";
 import { hasAmbiguousGatewayAuthModeConfig } from "../gateway/auth-mode-policy.js";
@@ -146,9 +145,8 @@ async function runAuthProfileHealth(ctx: DoctorHealthFlowContext): Promise<void>
   await noteAuthProfileHealth({
     cfg: ctx.cfg,
     prompter: ctx.prompter,
-    allowKeychainPrompt: ctx.options.nonInteractive !== true && process.stdin.isTTY,
+    allowKeychainPrompt: ctx.options.nonInteractive !== true && Boolean(process.stdin.isTTY),
   });
-  noteLegacyCodexProviderOverride(ctx.cfg);
   ctx.gatewayDetails = buildGatewayConnectionDetails({ config: ctx.cfg });
   if (ctx.gatewayDetails.remoteFallbackNote) {
     note(ctx.gatewayDetails.remoteFallbackNote, "Gateway");

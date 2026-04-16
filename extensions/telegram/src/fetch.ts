@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import * as dns from "node:dns";
 import type { TelegramNetworkConfig } from "openclaw/plugin-sdk/config-runtime";
 import { formatErrorMessage } from "openclaw/plugin-sdk/error-runtime";
@@ -8,19 +7,13 @@ import {
   resolveFetch,
   type PinnedDispatcherPolicy,
 } from "openclaw/plugin-sdk/fetch-runtime";
-import {
-  captureHttpExchange,
-  resolveEffectiveDebugProxyUrl,
-} from "openclaw/plugin-sdk/proxy-capture";
-import { resolveRequestUrl } from "openclaw/plugin-sdk/request-url";
 import { createSubsystemLogger } from "openclaw/plugin-sdk/runtime-env";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 import { Agent, EnvHttpProxyAgent, ProxyAgent, fetch as undiciFetch } from "undici";
 import {
   resolveTelegramAutoSelectFamilyDecision,
   resolveTelegramDnsResultOrderDecision,
 } from "./network-config.js";
-import { getProxyUrlFromFetch, makeProxyFetch } from "./proxy.js";
+import { getProxyUrlFromFetch } from "./proxy.js";
 
 const log = createSubsystemLogger("telegram/network");
 
@@ -167,7 +160,7 @@ function shouldBypassEnvProxyForTelegramApi(env: NodeJS.ProcessEnv = process.env
   if (noProxyValue === "*") {
     return true;
   }
-  const targetHostname = normalizeLowercaseStringOrEmpty(TELEGRAM_API_HOSTNAME);
+  const targetHostname = TELEGRAM_API_HOSTNAME.toLowerCase();
   const targetPort = 443;
   const noProxyEntries = noProxyValue.split(/[,\s]/);
   for (let i = 0; i < noProxyEntries.length; i++) {
@@ -176,9 +169,7 @@ function shouldBypassEnvProxyForTelegramApi(env: NodeJS.ProcessEnv = process.env
       continue;
     }
     const parsed = entry.match(/^(.+):(\d+)$/);
-    const entryHostname = normalizeLowercaseStringOrEmpty(
-      (parsed ? parsed[1] : entry).replace(/^\*?\./, ""),
-    );
+    const entryHostname = (parsed ? parsed[1] : entry).replace(/^\*?\./, "").toLowerCase();
     const entryPort = parsed ? Number.parseInt(parsed[2], 10) : 0;
     if (entryPort && entryPort !== targetPort) {
       continue;
@@ -408,9 +399,7 @@ function formatErrorCodes(err: unknown): string {
 function shouldUseTelegramTransportFallback(err: unknown): boolean {
   const ctx: TelegramTransportFallbackContext = {
     message:
-      err && typeof err === "object" && "message" in err
-        ? normalizeLowercaseStringOrEmpty(String(err.message))
-        : "",
+      err && typeof err === "object" && "message" in err ? String(err.message).toLowerCase() : "",
     codes: collectErrorCodes(err),
   };
   for (const rule of TELEGRAM_TRANSPORT_FALLBACK_RULES) {
@@ -501,23 +490,15 @@ export function resolveTelegramTransport(
     dnsDecision,
   });
 
-  const effectiveProxyFetch =
-    proxyFetch ??
-    (() => {
-      const debugProxyUrl = resolveEffectiveDebugProxyUrl(undefined);
-      return debugProxyUrl ? makeProxyFetch(debugProxyUrl) : undefined;
-    })();
-  const explicitProxyUrl = effectiveProxyFetch
-    ? getProxyUrlFromFetch(effectiveProxyFetch)
-    : undefined;
+  const explicitProxyUrl = proxyFetch ? getProxyUrlFromFetch(proxyFetch) : undefined;
   const undiciSourceFetch = resolveWrappedFetch(undiciFetch as unknown as typeof fetch);
   const sourceFetch = explicitProxyUrl
     ? undiciSourceFetch
-    : effectiveProxyFetch
-      ? resolveWrappedFetch(effectiveProxyFetch)
+    : proxyFetch
+      ? resolveWrappedFetch(proxyFetch)
       : undiciSourceFetch;
   const dnsResultOrder = normalizeDnsResultOrder(dnsDecision.value);
-  if (effectiveProxyFetch && !explicitProxyUrl) {
+  if (proxyFetch && !explicitProxyUrl) {
     return { fetch: sourceFetch, sourceFetch };
   }
 
@@ -558,20 +539,10 @@ export function resolveTelegramTransport(
     let err: unknown;
 
     try {
-      const response = await sourceFetch(
+      return await sourceFetch(
         input,
         withDispatcherIfMissing(init, transportAttempts[startIndex].createDispatcher()),
       );
-      captureHttpExchange({
-        url: resolveRequestUrl(input),
-        method: init?.method ?? "GET",
-        requestHeaders: init?.headers as Headers | Record<string, string> | undefined,
-        requestBody: (init as RequestInit & { body?: BodyInit | null })?.body ?? null,
-        response,
-        flowId: randomUUID(),
-        meta: { subsystem: "telegram-fetch" },
-      });
-      return response;
     } catch (caught) {
       err = caught;
     }
@@ -593,15 +564,6 @@ export function resolveTelegramTransport(
           input,
           withDispatcherIfMissing(init, nextAttempt.createDispatcher()),
         );
-        captureHttpExchange({
-          url: resolveRequestUrl(input),
-          method: init?.method ?? "GET",
-          requestHeaders: init?.headers as Headers | Record<string, string> | undefined,
-          requestBody: (init as RequestInit & { body?: BodyInit | null })?.body ?? null,
-          response,
-          flowId: randomUUID(),
-          meta: { subsystem: "telegram-fetch", fallbackAttempt: nextIndex },
-        });
         stickyAttemptIndex = nextIndex;
         return response;
       } catch (caught) {

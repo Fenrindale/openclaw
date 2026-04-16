@@ -3,9 +3,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import type { OpenClawConfig } from "../config/types.openclaw.js";
+import type { OpenClawConfig } from "../config/config.js";
 import { hasConfiguredSecretInput } from "../config/types.secrets.js";
-import { normalizeOptionalString } from "../shared/string-coerce.js";
 import { note } from "../terminal/note.js";
 import { shortenHomePath } from "../utils.js";
 
@@ -38,7 +37,7 @@ export async function noteMacLaunchAgentOverrides() {
 async function launchctlGetenv(name: string): Promise<string | undefined> {
   try {
     const result = await execFileAsync("/bin/launchctl", ["getenv", name], { encoding: "utf8" });
-    const value = normalizeOptionalString(result.stdout ?? "") ?? "";
+    const value = String(result.stdout ?? "").trim();
     return value.length > 0 ? value : undefined;
   } catch {
     return undefined;
@@ -49,11 +48,11 @@ function hasConfigGatewayCreds(cfg: OpenClawConfig): boolean {
   const localPassword = cfg.gateway?.auth?.password;
   const remoteToken = cfg.gateway?.remote?.token;
   const remotePassword = cfg.gateway?.remote?.password;
-  return (
+  return Boolean(
     hasConfiguredSecretInput(cfg.gateway?.auth?.token, cfg.secrets?.defaults) ||
     hasConfiguredSecretInput(localPassword, cfg.secrets?.defaults) ||
     hasConfiguredSecretInput(remoteToken, cfg.secrets?.defaults) ||
-    hasConfiguredSecretInput(remotePassword, cfg.secrets?.defaults)
+    hasConfiguredSecretInput(remotePassword, cfg.secrets?.defaults),
   );
 }
 
@@ -80,10 +79,10 @@ export async function noteMacLaunchctlGatewayEnvOverrides(
   const passwordEntries = [
     ["OPENCLAW_GATEWAY_PASSWORD", await getenv("OPENCLAW_GATEWAY_PASSWORD")],
   ] as const;
-  const tokenEntry = tokenEntries.find(([, value]) => normalizeOptionalString(value));
-  const passwordEntry = passwordEntries.find(([, value]) => normalizeOptionalString(value));
-  const envToken = normalizeOptionalString(tokenEntry?.[1]) ?? "";
-  const envPassword = normalizeOptionalString(passwordEntry?.[1]) ?? "";
+  const tokenEntry = tokenEntries.find(([, value]) => value?.trim());
+  const passwordEntry = passwordEntries.find(([, value]) => value?.trim());
+  const envToken = tokenEntry?.[1]?.trim() ?? "";
+  const envPassword = passwordEntry?.[1]?.trim() ?? "";
   const envTokenKey = tokenEntry?.[0];
   const envPasswordKey = passwordEntry?.[0];
   if (!envToken && !envPassword) {
@@ -107,7 +106,7 @@ export async function noteMacLaunchctlGatewayEnvOverrides(
 }
 
 function isTruthyEnvValue(value: string | undefined): boolean {
-  return Boolean(normalizeOptionalString(value));
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 function isTmpCompileCachePath(cachePath: string): boolean {
@@ -144,9 +143,9 @@ export function noteStartupOptimizationHints(
   }
 
   const noteFn = deps?.noteFn ?? note;
-  const compileCache = normalizeOptionalString(env.NODE_COMPILE_CACHE) ?? "";
-  const disableCompileCache = normalizeOptionalString(env.NODE_DISABLE_COMPILE_CACHE) ?? "";
-  const noRespawn = normalizeOptionalString(env.OPENCLAW_NO_RESPAWN) ?? "";
+  const compileCache = env.NODE_COMPILE_CACHE?.trim() ?? "";
+  const disableCompileCache = env.NODE_DISABLE_COMPILE_CACHE?.trim() ?? "";
+  const noRespawn = env.OPENCLAW_NO_RESPAWN?.trim() ?? "";
   const lines: string[] = [];
 
   if (!compileCache) {

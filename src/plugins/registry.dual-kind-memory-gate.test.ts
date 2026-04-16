@@ -5,11 +5,7 @@ import {
   registerVirtualTestPlugin,
 } from "../../test/helpers/plugins/contracts-testkit.js";
 import { clearMemoryEmbeddingProviders } from "./memory-embedding-providers.js";
-import {
-  _resetMemoryPluginState,
-  getMemoryCapabilityRegistration,
-  getMemoryRuntime,
-} from "./memory-state.js";
+import { _resetMemoryPluginState, getMemoryRuntime } from "./memory-state.js";
 import { createPluginRecord } from "./status.test-helpers.js";
 
 afterEach(() => {
@@ -94,32 +90,6 @@ describe("dual-kind memory registration gate", () => {
       },
     });
 
-    expect(getMemoryRuntime()).toBeDefined();
-  });
-
-  it("allows selected dual-kind plugins to register the unified memory capability", () => {
-    const { config, registry } = createPluginRegistryFixture();
-
-    registerTestPlugin({
-      registry,
-      config,
-      record: createPluginRecord({
-        id: "dual-plugin",
-        name: "Dual Plugin",
-        kind: ["memory", "context-engine"],
-        memorySlotSelected: true,
-      }),
-      register(api) {
-        api.registerMemoryCapability({
-          runtime: createStubMemoryRuntime(),
-          promptBuilder: () => ["memory capability"],
-        });
-      },
-    });
-
-    expect(getMemoryCapabilityRegistration()).toMatchObject({
-      pluginId: "dual-plugin",
-    });
     expect(getMemoryRuntime()).toBeDefined();
   });
 });

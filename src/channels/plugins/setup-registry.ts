@@ -2,11 +2,9 @@ import {
   getActivePluginRegistryVersion,
   requireActivePluginRegistry,
 } from "../../plugins/runtime.js";
-import { normalizeOptionalString } from "../../shared/string-coerce.js";
 import { CHAT_CHANNEL_ORDER, type ChatChannelId } from "../registry.js";
 import { listBundledChannelSetupPlugins } from "./bundled.js";
-import type { ChannelPlugin } from "./types.plugin.js";
-import type { ChannelId } from "./types.public.js";
+import type { ChannelId, ChannelPlugin } from "./types.js";
 
 type CachedChannelSetupPlugins = {
   registryVersion: number;
@@ -28,7 +26,7 @@ function dedupeSetupPlugins(plugins: readonly ChannelPlugin[]): ChannelPlugin[] 
   const seen = new Set<string>();
   const resolved: ChannelPlugin[] = [];
   for (const plugin of plugins) {
-    const id = normalizeOptionalString(plugin.id) ?? "";
+    const id = String(plugin.id).trim();
     if (!id || seen.has(id)) {
       continue;
     }
@@ -83,7 +81,7 @@ export function listChannelSetupPlugins(): ChannelPlugin[] {
 }
 
 export function getChannelSetupPlugin(id: ChannelId): ChannelPlugin | undefined {
-  const resolvedId = normalizeOptionalString(id) ?? "";
+  const resolvedId = String(id).trim();
   if (!resolvedId) {
     return undefined;
   }

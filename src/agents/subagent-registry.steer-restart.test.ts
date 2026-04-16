@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const noop = () => {};
 let lifecycleHandler:
@@ -19,7 +19,7 @@ vi.mock("../gateway/call.js", () => ({
   callGateway: vi.fn(async (opts: unknown) => {
     const request = opts as { method?: string };
     if (request.method === "agent.wait") {
-      return { status: "pending" };
+      return { status: "timeout" };
     }
     return {};
   }),
@@ -101,18 +101,10 @@ describe("subagent registry steer restarts", () => {
   const MAIN_REQUESTER_SESSION_KEY = "agent:main:main";
   const MAIN_REQUESTER_DISPLAY_KEY = "main";
 
-  beforeAll(async () => {
-    mod = await import("./subagent-registry.js");
-  });
-
-  beforeEach(() => {
+  beforeEach(async () => {
+    vi.resetModules();
     lifecycleHandler = undefined;
-    announceSpy.mockReset();
-    announceSpy.mockResolvedValue(true);
-    runSubagentEndedHookMock.mockReset();
-    runSubagentEndedHookMock.mockImplementation(async () => {});
-    emitSessionLifecycleEventMock.mockReset();
-    mod.resetSubagentRegistryForTests({ persist: false });
+    mod = await import("./subagent-registry.js");
   });
 
   const flushAnnounce = async () => {
@@ -239,11 +231,10 @@ describe("subagent registry steer restarts", () => {
   };
 
   afterEach(async () => {
-    announceSpy.mockReset();
+    announceSpy.mockClear();
     announceSpy.mockResolvedValue(true);
-    runSubagentEndedHookMock.mockReset();
-    runSubagentEndedHookMock.mockImplementation(async () => {});
-    emitSessionLifecycleEventMock.mockReset();
+    runSubagentEndedHookMock.mockClear();
+    emitSessionLifecycleEventMock.mockClear();
     lifecycleHandler = undefined;
     mod.resetSubagentRegistryForTests({ persist: false });
   });
@@ -281,11 +272,7 @@ describe("subagent registry steer restarts", () => {
         expect(announceSpy).toHaveBeenCalledTimes(1);
       });
       await vi.waitFor(() => {
-        const matchingCalls = runSubagentEndedHookMock.mock.calls.filter((call) => {
-          const ctx = call[1] as { runId?: string } | undefined;
-          return ctx?.runId === "run-new";
-        });
-        expect(matchingCalls).toHaveLength(1);
+        expect(runSubagentEndedHookMock).toHaveBeenCalledTimes(1);
       });
       expect(runSubagentEndedHookMock).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -679,21 +666,10 @@ describe("subagent registry steer restarts", () => {
     });
 
     emitLifecycleEnd("run-parent");
-    await vi.waitFor(() => {
-      const childRunIds = announceSpy.mock.calls.map(
-        (call) => ((call[0] ?? {}) as { childRunId?: string }).childRunId,
-      );
-      expect(childRunIds.filter((id) => id === "run-parent")).toHaveLength(1);
-    });
+    await flushAnnounce();
 
     emitLifecycleEnd("run-child");
-    await vi.waitFor(() => {
-      const childRunIds = announceSpy.mock.calls.map(
-        (call) => ((call[0] ?? {}) as { childRunId?: string }).childRunId,
-      );
-      expect(childRunIds.filter((id) => id === "run-parent")).toHaveLength(2);
-      expect(childRunIds.filter((id) => id === "run-child")).toHaveLength(1);
-    });
+    await flushAnnounce();
 
     const childRunIds = announceSpy.mock.calls.map(
       (call) => ((call[0] ?? {}) as { childRunId?: string }).childRunId,

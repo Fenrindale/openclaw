@@ -1,9 +1,3 @@
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalLowercaseString,
-  normalizeOptionalString,
-} from "./string-coerce.ts";
-
 export type ParsedAgentSessionKey = {
   agentId: string;
   rest: string;
@@ -20,7 +14,7 @@ const TRAILING_DASH_RE = /-+$/;
 export function parseAgentSessionKey(
   sessionKey: string | undefined | null,
 ): ParsedAgentSessionKey | null {
-  const raw = normalizeLowercaseStringOrEmpty(sessionKey);
+  const raw = (sessionKey ?? "").trim().toLowerCase();
   if (!raw) {
     return null;
   }
@@ -28,7 +22,7 @@ export function parseAgentSessionKey(
   if (parts.length < 3 || parts[0] !== "agent") {
     return null;
   }
-  const agentId = normalizeOptionalString(parts[1]);
+  const agentId = parts[1]?.trim();
   const rest = parts.slice(2).join(":");
   if (!agentId || !rest) {
     return null;
@@ -37,19 +31,21 @@ export function parseAgentSessionKey(
 }
 
 export function normalizeMainKey(value: string | undefined | null): string {
-  return normalizeOptionalLowercaseString(value) ?? DEFAULT_MAIN_KEY;
+  const trimmed = (value ?? "").trim();
+  return trimmed ? trimmed.toLowerCase() : DEFAULT_MAIN_KEY;
 }
 
 export function normalizeAgentId(value: string | undefined | null): string {
-  const trimmed = normalizeOptionalString(value) ?? "";
+  const trimmed = (value ?? "").trim();
   if (!trimmed) {
     return DEFAULT_AGENT_ID;
   }
   if (VALID_ID_RE.test(trimmed)) {
-    return normalizeLowercaseStringOrEmpty(trimmed);
+    return trimmed.toLowerCase();
   }
   return (
-    normalizeLowercaseStringOrEmpty(trimmed)
+    trimmed
+      .toLowerCase()
       .replace(INVALID_CHARS_RE, "-")
       .replace(LEADING_DASH_RE, "")
       .replace(TRAILING_DASH_RE, "")
@@ -72,13 +68,13 @@ export function resolveAgentIdFromSessionKey(sessionKey: string | undefined | nu
 }
 
 export function isSubagentSessionKey(sessionKey: string | undefined | null): boolean {
-  const raw = normalizeOptionalString(sessionKey) ?? "";
+  const raw = (sessionKey ?? "").trim();
   if (!raw) {
     return false;
   }
-  if (normalizeLowercaseStringOrEmpty(raw).startsWith("subagent:")) {
+  if (raw.toLowerCase().startsWith("subagent:")) {
     return true;
   }
   const parsed = parseAgentSessionKey(raw);
-  return normalizeLowercaseStringOrEmpty(parsed?.rest).startsWith("subagent:");
+  return Boolean((parsed?.rest ?? "").toLowerCase().startsWith("subagent:"));
 }

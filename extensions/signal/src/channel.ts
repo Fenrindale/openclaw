@@ -18,7 +18,6 @@ import {
   createComputedAccountStatusAdapter,
   createDefaultChannelRuntimeState,
 } from "openclaw/plugin-sdk/status-helpers";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 import { resolveSignalAccount, type ResolvedSignalAccount } from "./accounts.js";
 import { signalApprovalAuth } from "./approval-auth.js";
 import { markdownToSignalTextChunks } from "./format.js";
@@ -104,7 +103,7 @@ function inferSignalTargetChatType(rawTo: string) {
   if (!to) {
     return undefined;
   }
-  const lower = normalizeLowercaseStringOrEmpty(to);
+  const lower = to.toLowerCase();
   if (lower.startsWith("group:")) {
     return "group" as const;
   }
@@ -249,7 +248,7 @@ export const signalPlugin: ChannelPlugin<ResolvedSignalAccount, SignalProbe> =
         setup: signalSetupAdapter,
       }),
       actions: signalMessageActions,
-      approvalCapability: signalApprovalAuth,
+      auth: signalApprovalAuth,
       allowlist: buildDmGroupAccountAllowlistAdapter({
         channelId: "signal",
         resolveAccount: resolveSignalAccount,

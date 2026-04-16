@@ -1,4 +1,3 @@
-import { formatErrorMessage } from "openclaw/plugin-sdk/error-runtime";
 import { normalizeResolvedSecretInputString } from "openclaw/plugin-sdk/secret-input";
 import type {
   SpeechDirectiveTokenParseContext,
@@ -17,7 +16,6 @@ import {
   requireInRange,
   trimToUndefined,
 } from "openclaw/plugin-sdk/speech";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 import { resolveElevenLabsApiKeyWithProfileFallback } from "./config-api.js";
 import { isValidElevenLabsVoiceId, normalizeElevenLabsBaseUrl } from "./shared.js";
 import { elevenLabsTTS } from "./tts.js";
@@ -55,7 +53,7 @@ type ElevenLabsProviderConfig = {
 };
 
 function parseBooleanValue(value: string): boolean | undefined {
-  const normalized = normalizeLowercaseStringOrEmpty(value);
+  const normalized = value.trim().toLowerCase();
   if (["true", "1", "yes", "on"].includes(normalized)) {
     return true;
   }
@@ -283,7 +281,7 @@ function parseDirectiveToken(ctx: SpeechDirectiveTokenParseContext) {
   } catch (error) {
     return {
       handled: true,
-      warnings: [formatErrorMessage(error)],
+      warnings: [error instanceof Error ? error.message : String(error)],
     };
   }
 }
@@ -312,9 +310,9 @@ export async function listElevenLabsVoices(params: {
     ? json.voices
         .map((voice) => ({
           id: voice.voice_id?.trim() ?? "",
-          name: trimToUndefined(voice.name),
-          category: trimToUndefined(voice.category),
-          description: trimToUndefined(voice.description),
+          name: voice.name?.trim() || undefined,
+          category: voice.category?.trim() || undefined,
+          description: voice.description?.trim() || undefined,
         }))
         .filter((voice) => voice.id.length > 0)
     : [];
@@ -387,7 +385,7 @@ export function buildElevenLabsSpeechProvider(): SpeechProviderPlugin {
     },
     resolveTalkOverrides: ({ params }) => {
       const normalize = trimToUndefined(params.normalize);
-      const language = normalizeLowercaseStringOrEmpty(trimToUndefined(params.language));
+      const language = trimToUndefined(params.language)?.toLowerCase();
       const latencyTier = asFiniteNumber(params.latencyTier);
       const voiceSettings = {
         ...(asFiniteNumber(params.speed) == null ? {} : { speed: asFiniteNumber(params.speed) }),

@@ -1,4 +1,3 @@
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 import { normalizeExecutableToken } from "./exec-wrapper-resolution.js";
 
 export type InterpreterInlineEvalHit = {
@@ -218,7 +217,7 @@ export function detectInterpreterInlineEvalArgv(
       if (rawPrefixFlag) {
         return createInlineEvalHit(executable, argv, rawPrefixFlag.label);
       }
-      const lower = normalizeLowercaseStringOrEmpty(token);
+      const lower = token.toLowerCase();
       if (spec.exactFlags.has(lower)) {
         return createInlineEvalHit(executable, argv, lower);
       }
@@ -292,7 +291,7 @@ export function describeInterpreterInlineEval(hit: InterpreterInlineEvalHit): st
 }
 
 export function isInterpreterLikeAllowlistPattern(pattern: string | undefined | null): boolean {
-  const trimmed = normalizeLowercaseStringOrEmpty(pattern);
+  const trimmed = pattern?.trim().toLowerCase() ?? "";
   if (!trimmed) {
     return false;
   }

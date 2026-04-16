@@ -12,7 +12,6 @@ import {
   text,
 } from "@clack/prompts";
 import { createCliProgress } from "../cli/progress.js";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 import { stripAnsi } from "../terminal/ansi.js";
 import { note as emitNote } from "../terminal/note.js";
 import { stylePromptHint, stylePromptMessage, stylePromptTitle } from "../terminal/prompt-style.js";
@@ -29,7 +28,8 @@ function guardCancel<T>(value: T | symbol): T {
 }
 
 function normalizeSearchTokens(search: string): string[] {
-  return normalizeLowercaseStringOrEmpty(search)
+  return search
+    .toLowerCase()
     .split(/\s+/)
     .map((token) => token.trim())
     .filter((token) => token.length > 0);
@@ -39,7 +39,7 @@ function buildOptionSearchText<T>(option: Option<T>): string {
   const label = stripAnsi(option.label ?? "");
   const hint = stripAnsi(option.hint ?? "");
   const value = String(option.value ?? "");
-  return normalizeLowercaseStringOrEmpty(`${label} ${hint} ${value}`);
+  return `${label} ${hint} ${value}`.toLowerCase();
 }
 
 export function tokenizedOptionFilter<T>(search: string, option: Option<T>): boolean {

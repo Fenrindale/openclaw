@@ -1,5 +1,4 @@
 import type { CronSchedule } from "../../cron/types.js";
-import { normalizeOptionalString } from "../../shared/string-coerce.js";
 import { parseAt, parseCronStaggerMs, parseDurationMs } from "./shared.js";
 
 type ScheduleOptionInput = {
@@ -75,16 +74,16 @@ export function applyExistingCronSchedulePatch(
 }
 
 function normalizeScheduleOptions(options: ScheduleOptionInput): NormalizedScheduleOptions {
-  const staggerRaw = normalizeOptionalString(options.stagger) ?? "";
+  const staggerRaw = readTrimmedString(options.stagger);
   const useExact = Boolean(options.exact);
   if (staggerRaw && useExact) {
     throw new Error("Choose either --stagger or --exact, not both");
   }
   return {
-    at: normalizeOptionalString(options.at) ?? "",
-    every: normalizeOptionalString(options.every) ?? "",
-    cronExpr: normalizeOptionalString(options.cron) ?? "",
-    tz: normalizeOptionalString(options.tz),
+    at: readTrimmedString(options.at),
+    every: readTrimmedString(options.every),
+    cronExpr: readTrimmedString(options.cron),
+    tz: readOptionalString(options.tz),
     requestedStaggerMs: parseCronStaggerMs({ staggerRaw, useExact }),
   };
 }
@@ -124,4 +123,13 @@ function resolveDirectSchedule(options: NormalizedScheduleOptions): CronSchedule
     };
   }
   return undefined;
+}
+
+function readOptionalString(value: unknown): string | undefined {
+  const trimmed = readTrimmedString(value);
+  return trimmed || undefined;
+}
+
+function readTrimmedString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }

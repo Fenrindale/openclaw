@@ -6,21 +6,6 @@ export type QaBusConversation = {
   title?: string;
 };
 
-export type QaBusAttachment = {
-  id: string;
-  kind: "image" | "video" | "audio" | "file";
-  mimeType: string;
-  fileName?: string;
-  inline?: boolean;
-  url?: string;
-  contentBase64?: string;
-  width?: number;
-  height?: number;
-  durationMs?: number;
-  altText?: string;
-  transcript?: string;
-};
-
 export type QaBusMessage = {
   id: string;
   accountId: string;
@@ -35,7 +20,6 @@ export type QaBusMessage = {
   replyToId?: string;
   deleted?: boolean;
   editedAt?: number;
-  attachments?: QaBusAttachment[];
   reactions: Array<{
     emoji: string;
     senderId: string;
@@ -102,7 +86,6 @@ export type QaBusInboundMessageInput = {
   threadId?: string;
   threadTitle?: string;
   replyToId?: string;
-  attachments?: QaBusAttachment[];
 };
 
 export type QaBusOutboundMessageInput = {
@@ -114,7 +97,6 @@ export type QaBusOutboundMessageInput = {
   timestamp?: number;
   threadId?: string;
   replyToId?: string;
-  attachments?: QaBusAttachment[];
 };
 
 export type QaBusCreateThreadInput = {

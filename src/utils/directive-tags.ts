@@ -1,5 +1,3 @@
-import { normalizeOptionalString } from "../shared/string-coerce.js";
-
 export type InlineDirectiveParseResult = {
   text: string;
   audioAsVoice: boolean;
@@ -187,7 +185,7 @@ export function parseInlineDirectives(
   cleaned = normalizeDirectiveWhitespace(cleaned);
 
   const replyToId =
-    lastExplicitId ?? (sawCurrent ? normalizeOptionalString(currentMessageId) : undefined);
+    lastExplicitId ?? (sawCurrent ? currentMessageId?.trim() || undefined : undefined);
 
   return {
     text: cleaned,

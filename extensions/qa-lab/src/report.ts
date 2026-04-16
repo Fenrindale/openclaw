@@ -11,15 +11,6 @@ export type QaReportScenario = {
   steps?: QaReportCheck[];
 };
 
-function pushDetailsBlock(lines: string[], label: string, details: string, indent = "") {
-  if (!details.includes("\n")) {
-    lines.push(`${indent}- ${label}: ${details}`);
-    return;
-  }
-  lines.push(`${indent}- ${label}:`);
-  lines.push("", "```text", details, "```");
-}
-
 export function renderQaMarkdownReport(params: {
   title: string;
   startedAt: Date;
@@ -54,7 +45,7 @@ export function renderQaMarkdownReport(params: {
     for (const check of checks) {
       lines.push(`- [${check.status === "pass" ? "x" : " "}] ${check.name}`);
       if (check.details) {
-        pushDetailsBlock(lines, "Details", check.details, "  ");
+        lines.push(`  - ${check.details}`);
       }
     }
   }
@@ -66,14 +57,14 @@ export function renderQaMarkdownReport(params: {
       lines.push("");
       lines.push(`- Status: ${scenario.status}`);
       if (scenario.details) {
-        pushDetailsBlock(lines, "Details", scenario.details);
+        lines.push(`- Details: ${scenario.details}`);
       }
       if (scenario.steps?.length) {
         lines.push("- Steps:");
         for (const step of scenario.steps) {
           lines.push(`  - [${step.status === "pass" ? "x" : " "}] ${step.name}`);
           if (step.details) {
-            pushDetailsBlock(lines, "Details", step.details, "    ");
+            lines.push(`    - ${step.details}`);
           }
         }
       }

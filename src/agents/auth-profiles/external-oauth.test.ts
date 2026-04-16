@@ -1,15 +1,21 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProviderExternalAuthProfile } from "../../plugins/types.js";
-import {
-  __testing,
-  overlayExternalOAuthProfiles,
-  shouldPersistExternalOAuthProfile,
-} from "./external-auth.js";
 import type { AuthProfileStore, OAuthCredential } from "./types.js";
 
 const resolveExternalAuthProfilesWithPluginsMock = vi.fn<
   (params: unknown) => ProviderExternalAuthProfile[]
 >(() => []);
+
+vi.mock("../../plugins/provider-runtime.js", async () => {
+  const actual = await vi.importActual<typeof import("../../plugins/provider-runtime.js")>(
+    "../../plugins/provider-runtime.js",
+  );
+  return {
+    ...actual,
+    resolveExternalAuthProfilesWithPlugins: (params: unknown) =>
+      resolveExternalAuthProfilesWithPluginsMock(params),
+  };
+});
 
 function createStore(profiles: AuthProfileStore["profiles"] = {}): AuthProfileStore {
   return { version: 1, profiles };
@@ -29,15 +35,9 @@ function createCredential(overrides: Partial<OAuthCredential> = {}): OAuthCreden
 describe("auth external oauth helpers", () => {
   beforeEach(() => {
     resolveExternalAuthProfilesWithPluginsMock.mockReset();
-    resolveExternalAuthProfilesWithPluginsMock.mockReturnValue([]);
-    __testing.setResolveExternalAuthProfilesForTest(resolveExternalAuthProfilesWithPluginsMock);
   });
 
-  afterEach(() => {
-    __testing.resetResolveExternalAuthProfilesForTest();
-  });
-
-  it("overlays provider-managed runtime oauth profiles onto the store", () => {
+  it("overlays provider-managed runtime oauth profiles onto the store", async () => {
     resolveExternalAuthProfilesWithPluginsMock.mockReturnValueOnce([
       {
         profileId: "openai-codex:default",
@@ -45,6 +45,7 @@ describe("auth external oauth helpers", () => {
       },
     ]);
 
+    const { overlayExternalOAuthProfiles } = await import("./external-auth.js");
     const store = overlayExternalOAuthProfiles(createStore());
 
     expect(store.profiles["openai-codex:default"]).toMatchObject({
@@ -54,7 +55,7 @@ describe("auth external oauth helpers", () => {
     });
   });
 
-  it("omits exact runtime-only overlays from persisted store writes", () => {
+  it("omits exact runtime-only overlays from persisted store writes", async () => {
     const credential = createCredential();
     resolveExternalAuthProfilesWithPluginsMock.mockReturnValueOnce([
       {
@@ -63,6 +64,7 @@ describe("auth external oauth helpers", () => {
       },
     ]);
 
+    const { shouldPersistExternalOAuthProfile } = await import("./external-auth.js");
     const shouldPersist = shouldPersistExternalOAuthProfile({
       store: createStore({ "openai-codex:default": credential }),
       profileId: "openai-codex:default",
@@ -72,7 +74,7 @@ describe("auth external oauth helpers", () => {
     expect(shouldPersist).toBe(false);
   });
 
-  it("keeps persisted copies when the external overlay is marked persisted", () => {
+  it("keeps persisted copies when the external overlay is marked persisted", async () => {
     const credential = createCredential();
     resolveExternalAuthProfilesWithPluginsMock.mockReturnValueOnce([
       {
@@ -82,6 +84,7 @@ describe("auth external oauth helpers", () => {
       },
     ]);
 
+    const { shouldPersistExternalOAuthProfile } = await import("./external-auth.js");
     const shouldPersist = shouldPersistExternalOAuthProfile({
       store: createStore({ "openai-codex:default": credential }),
       profileId: "openai-codex:default",
@@ -91,7 +94,7 @@ describe("auth external oauth helpers", () => {
     expect(shouldPersist).toBe(true);
   });
 
-  it("keeps stale local copies when runtime overlay no longer matches", () => {
+  it("keeps stale local copies when runtime overlay no longer matches", async () => {
     const credential = createCredential();
     resolveExternalAuthProfilesWithPluginsMock.mockReturnValueOnce([
       {
@@ -100,6 +103,7 @@ describe("auth external oauth helpers", () => {
       },
     ]);
 
+    const { shouldPersistExternalOAuthProfile } = await import("./external-auth.js");
     const shouldPersist = shouldPersistExternalOAuthProfile({
       store: createStore({ "openai-codex:default": credential }),
       profileId: "openai-codex:default",

@@ -1,17 +1,20 @@
-import type { OpenClawConfig } from "../config/types.openclaw.js";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
+import type { OpenClawConfig } from "../config/config.js";
 
 const DIAGNOSTICS_ENV = "OPENCLAW_DIAGNOSTICS";
+
+function normalizeFlag(value: string): string {
+  return value.trim().toLowerCase();
+}
 
 function parseEnvFlags(raw?: string): string[] {
   if (!raw) {
     return [];
   }
   const trimmed = raw.trim();
-  const lowered = normalizeLowercaseStringOrEmpty(trimmed);
-  if (!lowered) {
+  if (!trimmed) {
     return [];
   }
+  const lowered = trimmed.toLowerCase();
   if (["0", "false", "off", "none"].includes(lowered)) {
     return [];
   }
@@ -20,7 +23,7 @@ function parseEnvFlags(raw?: string): string[] {
   }
   return trimmed
     .split(/[,\s]+/)
-    .map((value) => normalizeLowercaseStringOrEmpty(value))
+    .map(normalizeFlag)
     .filter(Boolean);
 }
 
@@ -28,7 +31,7 @@ function uniqueFlags(flags: string[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const flag of flags) {
-    const normalized = normalizeLowercaseStringOrEmpty(flag);
+    const normalized = normalizeFlag(flag);
     if (!normalized || seen.has(normalized)) {
       continue;
     }
@@ -48,12 +51,12 @@ export function resolveDiagnosticFlags(
 }
 
 export function matchesDiagnosticFlag(flag: string, enabledFlags: string[]): boolean {
-  const target = normalizeLowercaseStringOrEmpty(flag);
+  const target = normalizeFlag(flag);
   if (!target) {
     return false;
   }
   for (const raw of enabledFlags) {
-    const enabled = normalizeLowercaseStringOrEmpty(raw);
+    const enabled = normalizeFlag(raw);
     if (!enabled) {
       continue;
     }

@@ -376,7 +376,7 @@ private struct ConnectionStatusBox: View {
         gatewayController: GatewayConnectionController
     ) -> [String] {
         var lines: [String] = [
-            "gateway: \(appModel.gatewayDisplayStatusText)",
+            "gateway: \(appModel.gatewayStatusText)",
             "discovery: \(gatewayController.discoveryStatusText)",
         ]
         lines.append("server: \(appModel.gatewayServerName ?? "—")")

@@ -7,7 +7,6 @@
 
 // Extensions cannot import core internals directly, so use node:crypto here.
 import { randomBytes } from "node:crypto";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 import type { PendingApproval } from "../settings.js";
 
 export type { PendingApproval };
@@ -92,7 +91,6 @@ export function formatApprovalRequest(approval: PendingApproval): string {
         `(ID: ${approval.id})`
       );
   }
-  throw new Error("Unsupported approval type");
 }
 
 export type ApprovalResponse = {
@@ -108,7 +106,7 @@ export type ApprovalResponse = {
  *   - "block" permanently blocks the ship via Tlon's native blocking
  */
 export function parseApprovalResponse(text: string): ApprovalResponse | null {
-  const trimmed = normalizeLowercaseStringOrEmpty(text);
+  const trimmed = text.trim().toLowerCase();
 
   // Match "approve", "deny", or "block" optionally followed by an ID
   const match = trimmed.match(/^(approve|deny|block)(?:\s+(.+))?$/);
@@ -127,7 +125,7 @@ export function parseApprovalResponse(text: string): ApprovalResponse | null {
  * Used to determine if we should intercept the message before normal processing.
  */
 export function isApprovalResponse(text: string): boolean {
-  const trimmed = normalizeLowercaseStringOrEmpty(text);
+  const trimmed = text.trim().toLowerCase();
   return trimmed.startsWith("approve") || trimmed.startsWith("deny") || trimmed.startsWith("block");
 }
 
@@ -212,7 +210,6 @@ export function formatApprovalConfirmation(
       }
       return `${actionText} group invite from ${approval.requestingShip} to ${approval.groupFlag}.`;
   }
-  throw new Error("Unsupported approval type");
 }
 
 // ============================================================================
@@ -232,7 +229,7 @@ export type AdminCommand =
  *   - "pending" - list all pending approvals
  */
 export function parseAdminCommand(text: string): AdminCommand | null {
-  const trimmed = normalizeLowercaseStringOrEmpty(text);
+  const trimmed = text.trim().toLowerCase();
 
   // "blocked" - list blocked ships
   if (trimmed === "blocked") {

@@ -1,11 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { ReplyPayload } from "../../auto-reply/reply-payload.js";
-import { assertLocalMediaAllowed, LocalMediaAccessError } from "../../media/local-media-access.js";
-import { assertNoWindowsNetworkPath, safeFileURLToPath } from "../../infra/local-file-access.js";
+import { fileURLToPath } from "node:url";
+import type { ReplyPayload } from "../../auto-reply/types.js";
 import { isAudioFileName } from "../../media/mime.js";
 import { resolveSendableOutboundReplyParts } from "../../plugin-sdk/reply-payload.js";
-import { normalizeLowercaseStringOrEmpty } from "../../shared/string-coerce.js";
 
 /** Cap embedded audio size to avoid multi‑MB payloads on the chat WebSocket. */
 const MAX_WEBCHAT_AUDIO_BYTES = 15 * 1024 * 1024;
@@ -19,11 +17,6 @@ const MIME_BY_EXT: Record<string, string> = {
   ".opus": "audio/opus",
   ".wav": "audio/wav",
   ".webm": "audio/webm",
-};
-
-type WebchatAudioEmbeddingOptions = {
-  localRoots?: readonly string[];
-  onLocalAudioAccessDenied?: (err: LocalMediaAccessError) => void;
 };
 
 /** Map `mediaUrl` strings to an absolute filesystem path for local embedding (plain paths or `file:` URLs). */
@@ -40,7 +33,7 @@ function resolveLocalMediaPathForEmbedding(raw: string): string | null {
   }
   if (trimmed.startsWith("file:")) {
     try {
-      const p = safeFileURLToPath(trimmed);
+      const p = fileURLToPath(trimmed);
       if (!path.isAbsolute(p)) {
         return null;
       }
@@ -52,19 +45,11 @@ function resolveLocalMediaPathForEmbedding(raw: string): string | null {
   if (!path.isAbsolute(trimmed)) {
     return null;
   }
-  try {
-    assertNoWindowsNetworkPath(trimmed, "Local media path");
-  } catch {
-    return null;
-  }
   return trimmed;
 }
 
 /** Returns a readable local file path when it is a regular file and within the size cap (single stat before read). */
-async function resolveLocalAudioFileForEmbedding(
-  raw: string,
-  options: WebchatAudioEmbeddingOptions | undefined,
-): Promise<string | null> {
+function resolveLocalAudioFileForEmbedding(raw: string): string | null {
   const resolved = resolveLocalMediaPathForEmbedding(raw);
   if (!resolved) {
     return null;
@@ -73,22 +58,18 @@ async function resolveLocalAudioFileForEmbedding(
     return null;
   }
   try {
-    await assertLocalMediaAllowed(resolved, options?.localRoots);
     const st = fs.statSync(resolved);
     if (!st.isFile() || st.size > MAX_WEBCHAT_AUDIO_BYTES) {
       return null;
     }
     return resolved;
-  } catch (err) {
-    if (err instanceof LocalMediaAccessError) {
-      options?.onLocalAudioAccessDenied?.(err);
-    }
+  } catch {
     return null;
   }
 }
 
 function mimeTypeForPath(filePath: string): string {
-  const ext = normalizeLowercaseStringOrEmpty(path.extname(filePath));
+  const ext = path.extname(filePath).toLowerCase();
   return MIME_BY_EXT[ext] ?? "audio/mpeg";
 }
 
@@ -96,10 +77,9 @@ function mimeTypeForPath(filePath: string): string {
  * Build Control UI / transcript `content` blocks for local TTS (or other) audio files
  * referenced by slash-command / agent replies when the webchat path only had text aggregation.
  */
-export async function buildWebchatAudioContentBlocksFromReplyPayloads(
+export function buildWebchatAudioContentBlocksFromReplyPayloads(
   payloads: ReplyPayload[],
-  options?: WebchatAudioEmbeddingOptions,
-): Promise<Array<Record<string, unknown>>> {
+): Array<Record<string, unknown>> {
   const seen = new Set<string>();
   const blocks: Array<Record<string, unknown>> = [];
   for (const payload of payloads) {
@@ -109,7 +89,7 @@ export async function buildWebchatAudioContentBlocksFromReplyPayloads(
       if (!url) {
         continue;
       }
-      const resolved = await resolveLocalAudioFileForEmbedding(url, options);
+      const resolved = resolveLocalAudioFileForEmbedding(url);
       if (!resolved || seen.has(resolved)) {
         continue;
       }

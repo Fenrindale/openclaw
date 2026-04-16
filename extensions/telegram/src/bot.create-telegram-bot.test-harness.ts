@@ -1,9 +1,11 @@
+import { resolveDefaultModelForAgent } from "openclaw/plugin-sdk/agent-runtime";
 import type { OpenClawConfig } from "openclaw/plugin-sdk/config-runtime";
 import {
   createReplyDispatcher,
   resetInboundDedupe,
   type GetReplyOptions,
   type MsgContext,
+  type ReplyPayload,
 } from "openclaw/plugin-sdk/reply-runtime";
 import type { MockFn } from "openclaw/plugin-sdk/testing";
 import { beforeEach, vi } from "vitest";
@@ -24,12 +26,6 @@ type DispatchReplyWithBufferedBlockDispatcherResult = Awaited<
   ReturnType<DispatchReplyWithBufferedBlockDispatcherFn>
 >;
 type DispatchReplyHarnessParams = Parameters<DispatchReplyWithBufferedBlockDispatcherFn>[0];
-type ReplyPayloadLike = {
-  text?: string;
-  mediaUrl?: string;
-  mediaUrls?: string[];
-  replyToId?: string;
-};
 
 const _EMPTY_REPLY_COUNTS: DispatchReplyWithBufferedBlockDispatcherResult["counts"] = {
   block: 0,
@@ -50,6 +46,9 @@ export function getLoadWebMediaMock(): AnyMock {
 }
 
 vi.mock("openclaw/plugin-sdk/web-media", () => ({
+  loadWebMedia,
+}));
+vi.mock("openclaw/plugin-sdk/web-media.js", () => ({
   loadWebMedia,
 }));
 
@@ -119,7 +118,7 @@ const replySpyHoisted = vi.hoisted(() => ({
       ctx: MsgContext,
       opts?: GetReplyOptions,
       configOverride?: OpenClawConfig,
-    ) => Promise<ReplyPayloadLike | ReplyPayloadLike[] | undefined>
+    ) => Promise<ReplyPayload | ReplyPayload[] | undefined>
   >,
 }));
 
@@ -127,11 +126,11 @@ async function dispatchHarnessReplies(
   params: DispatchReplyHarnessParams,
   runReply: (
     params: DispatchReplyHarnessParams,
-  ) => Promise<ReplyPayloadLike | ReplyPayloadLike[] | undefined>,
+  ) => Promise<ReplyPayload | ReplyPayload[] | undefined>,
 ): Promise<DispatchReplyWithBufferedBlockDispatcherResult> {
   await params.dispatcherOptions.typingCallbacks?.onReplyStart?.();
   const reply = await runReply(params);
-  const payloads: ReplyPayloadLike[] =
+  const payloads: ReplyPayload[] =
     reply === undefined ? [] : Array.isArray(reply) ? reply : [reply];
   const dispatcher = createReplyDispatcher({
     deliver: async (payload, info) => {
@@ -201,25 +200,6 @@ function parseModelRef(raw: string): { provider?: string; model: string } {
   return { model: trimmed };
 }
 
-function normalizeLowercaseStringOrEmptyForTest(value: string | undefined): string {
-  return value?.trim().toLowerCase() ?? "";
-}
-
-function resolveDefaultModelForAgentForTest(params: { cfg: OpenClawConfig }): {
-  provider: string;
-  model: string;
-} {
-  const modelConfig = params.cfg.agents?.defaults?.model;
-  const rawModel =
-    typeof modelConfig === "string" ? modelConfig : (modelConfig?.primary ?? "openai/gpt-5.4");
-  const parsed = parseModelRef(rawModel);
-  const provider = normalizeLowercaseStringOrEmptyForTest(parsed.provider) || "openai";
-  return {
-    provider: provider === "bedrock" ? "amazon-bedrock" : provider,
-    model: parsed.model || "gpt-5.4",
-  };
-}
-
 function createModelsProviderDataFromConfig(cfg: OpenClawConfig): {
   byProvider: Map<string, Set<string>>;
   providers: string[];
@@ -228,7 +208,7 @@ function createModelsProviderDataFromConfig(cfg: OpenClawConfig): {
 } {
   const byProvider = new Map<string, Set<string>>();
   const add = (providerRaw: string | undefined, modelRaw: string | undefined) => {
-    const provider = normalizeLowercaseStringOrEmptyForTest(providerRaw);
+    const provider = providerRaw?.trim().toLowerCase();
     const model = modelRaw?.trim();
     if (!provider || !model) {
       return;
@@ -238,7 +218,7 @@ function createModelsProviderDataFromConfig(cfg: OpenClawConfig): {
     byProvider.set(provider, existing);
   };
 
-  const resolvedDefault = resolveDefaultModelForAgentForTest({ cfg });
+  const resolvedDefault = resolveDefaultModelForAgent({ cfg });
   add(resolvedDefault.provider, resolvedDefault.model);
 
   for (const raw of Object.keys(cfg.agents?.defaults?.models ?? {})) {

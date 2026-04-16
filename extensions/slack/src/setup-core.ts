@@ -16,10 +16,6 @@ import {
   type OpenClawConfig,
 } from "openclaw/plugin-sdk/setup-runtime";
 import { formatDocsLink } from "openclaw/plugin-sdk/setup-tools";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-} from "openclaw/plugin-sdk/text-runtime";
 import { inspectSlackAccount } from "./account-inspect.js";
 import { resolveSlackAccount } from "./accounts.js";
 import {
@@ -42,7 +38,7 @@ function hasSlackInteractiveRepliesConfig(cfg: OpenClawConfig, accountId: string
   const capabilities = resolveSlackAccount({ cfg, accountId }).config.capabilities;
   if (Array.isArray(capabilities)) {
     return capabilities.some(
-      (entry) => normalizeLowercaseStringOrEmpty(entry) === "interactivereplies",
+      (entry) => String(entry).trim().toLowerCase() === "interactivereplies",
     );
   }
   if (!capabilities || typeof capabilities !== "object") {
@@ -60,9 +56,7 @@ function setSlackInteractiveReplies(
   const nextCapabilities = Array.isArray(capabilities)
     ? interactiveReplies
       ? [...new Set([...capabilities, "interactiveReplies"])]
-      : capabilities.filter(
-          (entry) => normalizeLowercaseStringOrEmpty(entry) !== "interactivereplies",
-        )
+      : capabilities.filter((entry) => String(entry).trim().toLowerCase() !== "interactivereplies")
     : {
         ...((capabilities && typeof capabilities === "object" ? capabilities : {}) as Record<
           string,
@@ -103,10 +97,10 @@ function createSlackTokenCredential(params: {
       return {
         accountConfigured: Boolean(resolvedValue) || hasConfiguredSecretInput(configuredValue),
         hasConfiguredValue: hasConfiguredSecretInput(configuredValue),
-        resolvedValue: normalizeOptionalString(resolvedValue),
+        resolvedValue: resolvedValue?.trim() || undefined,
         envValue:
           accountId === DEFAULT_ACCOUNT_ID
-            ? normalizeOptionalString(process.env[params.preferredEnvVar])
+            ? process.env[params.preferredEnvVar]?.trim()
             : undefined,
       };
     },
@@ -257,7 +251,7 @@ export function createSlackSetupWizardBase(handlers: {
     }),
     finalize: async ({ cfg, accountId, options, prompter }) => {
       if (hasSlackInteractiveRepliesConfig(cfg, accountId)) {
-        return undefined;
+        return;
       }
       if (options?.quickstartDefaults) {
         return {

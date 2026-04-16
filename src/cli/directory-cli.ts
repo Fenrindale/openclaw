@@ -7,10 +7,6 @@ import { applyPluginAutoEnable } from "../config/plugin-auto-enable.js";
 import { danger } from "../globals.js";
 import { resolveMessageChannelSelection } from "../infra/outbound/channel-selection.js";
 import { defaultRuntime } from "../runtime.js";
-import {
-  normalizeOptionalString,
-  normalizeStringifiedOptionalString,
-} from "../shared/string-coerce.js";
 import { formatDocsLink } from "../terminal/links.js";
 import { getTerminalTableWidth, renderTable } from "../terminal/table.js";
 import { theme } from "../terminal/theme.js";
@@ -26,7 +22,7 @@ function parseLimit(value: unknown): number | null {
   if (typeof value !== "string") {
     return null;
   }
-  const raw = normalizeOptionalString(value) ?? "";
+  const raw = value.trim();
   if (!raw) {
     return null;
   }
@@ -40,7 +36,7 @@ function parseLimit(value: unknown): number | null {
 function buildRows(entries: Array<{ id: string; name?: string | undefined }>) {
   return entries.map((entry) => ({
     ID: entry.id,
-    Name: normalizeOptionalString(entry.name) ?? "",
+    Name: entry.name?.trim() ?? "",
   }));
 }
 
@@ -144,8 +140,7 @@ export function registerDirectoryCli(program: Command) {
     if (!plugin) {
       throw new Error(`Unsupported channel: ${String(channelId)}`);
     }
-    const accountId =
-      normalizeOptionalString(opts.account) || resolveChannelDefaultAccountId({ plugin, cfg });
+    const accountId = opts.account?.trim() || resolveChannelDefaultAccountId({ plugin, cfg });
     return { cfg, channelId, accountId, plugin };
   };
 
@@ -279,7 +274,7 @@ export function registerDirectoryCli(program: Command) {
         if (!fn) {
           throw new Error(`Channel ${channelId} does not support group members listing`);
         }
-        const groupId = normalizeStringifiedOptionalString(opts.groupId) ?? "";
+        const groupId = String(opts.groupId ?? "").trim();
         if (!groupId) {
           throw new Error("Missing --group-id");
         }

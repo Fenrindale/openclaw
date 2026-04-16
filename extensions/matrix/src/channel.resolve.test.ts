@@ -3,13 +3,11 @@ import { createNonExitingRuntimeEnv } from "../../../test/helpers/plugins/runtim
 
 const resolveMatrixTargetsMock = vi.hoisted(() => vi.fn(async () => []));
 
-vi.mock("./resolver.runtime.js", () => ({
-  matrixResolverRuntime: {
-    resolveMatrixTargets: resolveMatrixTargetsMock,
-  },
+vi.mock("./resolve-targets.js", () => ({
+  resolveMatrixTargets: resolveMatrixTargetsMock,
 }));
 
-import { matrixResolverAdapter } from "./resolver.js";
+import { matrixPlugin } from "./channel.js";
 
 describe("matrix resolver adapter", () => {
   beforeEach(() => {
@@ -17,7 +15,7 @@ describe("matrix resolver adapter", () => {
   });
 
   it("forwards accountId into Matrix target resolution", async () => {
-    await matrixResolverAdapter.resolveTargets({
+    await matrixPlugin.resolver?.resolveTargets({
       cfg: { channels: { matrix: {} } },
       accountId: "ops",
       inputs: ["Alice"],

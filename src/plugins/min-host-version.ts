@@ -9,8 +9,6 @@ export type MinHostVersionRequirement = {
   minimumLabel: string;
 };
 
-import { normalizeOptionalString } from "../shared/string-coerce.js";
-
 export type MinHostVersionCheckResult =
   | { ok: true; requirement: MinHostVersionRequirement | null }
   | { ok: false; kind: "invalid"; error: string }
@@ -62,7 +60,7 @@ export function checkMinHostVersion(params: {
   if (!requirement) {
     return { ok: false, kind: "invalid", error: MIN_HOST_VERSION_FORMAT };
   }
-  const currentVersion = normalizeOptionalString(params.currentVersion) || "unknown";
+  const currentVersion = params.currentVersion?.trim() || "unknown";
   const currentSemver = parseSemver(currentVersion);
   if (!currentSemver) {
     return {

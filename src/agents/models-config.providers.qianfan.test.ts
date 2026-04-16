@@ -1,41 +1,18 @@
-import { beforeAll, describe, expect, it, vi } from "vitest";
-
-vi.unmock("../plugins/manifest-registry.js");
-vi.unmock("../plugins/provider-runtime.js");
-vi.unmock("../plugins/provider-runtime.runtime.js");
-vi.unmock("../secrets/provider-env-vars.js");
-
-async function resetProviderRuntimeState() {
-  const [
-    { clearPluginManifestRegistryCache },
-    { resetProviderRuntimeHookCacheForTest },
-    { resetPluginLoaderTestStateForTest },
-  ] = await Promise.all([
-    import("../plugins/manifest-registry.js"),
-    import("../plugins/provider-runtime.js"),
-    import("../plugins/loader.test-fixtures.js"),
-  ]);
-  resetPluginLoaderTestStateForTest();
-  clearPluginManifestRegistryCache();
-  resetProviderRuntimeHookCacheForTest();
-}
-
-let createProviderAuthResolver: typeof import("./models-config.providers.secrets.js").createProviderAuthResolver;
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 async function loadSecretsModule() {
   vi.doUnmock("../plugins/manifest-registry.js");
-  vi.doUnmock("../plugins/provider-runtime.js");
-  vi.doUnmock("../plugins/provider-runtime.runtime.js");
-  vi.doUnmock("../secrets/provider-env-vars.js");
   vi.resetModules();
-  await resetProviderRuntimeState();
-  ({ createProviderAuthResolver } = await import("./models-config.providers.secrets.js"));
+  return import("./models-config.providers.secrets.js");
 }
 
-beforeAll(loadSecretsModule);
+beforeEach(() => {
+  vi.doUnmock("../plugins/manifest-registry.js");
+});
 
 describe("Qianfan provider", () => {
-  it("resolves QIANFAN_API_KEY markers through provider auth lookup", () => {
+  it("resolves QIANFAN_API_KEY markers through provider auth lookup", async () => {
+    const { createProviderAuthResolver } = await loadSecretsModule();
     const resolveAuth = createProviderAuthResolver(
       {
         QIANFAN_API_KEY: "test-key", // pragma: allowlist secret

@@ -3,7 +3,7 @@ import type { LobsterRunner } from "./lobster-runner.js";
 import { resumeManagedLobsterFlow, runManagedLobsterFlow } from "./lobster-taskflow.js";
 import { createFakeTaskFlow } from "./taskflow-test-helpers.js";
 
-function expectManagedFlowFailure(
+function _expectManagedFlowFailure(
   result: Awaited<ReturnType<typeof runManagedLobsterFlow | typeof resumeManagedLobsterFlow>>,
 ) {
   expect(result.ok).toBe(false);
@@ -18,45 +18,6 @@ function createRunner(result: Awaited<ReturnType<LobsterRunner["run"]>>): Lobste
   };
 }
 
-function createRunFlowParams(
-  taskFlow: ReturnType<typeof createFakeTaskFlow>,
-  runner: LobsterRunner,
-): Parameters<typeof runManagedLobsterFlow>[0] {
-  return {
-    taskFlow,
-    runner,
-    runnerParams: {
-      action: "run",
-      pipeline: "noop",
-      cwd: process.cwd(),
-      timeoutMs: 1000,
-      maxStdoutBytes: 4096,
-    },
-    controllerId: "tests/lobster",
-    goal: "Run Lobster workflow",
-  };
-}
-
-function createResumeFlowParams(
-  taskFlow: ReturnType<typeof createFakeTaskFlow>,
-  runner: LobsterRunner,
-): Parameters<typeof resumeManagedLobsterFlow>[0] {
-  return {
-    taskFlow,
-    runner,
-    flowId: "flow-1",
-    expectedRevision: 4,
-    runnerParams: {
-      action: "resume",
-      token: "resume-1",
-      approve: true,
-      cwd: process.cwd(),
-      timeoutMs: 1000,
-      maxStdoutBytes: 4096,
-    },
-  };
-}
-
 describe("runManagedLobsterFlow", () => {
   it("creates a flow and finishes it when Lobster succeeds", async () => {
     const taskFlow = createFakeTaskFlow();
@@ -67,7 +28,19 @@ describe("runManagedLobsterFlow", () => {
       requiresApproval: null,
     });
 
-    const result = await runManagedLobsterFlow(createRunFlowParams(taskFlow, runner));
+    const result = await runManagedLobsterFlow({
+      taskFlow,
+      runner,
+      runnerParams: {
+        action: "run",
+        pipeline: "noop",
+        cwd: process.cwd(),
+        timeoutMs: 1000,
+        maxStdoutBytes: 4096,
+      },
+      controllerId: "tests/lobster",
+      goal: "Run Lobster workflow",
+    });
 
     expect(result.ok).toBe(true);
     expect(taskFlow.createManaged).toHaveBeenCalledWith({
@@ -96,7 +69,19 @@ describe("runManagedLobsterFlow", () => {
       },
     });
 
-    const result = await runManagedLobsterFlow(createRunFlowParams(taskFlow, runner));
+    const result = await runManagedLobsterFlow({
+      taskFlow,
+      runner,
+      runnerParams: {
+        action: "run",
+        pipeline: "noop",
+        cwd: process.cwd(),
+        timeoutMs: 1000,
+        maxStdoutBytes: 4096,
+      },
+      controllerId: "tests/lobster",
+      goal: "Run Lobster workflow",
+    });
 
     expect(result.ok).toBe(true);
     expect(taskFlow.setWaiting).toHaveBeenCalledWith({
@@ -122,9 +107,24 @@ describe("runManagedLobsterFlow", () => {
       },
     });
 
-    const result = expectManagedFlowFailure(
-      await runManagedLobsterFlow(createRunFlowParams(taskFlow, runner)),
-    );
+    const result = await runManagedLobsterFlow({
+      taskFlow,
+      runner,
+      runnerParams: {
+        action: "run",
+        pipeline: "noop",
+        cwd: process.cwd(),
+        timeoutMs: 1000,
+        maxStdoutBytes: 4096,
+      },
+      controllerId: "tests/lobster",
+      goal: "Run Lobster workflow",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      throw new Error("expected managed Lobster flow to fail");
+    }
     expect(result.error.message).toBe("boom");
     expect(taskFlow.fail).toHaveBeenCalledWith({
       flowId: "flow-1",
@@ -138,9 +138,24 @@ describe("runManagedLobsterFlow", () => {
       run: vi.fn().mockRejectedValue(new Error("crashed")),
     };
 
-    const result = expectManagedFlowFailure(
-      await runManagedLobsterFlow(createRunFlowParams(taskFlow, runner)),
-    );
+    const result = await runManagedLobsterFlow({
+      taskFlow,
+      runner,
+      runnerParams: {
+        action: "run",
+        pipeline: "noop",
+        cwd: process.cwd(),
+        timeoutMs: 1000,
+        maxStdoutBytes: 4096,
+      },
+      controllerId: "tests/lobster",
+      goal: "Run Lobster workflow",
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      throw new Error("expected managed Lobster flow to fail");
+    }
     expect(result.error.message).toBe("crashed");
     expect(taskFlow.fail).toHaveBeenCalledWith({
       flowId: "flow-1",
@@ -159,7 +174,20 @@ describe("resumeManagedLobsterFlow", () => {
       requiresApproval: null,
     });
 
-    const result = await resumeManagedLobsterFlow(createResumeFlowParams(taskFlow, runner));
+    const result = await resumeManagedLobsterFlow({
+      taskFlow,
+      runner,
+      flowId: "flow-1",
+      expectedRevision: 4,
+      runnerParams: {
+        action: "resume",
+        token: "resume-1",
+        approve: true,
+        cwd: process.cwd(),
+        timeoutMs: 1000,
+        maxStdoutBytes: 4096,
+      },
+    });
 
     expect(result.ok).toBe(true);
     expect(taskFlow.resume).toHaveBeenCalledWith({
@@ -188,9 +216,25 @@ describe("resumeManagedLobsterFlow", () => {
       requiresApproval: null,
     });
 
-    const result = expectManagedFlowFailure(
-      await resumeManagedLobsterFlow(createResumeFlowParams(taskFlow, runner)),
-    );
+    const result = await resumeManagedLobsterFlow({
+      taskFlow,
+      runner,
+      flowId: "flow-1",
+      expectedRevision: 4,
+      runnerParams: {
+        action: "resume",
+        token: "resume-1",
+        approve: true,
+        cwd: process.cwd(),
+        timeoutMs: 1000,
+        maxStdoutBytes: 4096,
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      throw new Error("expected resumed Lobster flow to fail");
+    }
     expect(result.error.message).toMatch(/revision_conflict/);
     expect(runner.run).not.toHaveBeenCalled();
   });
@@ -209,7 +253,20 @@ describe("resumeManagedLobsterFlow", () => {
       },
     });
 
-    const result = await resumeManagedLobsterFlow(createResumeFlowParams(taskFlow, runner));
+    const result = await resumeManagedLobsterFlow({
+      taskFlow,
+      runner,
+      flowId: "flow-1",
+      expectedRevision: 4,
+      runnerParams: {
+        action: "resume",
+        token: "resume-1",
+        approve: true,
+        cwd: process.cwd(),
+        timeoutMs: 1000,
+        maxStdoutBytes: 4096,
+      },
+    });
 
     expect(result.ok).toBe(true);
     expect(taskFlow.setWaiting).toHaveBeenCalledWith({

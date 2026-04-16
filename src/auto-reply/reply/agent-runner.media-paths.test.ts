@@ -16,7 +16,6 @@ const waitForEmbeddedPiRunEndMock = vi.fn();
 const enqueueFollowupRunMock = vi.fn();
 const scheduleFollowupDrainMock = vi.fn();
 const refreshQueuedFollowupSessionMock = vi.fn();
-const resolveOutboundAttachmentFromUrlMock = vi.fn();
 
 vi.mock("../../agents/model-fallback.js", () => ({
   runWithModelFallback: (params: {
@@ -47,11 +46,6 @@ vi.mock("./queue.js", () => ({
   scheduleFollowupDrain: scheduleFollowupDrainMock,
 }));
 
-vi.mock("../../media/outbound-attachment.js", () => ({
-  resolveOutboundAttachmentFromUrl: (...args: unknown[]) =>
-    resolveOutboundAttachmentFromUrlMock(...args),
-}));
-
 let runReplyAgent: typeof import("./agent-runner.js").runReplyAgent;
 
 describe("runReplyAgent media path normalization", () => {
@@ -72,11 +66,7 @@ describe("runReplyAgent media path normalization", () => {
     enqueueFollowupRunMock.mockReset();
     scheduleFollowupDrainMock.mockReset();
     refreshQueuedFollowupSessionMock.mockReset();
-    resolveOutboundAttachmentFromUrlMock.mockReset();
     vi.stubEnv("OPENCLAW_TEST_FAST", "1");
-    resolveOutboundAttachmentFromUrlMock.mockImplementation(async (mediaUrl: string) => ({
-      path: path.join("/tmp/outbound-media", path.basename(mediaUrl)),
-    }));
     runWithModelFallbackMock.mockImplementation(
       async ({
         provider,
@@ -147,17 +137,8 @@ describe("runReplyAgent media path normalization", () => {
     });
 
     expect(result).toMatchObject({
-      mediaUrl: "/tmp/outbound-media/generated.png",
-      mediaUrls: ["/tmp/outbound-media/generated.png"],
+      mediaUrl: path.join("/tmp/workspace", "out", "generated.png"),
+      mediaUrls: [path.join("/tmp/workspace", "out", "generated.png")],
     });
-    expect(resolveOutboundAttachmentFromUrlMock).toHaveBeenCalledWith(
-      path.join("/tmp/workspace", "out", "generated.png"),
-      5 * 1024 * 1024,
-      expect.objectContaining({
-        mediaAccess: expect.objectContaining({
-          workspaceDir: "/tmp/workspace",
-        }),
-      }),
-    );
   });
 });

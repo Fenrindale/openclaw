@@ -1,9 +1,5 @@
 import { getBootstrapChannelPlugin } from "../../channels/plugins/bootstrap-registry.js";
-import type { ChannelMessageActionName } from "../../channels/plugins/types.public.js";
-import {
-  normalizeOptionalLowercaseString,
-  normalizeOptionalString,
-} from "../../shared/string-coerce.js";
+import type { ChannelMessageActionName } from "../../channels/plugins/types.js";
 
 export type MessageActionTargetMode = "to" | "channelId" | "none";
 
@@ -91,7 +87,7 @@ function listActionTargetAliasSpecs(
   if (coreSpec) {
     specs.push(coreSpec);
   }
-  const normalizedChannel = normalizeOptionalLowercaseString(channel);
+  const normalizedChannel = channel?.trim().toLowerCase();
   if (!normalizedChannel) {
     return specs;
   }
@@ -112,11 +108,11 @@ export function actionHasTarget(
   params: Record<string, unknown>,
   options?: { channel?: string },
 ): boolean {
-  const to = normalizeOptionalString(params.to) ?? "";
+  const to = typeof params.to === "string" ? params.to.trim() : "";
   if (to) {
     return true;
   }
-  const channelId = normalizeOptionalString(params.channelId) ?? "";
+  const channelId = typeof params.channelId === "string" ? params.channelId.trim() : "";
   if (channelId) {
     return true;
   }
@@ -128,7 +124,7 @@ export function actionHasTarget(
     spec.aliases.some((alias) => {
       const value = params[alias];
       if (typeof value === "string") {
-        return Boolean(normalizeOptionalString(value));
+        return value.trim().length > 0;
       }
       if (typeof value === "number") {
         return Number.isFinite(value);

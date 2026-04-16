@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertSandboxPath } from "../../agents/sandbox-paths.js";
 import { ensureSandboxWorkspaceForSession } from "../../agents/sandbox.js";
-import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import type { OpenClawConfig } from "../../config/config.js";
 import { logVerbose } from "../../globals.js";
 import { copyFileWithinRoot, SafeOpenError } from "../../infra/fs-safe.js";
 import { normalizeScpRemoteHost, normalizeScpRemotePath } from "../../infra/scp-host.js";
@@ -12,7 +12,6 @@ import { resolvePreferredOpenClawTmpDir } from "../../infra/tmp-openclaw-dir.js"
 import { resolveChannelRemoteInboundAttachmentRoots } from "../../media/channel-inbound-roots.js";
 import { isInboundPathAllowed } from "../../media/inbound-path-policy.js";
 import { getMediaDir, MEDIA_MAX_BYTES } from "../../media/store.js";
-import { normalizeOptionalString } from "../../shared/string-coerce.js";
 import { CONFIG_DIR } from "../../utils.js";
 import type { MsgContext, TemplateContext } from "../templating.js";
 
@@ -157,8 +156,8 @@ function resolveRawPaths(ctx: MsgContext): string[] {
   const pathsFromArray = Array.isArray(ctx.MediaPaths) ? ctx.MediaPaths : undefined;
   return pathsFromArray && pathsFromArray.length > 0
     ? pathsFromArray
-    : normalizeOptionalString(ctx.MediaPath)
-      ? [normalizeOptionalString(ctx.MediaPath)!]
+    : ctx.MediaPath?.trim()
+      ? [ctx.MediaPath.trim()]
       : [];
 }
 
@@ -244,7 +243,7 @@ function rewriteStagedMediaPaths(params: {
   hasPathsArray: boolean;
 }): void {
   const rewriteIfStaged = (value: string | undefined): string | undefined => {
-    const raw = normalizeOptionalString(value);
+    const raw = value?.trim();
     if (!raw) {
       return value;
     }

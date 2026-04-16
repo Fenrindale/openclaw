@@ -1,7 +1,4 @@
-import {
-  hasNonEmptyString as sharedHasNonEmptyString,
-  normalizeOptionalString,
-} from "../../shared/string-coerce.js";
+import { hasNonEmptyString as sharedHasNonEmptyString } from "../../shared/string-coerce.js";
 import { MESSAGE_ACTION_TARGET_MODE } from "./message-action-spec.js";
 
 export const hasNonEmptyString = sharedHasNonEmptyString;
@@ -16,7 +13,7 @@ export function applyTargetToParams(params: {
   action: string;
   args: Record<string, unknown>;
 }): void {
-  const target = normalizeOptionalString(params.args.target) ?? "";
+  const target = typeof params.args.target === "string" ? params.args.target.trim() : "";
   const hasLegacyTo = hasNonEmptyString(params.args.to);
   const hasLegacyChannelId = hasNonEmptyString(params.args.channelId);
   const mode =

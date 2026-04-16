@@ -1,6 +1,5 @@
 import { enqueueCommandInLane } from "../../process/command-queue.js";
 import { CommandLane } from "../../process/lanes.js";
-import { normalizeLowercaseStringOrEmpty } from "../../shared/string-coerce.js";
 import {
   completeTaskRunByRunId,
   createRunningTaskRun,
@@ -13,7 +12,6 @@ import {
   computeJobNextRunAtMs,
   createJob,
   findJobOrThrow,
-  hasScheduledNextRunAtMs,
   isJobEnabled,
   isJobDue,
   nextWakeAtMs,
@@ -222,7 +220,7 @@ function sortJobs(jobs: CronJob[], sortBy: CronJobsSortBy, sortDir: CronSortDir)
 export async function listPage(state: CronServiceState, opts?: CronListPageOptions) {
   return await locked(state, async () => {
     await ensureLoadedForRead(state);
-    const query = normalizeLowercaseStringOrEmpty(opts?.query);
+    const query = opts?.query?.trim().toLowerCase() ?? "";
     const enabledFilter = resolveEnabledFilter(opts);
     const sortBy = opts?.sortBy ?? "nextRunAtMs";
     const sortDir = opts?.sortDir ?? "asc";
@@ -237,9 +235,7 @@ export async function listPage(state: CronServiceState, opts?: CronListPageOptio
       if (!query) {
         return true;
       }
-      const haystack = normalizeLowercaseStringOrEmpty(
-        [job.name, job.description ?? "", job.agentId ?? ""].join(" "),
-      );
+      const haystack = [job.name, job.description ?? "", job.agentId ?? ""].join(" ").toLowerCase();
       return haystack.includes(query);
     });
     const sorted = sortJobs(filtered, sortBy, sortDir);
@@ -328,8 +324,13 @@ export async function update(state: CronServiceState, id: string, patch: CronJob
         job.state.nextRunAtMs = undefined;
         job.state.runningAtMs = undefined;
       }
-    } else if (isJobEnabled(job) && !hasScheduledNextRunAtMs(job.state.nextRunAtMs)) {
-      job.state.nextRunAtMs = computeJobNextRunAtMs(job, now);
+    } else if (isJobEnabled(job)) {
+      // Non-schedule edits should not mutate other jobs, but still repair a
+      // missing/corrupt nextRunAtMs for the updated job.
+      const nextRun = job.state.nextRunAtMs;
+      if (typeof nextRun !== "number" || !Number.isFinite(nextRun)) {
+        job.state.nextRunAtMs = computeJobNextRunAtMs(job, now);
+      }
     }
 
     await persist(state);

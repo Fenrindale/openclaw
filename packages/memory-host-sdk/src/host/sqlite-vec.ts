@@ -1,6 +1,4 @@
 import type { DatabaseSync } from "node:sqlite";
-import { formatErrorMessage } from "../../../../src/infra/errors.js";
-import { normalizeOptionalString } from "../../../../src/shared/string-coerce.js";
 
 export async function loadSqliteVecExtension(params: {
   db: DatabaseSync;
@@ -8,7 +6,7 @@ export async function loadSqliteVecExtension(params: {
 }): Promise<{ ok: boolean; extensionPath?: string; error?: string }> {
   try {
     const sqliteVec = await import("sqlite-vec");
-    const resolvedPath = normalizeOptionalString(params.extensionPath);
+    const resolvedPath = params.extensionPath?.trim() ? params.extensionPath.trim() : undefined;
     const extensionPath = resolvedPath ?? sqliteVec.getLoadablePath();
 
     params.db.enableLoadExtension(true);
@@ -20,7 +18,7 @@ export async function loadSqliteVecExtension(params: {
 
     return { ok: true, extensionPath };
   } catch (err) {
-    const message = formatErrorMessage(err);
+    const message = err instanceof Error ? err.message : String(err);
     return { ok: false, error: message };
   }
 }

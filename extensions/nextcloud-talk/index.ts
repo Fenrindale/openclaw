@@ -10,7 +10,7 @@ export default defineBundledChannelEntry({
     exportName: "nextcloudTalkPlugin",
   },
   secrets: {
-    specifier: "./secret-contract-api.js",
+    specifier: "./src/secret-contract.js",
     exportName: "channelSecrets",
   },
   runtime: {

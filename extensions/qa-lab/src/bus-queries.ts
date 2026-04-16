@@ -1,6 +1,4 @@
-import { normalizeOptionalLowercaseString } from "openclaw/plugin-sdk/text-runtime";
 import type {
-  QaBusAttachment,
   QaBusConversation,
   QaBusEvent,
   QaBusMessage,
@@ -53,13 +51,8 @@ export function cloneMessage(message: QaBusMessage): QaBusMessage {
   return {
     ...message,
     conversation: { ...message.conversation },
-    attachments: (message.attachments ?? []).map((attachment) => cloneAttachment(attachment)),
     reactions: message.reactions.map((reaction) => ({ ...reaction })),
   };
-}
-
-function cloneAttachment(attachment: QaBusAttachment): QaBusAttachment {
-  return { ...attachment };
 }
 
 export function cloneEvent(event: QaBusEvent): QaBusEvent {
@@ -73,7 +66,6 @@ export function cloneEvent(event: QaBusEvent): QaBusEvent {
     case "thread-created":
       return { ...event, thread: { ...event.thread } };
   }
-  throw new Error("Unsupported QA bus event kind");
 }
 
 export function buildQaBusSnapshot(params: {
@@ -111,7 +103,7 @@ export function searchQaBusMessages(params: {
 }) {
   const accountId = normalizeAccountId(params.input.accountId);
   const limit = Math.max(1, Math.min(params.input.limit ?? 20, 100));
-  const query = normalizeOptionalLowercaseString(params.input.query);
+  const query = params.input.query?.trim().toLowerCase();
   return Array.from(params.messages.values())
     .filter((message) => message.accountId === accountId)
     .filter((message) =>
@@ -120,24 +112,7 @@ export function searchQaBusMessages(params: {
     .filter((message) =>
       params.input.threadId ? message.threadId === params.input.threadId : true,
     )
-    .filter((message) => {
-      if (!query) {
-        return true;
-      }
-      const attachmentHaystack = message.attachments ?? [];
-      const searchableAttachmentText = attachmentHaystack
-        .flatMap((attachment) => [
-          attachment.fileName,
-          attachment.altText,
-          attachment.transcript,
-          attachment.mimeType,
-        ])
-        .filter((value): value is string => Boolean(value))
-        .join(" ")
-        .toLowerCase();
-      const messageText = normalizeOptionalLowercaseString(message.text) ?? "";
-      return `${messageText} ${searchableAttachmentText}`.includes(query);
-    })
+    .filter((message) => (query ? message.text.toLowerCase().includes(query) : true))
     .slice(-limit)
     .map((message) => cloneMessage(message));
 }

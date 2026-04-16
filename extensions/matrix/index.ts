@@ -12,7 +12,7 @@ export default defineBundledChannelEntry({
     exportName: "matrixPlugin",
   },
   secrets: {
-    specifier: "./secret-contract-api.js",
+    specifier: "./src/secret-contract.js",
     exportName: "channelSecrets",
   },
   runtime: {

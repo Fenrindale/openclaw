@@ -1,12 +1,11 @@
 import type { ModelProviderConfig } from "openclaw/plugin-sdk/provider-model-shared";
-import { buildQwenModelCatalogForBaseUrl, QWEN_BASE_URL } from "./models.js";
+import { QWEN_BASE_URL, QWEN_MODEL_CATALOG } from "./models.js";
 
-export function buildQwenProvider(params?: { baseUrl?: string }): ModelProviderConfig {
-  const baseUrl = params?.baseUrl ?? QWEN_BASE_URL;
+export function buildQwenProvider(): ModelProviderConfig {
   return {
-    baseUrl,
+    baseUrl: QWEN_BASE_URL,
     api: "openai-completions",
-    models: buildQwenModelCatalogForBaseUrl(baseUrl).map((model) => ({ ...model })),
+    models: QWEN_MODEL_CATALOG.map((model) => ({ ...model })),
   };
 }
 

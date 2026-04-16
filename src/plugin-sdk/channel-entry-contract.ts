@@ -2,18 +2,18 @@ import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createJiti } from "jiti";
 import { emptyChannelConfigSchema } from "../channels/plugins/config-schema.js";
-import type { ChannelConfigSchema } from "../channels/plugins/types.config.js";
-import type { ChannelPlugin } from "../channels/plugins/types.plugin.js";
+import type { ChannelConfigSchema, ChannelPlugin } from "../channels/plugins/types.plugin.js";
 import { openBoundaryFileSync } from "../infra/boundary-file-read.js";
-import {
-  getCachedPluginJitiLoader,
-  type PluginJitiLoaderCache,
-} from "../plugins/jiti-loader-cache.js";
 import type { PluginRuntime } from "../plugins/runtime/types.js";
-import { resolveLoaderPackageRoot } from "../plugins/sdk-alias.js";
+import {
+  buildPluginLoaderAliasMap,
+  buildPluginLoaderJitiOptions,
+  resolveLoaderPackageRoot,
+  shouldPreferNativeJiti,
+} from "../plugins/sdk-alias.js";
 import type { AnyAgentTool, OpenClawPluginApi, PluginCommandContext } from "../plugins/types.js";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 
 export type { AnyAgentTool, OpenClawPluginApi, PluginCommandContext };
 
@@ -44,13 +44,6 @@ type DefineBundledChannelSetupEntryOptions = {
   importMetaUrl: string;
   plugin: BundledEntryModuleRef;
   secrets?: BundledEntryModuleRef;
-  runtime?: BundledEntryModuleRef;
-  features?: BundledChannelSetupEntryFeatures;
-};
-
-export type BundledChannelSetupEntryFeatures = {
-  legacyStateMigrations?: boolean;
-  legacySessionSurfaces?: boolean;
 };
 
 export type BundledChannelEntryContract<TPlugin = ChannelPlugin> = {
@@ -69,21 +62,14 @@ export type BundledChannelSetupEntryContract<TPlugin = ChannelPlugin> = {
   kind: "bundled-channel-setup-entry";
   loadSetupPlugin: () => TPlugin;
   loadSetupSecrets?: () => ChannelPlugin["secrets"] | undefined;
-  setChannelRuntime?: (runtime: PluginRuntime) => void;
-  features?: BundledChannelSetupEntryFeatures;
 };
 
 const nodeRequire = createRequire(import.meta.url);
-const jitiLoaders: PluginJitiLoaderCache = new Map();
+const jitiLoaders = new Map<string, ReturnType<typeof createJiti>>();
 const loadedModuleExports = new Map<string, unknown>();
-const disableBundledEntrySourceFallbackEnv = "OPENCLAW_DISABLE_BUNDLED_ENTRY_SOURCE_FALLBACK";
-
-function isTruthyEnvFlag(value: string | undefined): boolean {
-  return value !== undefined && !/^(?:0|false)$/iu.test(value.trim());
-}
 
 function resolveSpecifierCandidates(modulePath: string): string[] {
-  const ext = normalizeLowercaseStringOrEmpty(path.extname(modulePath));
+  const ext = path.extname(modulePath).toLowerCase();
   if (ext === ".js") {
     return [modulePath, modulePath.slice(0, -3) + ".ts"];
   }
@@ -152,9 +138,6 @@ function resolveBundledEntryModuleCandidates(
 
   const distExtensionsRoot = path.join(packageRoot, "dist", "extensions") + path.sep;
   if (!importerPath.startsWith(distExtensionsRoot)) {
-    return candidates;
-  }
-  if (isTruthyEnvFlag(process.env[disableBundledEntrySourceFallbackEnv])) {
     return candidates;
   }
 
@@ -269,13 +252,23 @@ function resolveBundledEntryModulePath(importMetaUrl: string, specifier: string)
 }
 
 function getJiti(modulePath: string) {
-  return getCachedPluginJitiLoader({
-    cache: jitiLoaders,
-    modulePath,
-    importerUrl: import.meta.url,
-    preferBuiltDist: true,
-    jitiFilename: import.meta.url,
+  const tryNative =
+    shouldPreferNativeJiti(modulePath) || modulePath.includes(`${path.sep}dist${path.sep}`);
+  const aliasMap = buildPluginLoaderAliasMap(modulePath, process.argv[1], import.meta.url);
+  const cacheKey = JSON.stringify({
+    tryNative,
+    aliasMap: Object.entries(aliasMap).toSorted(([left], [right]) => left.localeCompare(right)),
   });
+  const cached = jitiLoaders.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  const loader = createJiti(import.meta.url, {
+    ...buildPluginLoaderJitiOptions(aliasMap),
+    tryNative,
+  });
+  jitiLoaders.set(cacheKey, loader);
+  return loader;
 }
 
 function loadBundledEntryModuleSync(importMetaUrl: string, specifier: string): unknown {
@@ -288,7 +281,7 @@ function loadBundledEntryModuleSync(importMetaUrl: string, specifier: string): u
   if (
     process.platform === "win32" &&
     modulePath.includes(`${path.sep}dist${path.sep}`) &&
-    [".js", ".mjs", ".cjs"].includes(normalizeLowercaseStringOrEmpty(path.extname(modulePath)))
+    [".js", ".mjs", ".cjs"].includes(path.extname(modulePath).toLowerCase())
   ) {
     try {
       loaded = nodeRequire(modulePath);
@@ -382,21 +375,7 @@ export function defineBundledChannelSetupEntry<TPlugin = ChannelPlugin>({
   importMetaUrl,
   plugin,
   secrets,
-  runtime,
-  features,
 }: DefineBundledChannelSetupEntryOptions): BundledChannelSetupEntryContract<TPlugin> {
-  // Bundled setup entries stay on a light path during setup-only/setup-runtime loads.
-  // When runtime wiring is needed, expose only the setter so the loader can hand
-  // the setup surface the active runtime without importing the full channel entry.
-  const setChannelRuntime = runtime
-    ? (pluginRuntime: PluginRuntime) => {
-        const setter = loadBundledEntryExportSync<(runtime: PluginRuntime) => void>(
-          importMetaUrl,
-          runtime,
-        );
-        setter(pluginRuntime);
-      }
-    : undefined;
   return {
     kind: "bundled-channel-setup-entry",
     loadSetupPlugin: () => loadBundledEntryExportSync<TPlugin>(importMetaUrl, plugin),
@@ -409,7 +388,5 @@ export function defineBundledChannelSetupEntry<TPlugin = ChannelPlugin>({
             ),
         }
       : {}),
-    ...(setChannelRuntime ? { setChannelRuntime } : {}),
-    ...(features ? { features } : {}),
   };
 }

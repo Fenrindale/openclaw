@@ -5,7 +5,7 @@ import {
   type ResolverContext,
   type SecretDefaults,
   type SecretTargetRegistryEntry,
-} from "openclaw/plugin-sdk/channel-secret-basic-runtime";
+} from "openclaw/plugin-sdk/channel-secret-runtime";
 
 export const secretTargetRegistryEntries = [
   {
@@ -56,7 +56,7 @@ export const secretTargetRegistryEntries = [
 
 export function collectRuntimeConfigAssignments(params: {
   config: { channels?: Record<string, unknown> };
-  defaults?: SecretDefaults;
+  defaults: SecretDefaults | undefined;
   context: ResolverContext;
 }): void {
   const resolved = getChannelSurface(params.config, "zalo");

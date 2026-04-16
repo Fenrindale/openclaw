@@ -1,13 +1,14 @@
 import crypto from "node:crypto";
 import type { AgentToolResult } from "@mariozechner/pi-agent-core";
+import { loadConfig } from "../config/config.js";
 import { formatErrorMessage } from "../infra/errors.js";
 import { buildExecApprovalUnavailableReplyPayload } from "../infra/exec-approval-reply.js";
 import {
+  hasConfiguredExecApprovalDmRoute,
   type ExecApprovalInitiatingSurfaceState,
   resolveExecApprovalInitiatingSurfaceState,
 } from "../infra/exec-approval-surface.js";
 import {
-  minSecurity,
   maxAsk,
   resolveExecApprovalAllowedDecisions,
   resolveExecApprovals,
@@ -88,11 +89,6 @@ export type ExecApprovalFollowupTarget = {
   turnSourceTo?: string;
   turnSourceAccountId?: string;
   turnSourceThreadId?: string | number;
-};
-
-export type ExecApprovalFollowupResultDeps = {
-  sendExecApprovalFollowup?: typeof sendExecApprovalFollowup;
-  logWarn?: typeof logWarn;
 };
 
 export type DefaultExecApprovalRequestArgs = {
@@ -199,11 +195,17 @@ export function resolveExecHostApprovalContext(params: {
     security: params.security,
     ask: params.ask,
   });
-  // Session/config tool policy is the caller's requested contract. The host file
-  // may tighten that contract, but it must not silently broaden it.
-  const hostSecurity = minSecurity(params.security, approvals.agent.security);
-  const hostAsk = maxAsk(params.ask, approvals.agent.ask);
-  const askFallback = minSecurity(hostSecurity, approvals.agent.askFallback);
+  // exec-approvals.json is the authoritative security policy and must be able to grant
+  // a less-restrictive level (e.g. "full") even when tool/runtime defaults are stricter
+  // (e.g. "allowlist"). This matches node-host behavior and mirrors the ask=off special
+  // case: exec-approvals.json can suppress prompts AND grant broader execution rights.
+  // When exec-approvals.json has no explicit agent or defaults entry, approvals.agent.security
+  // falls back to params.security, so this is backward-compatible.
+  const hostSecurity = approvals.agent.security;
+  // An explicit ask=off policy in exec-approvals.json must be able to suppress
+  // prompts even when tool/runtime defaults are stricter (for example on-miss).
+  const hostAsk = approvals.agent.ask === "off" ? "off" : maxAsk(params.ask, approvals.agent.ask);
+  const askFallback = approvals.agent.askFallback;
   if (hostSecurity === "deny") {
     throw new Error(`exec denied: host=${params.host} security=deny`);
   }
@@ -239,9 +241,9 @@ export function resolveExecApprovalUnavailableState(params: {
     channel: params.turnSourceChannel,
     accountId: params.turnSourceAccountId,
   });
-  // Native approval runtimes emit routed-elsewhere notices after actual delivery.
-  // Avoid claiming approver DMs were sent from config-only guesses here.
-  const sentApproverDms = false;
+  const sentApproverDms =
+    (initiatingSurface.kind === "disabled" || initiatingSurface.kind === "unsupported") &&
+    hasConfiguredExecApprovalDmRoute(loadConfig());
   const unavailableReason =
     params.preResolvedDecision === null
       ? "no-approval-route"
@@ -402,11 +404,8 @@ export function buildHeadlessExecApprovalDeniedMessage(params: {
 export async function sendExecApprovalFollowupResult(
   target: ExecApprovalFollowupTarget,
   resultText: string,
-  deps: ExecApprovalFollowupResultDeps = {},
 ): Promise<void> {
-  const send = deps.sendExecApprovalFollowup ?? sendExecApprovalFollowup;
-  const warn = deps.logWarn ?? logWarn;
-  await send({
+  await sendExecApprovalFollowup({
     approvalId: target.approvalId,
     sessionKey: target.sessionKey,
     turnSourceChannel: target.turnSourceChannel,
@@ -420,7 +419,7 @@ export async function sendExecApprovalFollowupResult(
     if (!rememberExecApprovalFollowupFailureKey(key)) {
       return;
     }
-    warn(`exec approval followup dispatch failed (id=${target.approvalId}): ${message}`);
+    logWarn(`exec approval followup dispatch failed (id=${target.approvalId}): ${message}`);
   });
 }
 

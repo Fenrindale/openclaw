@@ -17,7 +17,6 @@ import {
   sanitizeAgentId,
 } from "openclaw/plugin-sdk/routing";
 import { logVerbose } from "openclaw/plugin-sdk/runtime-env";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 import {
   buildTelegramGroupPeerId,
   buildTelegramParentPeer,
@@ -65,29 +64,32 @@ export function resolveTelegramConversationRoute(params: {
     // Preserve the configured topic agent ID so topic-bound sessions stay stable
     // even when that agent is not present in the current config snapshot.
     const topicAgentId = sanitizeAgentId(rawTopicAgentId);
-    const sessionKey = normalizeLowercaseStringOrEmpty(
-      buildAgentSessionKey({
+    route = {
+      ...route,
+      agentId: topicAgentId,
+      sessionKey: buildAgentSessionKey({
         agentId: topicAgentId,
         channel: "telegram",
         accountId: params.accountId,
         peer: { kind: params.isGroup ? "group" : "direct", id: peerId },
         dmScope: params.cfg.session?.dmScope,
         identityLinks: params.cfg.session?.identityLinks,
-      }),
-    );
-    const mainSessionKey = normalizeLowercaseStringOrEmpty(
-      buildAgentMainSessionKey({
+      }).toLowerCase(),
+      mainSessionKey: buildAgentMainSessionKey({
         agentId: topicAgentId,
-      }),
-    );
-    route = {
-      ...route,
-      agentId: topicAgentId,
-      sessionKey,
-      mainSessionKey,
+      }).toLowerCase(),
       lastRoutePolicy: deriveLastRoutePolicy({
-        sessionKey,
-        mainSessionKey,
+        sessionKey: buildAgentSessionKey({
+          agentId: topicAgentId,
+          channel: "telegram",
+          accountId: params.accountId,
+          peer: { kind: params.isGroup ? "group" : "direct", id: peerId },
+          dmScope: params.cfg.session?.dmScope,
+          identityLinks: params.cfg.session?.identityLinks,
+        }).toLowerCase(),
+        mainSessionKey: buildAgentMainSessionKey({
+          agentId: topicAgentId,
+        }).toLowerCase(),
       }),
     };
     logVerbose(
@@ -168,20 +170,18 @@ export function resolveTelegramConversationBaseSessionKey(params: {
   if (!isNamedAccountFallback || params.isGroup) {
     return params.route.sessionKey;
   }
-  return normalizeLowercaseStringOrEmpty(
-    buildAgentSessionKey({
-      agentId: params.route.agentId,
-      channel: "telegram",
-      accountId: params.route.accountId,
-      peer: {
-        kind: "direct",
-        id: resolveTelegramDirectPeerId({
-          chatId: params.chatId,
-          senderId: params.senderId,
-        }),
-      },
-      dmScope: "per-account-channel-peer",
-      identityLinks: params.cfg.session?.identityLinks,
-    }),
-  );
+  return buildAgentSessionKey({
+    agentId: params.route.agentId,
+    channel: "telegram",
+    accountId: params.route.accountId,
+    peer: {
+      kind: "direct",
+      id: resolveTelegramDirectPeerId({
+        chatId: params.chatId,
+        senderId: params.senderId,
+      }),
+    },
+    dmScope: "per-account-channel-peer",
+    identityLinks: params.cfg.session?.identityLinks,
+  }).toLowerCase();
 }

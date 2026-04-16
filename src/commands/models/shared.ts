@@ -18,7 +18,6 @@ import { toAgentModelListLike } from "../../config/model-input.js";
 import type { AgentModelEntryConfig } from "../../config/types.agent-defaults.js";
 import type { AgentModelConfig } from "../../config/types.agents-shared.js";
 import { normalizeAgentId } from "../../routing/session-key.js";
-import { normalizeLowercaseStringOrEmpty } from "../../shared/string-coerce.js";
 
 export const ensureFlagCompatibility = (opts: { json?: boolean; plain?: boolean }) => {
   if (opts.json && opts.plain) {
@@ -52,7 +51,7 @@ export const formatMs = (value?: number | null) => {
 export const isLocalBaseUrl = (baseUrl: string) => {
   try {
     const url = new URL(baseUrl);
-    const host = normalizeLowercaseStringOrEmpty(url.hostname);
+    const host = url.hostname.toLowerCase();
     return (
       host === "localhost" ||
       host === "127.0.0.1" ||
@@ -133,7 +132,7 @@ export function buildAllowlistSet(cfg: OpenClawConfig): Set<string> {
   const allowed = new Set<string>();
   const models = cfg.agents?.defaults?.models ?? {};
   for (const raw of Object.keys(models)) {
-    const parsed = parseModelRef(raw, DEFAULT_PROVIDER);
+    const parsed = parseModelRef(String(raw ?? ""), DEFAULT_PROVIDER);
     if (!parsed) {
       continue;
     }

@@ -6,15 +6,13 @@
  */
 
 import { resolveConversationBindingContext } from "../channels/conversation-binding-context.js";
-import type { OpenClawConfig } from "../config/types.openclaw.js";
+import type { OpenClawConfig } from "../config/config.js";
 import { logVerbose } from "../globals.js";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 import {
   clearPluginCommands,
   clearPluginCommandsForPlugin,
   getPluginCommandSpecs,
   listPluginInvocationKeys,
-  listProviderPluginCommandSpecs,
   registerPluginCommand,
   validateCommandName,
   validatePluginCommandDefinition,
@@ -43,7 +41,6 @@ export {
   clearPluginCommands,
   clearPluginCommandsForPlugin,
   getPluginCommandSpecs,
-  listProviderPluginCommandSpecs,
   registerPluginCommand,
   validateCommandName,
   validatePluginCommandDefinition,
@@ -70,24 +67,12 @@ export function matchPluginCommand(
   const commandName = spaceIndex === -1 ? trimmed : trimmed.slice(0, spaceIndex);
   const args = spaceIndex === -1 ? undefined : trimmed.slice(spaceIndex + 1).trim();
 
-  const key = normalizeLowercaseStringOrEmpty(commandName);
-  const alternateKeys = [key];
-  if (key.includes("_")) {
-    alternateKeys.push(key.replace(/_/g, "-"));
-  }
-  if (key.includes("-")) {
-    alternateKeys.push(key.replace(/-/g, "_"));
-  }
+  const key = commandName.toLowerCase();
   const command =
-    alternateKeys
-      .map(
-        (candidateKey) =>
-          pluginCommands.get(candidateKey) ??
-          Array.from(pluginCommands.values()).find((candidate) =>
-            listPluginInvocationNames(candidate).includes(candidateKey),
-          ),
-      )
-      .find(Boolean) ?? null;
+    pluginCommands.get(key) ??
+    Array.from(pluginCommands.values()).find((candidate) =>
+      listPluginInvocationNames(candidate).includes(key),
+    );
 
   if (!command) {
     return null;
@@ -130,7 +115,6 @@ function sanitizeArgs(args: string | undefined): string | undefined {
 function resolveBindingConversationFromCommand(params: {
   config?: OpenClawConfig;
   channel: string;
-  senderId?: string;
   from?: string;
   to?: string;
   accountId?: string;
@@ -155,7 +139,6 @@ function resolveBindingConversationFromCommand(params: {
     accountId: params.accountId,
     threadId: params.messageThreadId,
     threadParentId: params.threadParentId,
-    senderId: params.senderId,
     originatingTo: params.from,
     commandTo: params.to,
     fallbackTo: params.to ?? params.from,
@@ -178,7 +161,6 @@ export async function executePluginCommand(params: {
   gatewayClientScopes?: PluginCommandContext["gatewayClientScopes"];
   sessionKey?: PluginCommandContext["sessionKey"];
   sessionId?: PluginCommandContext["sessionId"];
-  sessionFile?: PluginCommandContext["sessionFile"];
   commandBody: string;
   config: OpenClawConfig;
   from?: PluginCommandContext["from"];
@@ -203,7 +185,6 @@ export async function executePluginCommand(params: {
   const bindingConversation = resolveBindingConversationFromCommand({
     config,
     channel,
-    senderId,
     from: params.from,
     to: params.to,
     accountId: params.accountId,
@@ -220,7 +201,6 @@ export async function executePluginCommand(params: {
     gatewayClientScopes: params.gatewayClientScopes,
     sessionKey: params.sessionKey,
     sessionId: params.sessionId,
-    sessionFile: params.sessionFile,
     args: sanitizedArgs,
     commandBody,
     config,
@@ -291,13 +271,11 @@ export function listPluginCommands(): Array<{
   name: string;
   description: string;
   pluginId: string;
-  acceptsArgs: boolean;
 }> {
   return Array.from(pluginCommands.values()).map((cmd) => ({
     name: cmd.name,
     description: cmd.description,
     pluginId: cmd.pluginId,
-    acceptsArgs: cmd.acceptsArgs ?? false,
   }));
 }
 

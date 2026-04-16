@@ -1,8 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import type { AgentToolResult } from "@mariozechner/pi-agent-core";
-import type { OpenClawConfig } from "../config/types.openclaw.js";
+import type { OpenClawConfig } from "../config/config.js";
 import { logDebug, logWarn } from "../logger.js";
-import { normalizeOptionalLowercaseString } from "../shared/string-coerce.js";
 import { loadEmbeddedPiLspConfig } from "./embedded-pi-lsp.js";
 import {
   resolveStdioMcpServerLaunchConfig,
@@ -309,9 +308,7 @@ export async function createBundleLspToolRuntime(params: {
   }
 
   const reservedNames = new Set(
-    Array.from(params.reservedToolNames ?? [], (name) =>
-      normalizeOptionalLowercaseString(name),
-    ).filter(Boolean),
+    Array.from(params.reservedToolNames ?? [], (name) => name.trim().toLowerCase()).filter(Boolean),
   );
   const sessions: LspSession[] = [];
   const tools: AnyAgentTool[] = [];
@@ -357,10 +354,7 @@ export async function createBundleLspToolRuntime(params: {
 
         const serverTools = buildLspTools(session);
         for (const tool of serverTools) {
-          const normalizedName = normalizeOptionalLowercaseString(tool.name);
-          if (!normalizedName) {
-            continue;
-          }
+          const normalizedName = tool.name.trim().toLowerCase();
           if (reservedNames.has(normalizedName)) {
             logWarn(
               `bundle-lsp: skipped tool "${tool.name}" from server "${serverName}" because the name already exists.`,

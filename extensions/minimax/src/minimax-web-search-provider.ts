@@ -24,7 +24,6 @@ import {
   type WebSearchProviderPlugin,
   type WebSearchProviderToolDefinition,
 } from "openclaw/plugin-sdk/provider-web-search";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 
 const MINIMAX_SEARCH_ENDPOINT_GLOBAL = "https://api.minimax.io/v1/coding_plan/search";
 const MINIMAX_SEARCH_ENDPOINT_CN = "https://api.minimaxi.com/v1/coding_plan/search";
@@ -58,7 +57,7 @@ function resolveMiniMaxApiKey(searchConfig?: SearchConfigRecord): string | undef
 }
 
 function isMiniMaxCnHost(value: string | undefined): boolean {
-  const trimmed = normalizeOptionalString(value);
+  const trimmed = value?.trim();
   if (!trimmed) {
     return false;
   }
@@ -80,10 +79,8 @@ function resolveMiniMaxRegion(
     !Array.isArray(searchConfig.minimax)
       ? (searchConfig.minimax as Record<string, unknown>)
       : undefined;
-  const configuredRegion =
-    typeof minimax?.region === "string" ? normalizeOptionalString(minimax.region) : undefined;
-  if (configuredRegion) {
-    return configuredRegion === "cn" ? "cn" : "global";
+  if (typeof minimax?.region === "string" && minimax.region.trim()) {
+    return minimax.region === "cn" ? "cn" : "global";
   }
 
   // 2. Infer from the shared MiniMax host override.

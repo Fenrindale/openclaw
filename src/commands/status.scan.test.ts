@@ -186,12 +186,10 @@ describe("scanStatus", () => {
     configureScanStatus({
       hasConfiguredChannels: true,
       sourceConfig: createStatusScanConfig({
-        marker: "source-preload",
         plugins: { enabled: false },
         channels: { telegram: { enabled: false } },
       }),
       resolvedConfig: createStatusScanConfig({
-        marker: "resolved-preload",
         plugins: { enabled: false },
         channels: { telegram: { enabled: false } },
       }),
@@ -200,13 +198,9 @@ describe("scanStatus", () => {
 
     await scanStatus({ json: true }, {} as never);
 
-    expect(mocks.ensurePluginRegistryLoaded).toHaveBeenCalledWith(
-      expect.objectContaining({
-        scope: "configured-channels",
-        config: expect.objectContaining({ marker: "resolved-preload" }),
-        activationSourceConfig: expect.objectContaining({ marker: "source-preload" }),
-      }),
-    );
+    expect(mocks.ensurePluginRegistryLoaded).toHaveBeenCalledWith({
+      scope: "configured-channels",
+    });
     // Verify plugin logs were routed to stderr during loading and restored after
     expect(loggingStateRef.forceConsoleToStderr).toBe(false);
     expect(mocks.probeGateway).toHaveBeenCalledWith(
@@ -221,11 +215,9 @@ describe("scanStatus", () => {
     configureScanStatus({
       hasConfiguredChannels: true,
       sourceConfig: createStatusScanConfig({
-        marker: "source-env-only",
         plugins: { enabled: false },
       }),
       resolvedConfig: createStatusScanConfig({
-        marker: "resolved-env-only",
         plugins: { enabled: false },
       }),
       summary: createStatusSummary({ linkChannel: { linked: false } }),
@@ -235,12 +227,8 @@ describe("scanStatus", () => {
       await scanStatus({ json: true }, {} as never);
     });
 
-    expect(mocks.ensurePluginRegistryLoaded).toHaveBeenCalledWith(
-      expect.objectContaining({
-        scope: "configured-channels",
-        config: expect.objectContaining({ marker: "resolved-env-only" }),
-        activationSourceConfig: expect.objectContaining({ marker: "source-env-only" }),
-      }),
-    );
+    expect(mocks.ensurePluginRegistryLoaded).toHaveBeenCalledWith({
+      scope: "configured-channels",
+    });
   });
 });

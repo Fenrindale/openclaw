@@ -29,9 +29,6 @@ function walkCodeFiles(dir: string, files: string[] = []): string[] {
     if (!CODE_EXTENSIONS.has(path.extname(entry.name))) {
       continue;
     }
-    if (entry.name.startsWith("__rootdir_boundary_canary__.")) {
-      continue;
-    }
     const relativePath = path.relative(repoRoot, fullPath).replaceAll(path.sep, "/");
     if (
       relativePath.includes("/test/") ||

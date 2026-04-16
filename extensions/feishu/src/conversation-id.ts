@@ -1,5 +1,3 @@
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
-
 export type FeishuGroupSessionScope =
   | "group"
   | "group_sender"
@@ -52,7 +50,7 @@ export function parseFeishuTargetId(raw: unknown): string | undefined {
   if (!withoutProvider) {
     return undefined;
   }
-  const lowered = normalizeLowercaseStringOrEmpty(withoutProvider);
+  const lowered = withoutProvider.toLowerCase();
   for (const prefix of ["chat:", "group:", "channel:", "user:", "dm:", "open_id:"]) {
     if (lowered.startsWith(prefix)) {
       return normalizeText(withoutProvider.slice(prefix.length));
@@ -70,7 +68,7 @@ export function parseFeishuDirectConversationId(raw: unknown): string | undefine
   if (!withoutProvider) {
     return undefined;
   }
-  const lowered = normalizeLowercaseStringOrEmpty(withoutProvider);
+  const lowered = withoutProvider.toLowerCase();
   for (const prefix of ["user:", "dm:", "open_id:"]) {
     if (lowered.startsWith(prefix)) {
       return normalizeText(withoutProvider.slice(prefix.length));
@@ -178,8 +176,8 @@ export function buildFeishuModelOverrideParentCandidates(
   }
   const topicSenderMatch = rawId.match(/^(.+):topic:([^:]+):sender:([^:]+)$/i);
   if (topicSenderMatch) {
-    const chatId = normalizeLowercaseStringOrEmpty(topicSenderMatch[1]);
-    const topicId = normalizeLowercaseStringOrEmpty(topicSenderMatch[2]);
+    const chatId = topicSenderMatch[1]?.trim().toLowerCase();
+    const topicId = topicSenderMatch[2]?.trim().toLowerCase();
     if (chatId && topicId) {
       return [`${chatId}:topic:${topicId}`, chatId];
     }
@@ -187,12 +185,12 @@ export function buildFeishuModelOverrideParentCandidates(
   }
   const topicMatch = rawId.match(/^(.+):topic:([^:]+)$/i);
   if (topicMatch) {
-    const chatId = normalizeLowercaseStringOrEmpty(topicMatch[1]);
+    const chatId = topicMatch[1]?.trim().toLowerCase();
     return chatId ? [chatId] : [];
   }
   const senderMatch = rawId.match(/^(.+):sender:([^:]+)$/i);
   if (senderMatch) {
-    const chatId = normalizeLowercaseStringOrEmpty(senderMatch[1]);
+    const chatId = senderMatch[1]?.trim().toLowerCase();
     return chatId ? [chatId] : [];
   }
   return [];

@@ -220,7 +220,7 @@ function createDeferred<T>() {
 
 function createArgMenusHarness() {
   const commands = new Map<string, (args: unknown) => Promise<void>>();
-  const actions = new Map<string | RegExp, (args: unknown) => Promise<void>>();
+  const actions = new Map<string, (args: unknown) => Promise<void>>();
   const options = new Map<string, (args: unknown) => Promise<void>>();
   const optionsReceiverContexts: unknown[] = [];
 
@@ -230,7 +230,7 @@ function createArgMenusHarness() {
     command: (name: string, handler: (args: unknown) => Promise<void>) => {
       commands.set(name, handler);
     },
-    action: (id: string | RegExp, handler: (args: unknown) => Promise<void>) => {
+    action: (id: string, handler: (args: unknown) => Promise<void>) => {
       actions.set(id, handler);
     },
     options: function (this: unknown, id: string, handler: (args: unknown) => Promise<void>) {
@@ -285,16 +285,11 @@ function createArgMenusHarness() {
 }
 
 function requireHandler(
-  handlers: Map<string | RegExp, (args: unknown) => Promise<void>>,
-  key: string | RegExp,
+  handlers: Map<string, (args: unknown) => Promise<void>>,
+  key: string,
   label: string,
 ): (args: unknown) => Promise<void> {
-  const handler =
-    key instanceof RegExp
-      ? Array.from(handlers.entries()).find(
-          ([candidate]) => candidate instanceof RegExp && String(candidate) === String(key),
-        )?.[1]
-      : handlers.get(key);
+  const handler = handlers.get(key);
   if (!handler) {
     throw new Error(`Missing ${label} handler`);
   }
@@ -419,7 +414,7 @@ describe("Slack native command argument menus", () => {
     reportLongHandler = requireHandler(harness.commands, "/reportlong", "/reportlong");
     unsafeConfirmHandler = requireHandler(harness.commands, "/unsafeconfirm", "/unsafeconfirm");
     agentStatusHandler = requireHandler(harness.commands, "/agentstatus", "/agentstatus");
-    argMenuHandler = requireHandler(harness.actions, /^openclaw_cmdarg/, "arg-menu action");
+    argMenuHandler = requireHandler(harness.actions, "openclaw_cmdarg", "arg-menu action");
     argMenuOptionsHandler = requireHandler(harness.options, "openclaw_cmdarg", "arg-menu options");
   });
 
@@ -431,25 +426,21 @@ describe("Slack native command argument menus", () => {
     const testHarness = createArgMenusHarness();
     await registerCommands(testHarness.ctx, testHarness.account);
     expect(testHarness.commands.size).toBeGreaterThan(0);
-    expect(
-      Array.from(testHarness.actions.keys()).some(
-        (key) => key instanceof RegExp && String(key) === String(/^openclaw_cmdarg/),
-      ),
-    ).toBe(true);
+    expect(testHarness.actions.has("openclaw_cmdarg")).toBe(true);
     expect(testHarness.options.has("openclaw_cmdarg")).toBe(true);
     expect(testHarness.optionsReceiverContexts[0]).toBe(testHarness.app);
   });
 
   it("falls back to static menus when app.options() throws during registration", async () => {
     const commands = new Map<string, (args: unknown) => Promise<void>>();
-    const actions = new Map<string | RegExp, (args: unknown) => Promise<void>>();
+    const actions = new Map<string, (args: unknown) => Promise<void>>();
     const postEphemeral = vi.fn().mockResolvedValue({ ok: true });
     const app = {
       client: { chat: { postEphemeral } },
       command: (name: string, handler: (args: unknown) => Promise<void>) => {
         commands.set(name, handler);
       },
-      action: (id: string | RegExp, handler: (args: unknown) => Promise<void>) => {
+      action: (id: string, handler: (args: unknown) => Promise<void>) => {
         actions.set(id, handler);
       },
       // Simulate Bolt throwing during options registration (e.g. receiver not initialized)
@@ -492,11 +483,7 @@ describe("Slack native command argument menus", () => {
     // Registration should not throw despite app.options() throwing
     await registerCommands(ctx, account);
     expect(commands.size).toBeGreaterThan(0);
-    expect(
-      Array.from(actions.keys()).some(
-        (key) => key instanceof RegExp && String(key) === String(/^openclaw_cmdarg/),
-      ),
-    ).toBe(true);
+    expect(actions.has("openclaw_cmdarg")).toBe(true);
 
     // The /reportexternal command (140 choices) should fall back to static_select
     // instead of external_select since options registration failed
@@ -521,8 +508,6 @@ describe("Slack native command argument menus", () => {
     const actions = expectArgMenuLayout(respond);
     const elementType = actions?.elements?.[0]?.type;
     expect(elementType).toBe("button");
-    expect(actions?.elements?.[0]?.action_id).toBe("openclaw_cmdarg_0_0");
-    expect(actions?.elements?.[1]?.action_id).toBe("openclaw_cmdarg_0_1");
     expect(actions?.elements?.[0]?.confirm).toBeTruthy();
   });
 

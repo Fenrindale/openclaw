@@ -9,7 +9,7 @@ const [
 
 const { sendTypingMock, sendReadReceiptMock, dispatchInboundMessageMock, capture } = vi.hoisted(
   () => {
-    const captureState: { ctx?: MsgContext } = {};
+    const captureState: { ctx: MsgContext | undefined } = { ctx: undefined };
     return {
       sendTypingMock: vi.fn(),
       sendReadReceiptMock: vi.fn(),
@@ -53,7 +53,7 @@ vi.mock("../../../../src/pairing/pairing-store.js", () => ({
 
 describe("signal createSignalEventHandler inbound context", () => {
   beforeEach(() => {
-    delete capture.ctx;
+    capture.ctx = undefined;
     sendTypingMock.mockReset().mockResolvedValue(true);
     sendReadReceiptMock.mockReset().mockResolvedValue(true);
     dispatchInboundMessageMock.mockClear();
@@ -78,11 +78,8 @@ describe("signal createSignalEventHandler inbound context", () => {
     );
 
     expect(capture.ctx).toBeTruthy();
-    const contextWithBody = capture.ctx;
-    if (!contextWithBody) {
-      throw new Error("expected inbound MsgContext");
-    }
-    expectInboundContextContract(contextWithBody);
+    expectInboundContextContract(capture.ctx!);
+    const contextWithBody = capture.ctx!;
     // Sender should appear as prefix in group messages (no redundant [from:] suffix)
     expect(String(contextWithBody.Body ?? "")).toContain("Alice");
     expect(String(contextWithBody.Body ?? "")).toMatch(/Alice.*:/);

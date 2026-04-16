@@ -1,7 +1,6 @@
 // Real workspace contract for memory engine foundation concerns.
 
 export {
-  resolveAgentContextLimits,
   resolveAgentDir,
   resolveAgentWorkspaceDir,
   resolveDefaultAgentId,

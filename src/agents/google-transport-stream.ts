@@ -9,12 +9,10 @@ import {
 } from "@mariozechner/pi-ai";
 import { parseGeminiAuth } from "../infra/gemini-auth.js";
 import { normalizeGoogleApiBaseUrl } from "../infra/google-api-base-url.js";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 import { buildGuardedModelFetch } from "./provider-transport-fetch.js";
 import { stripSystemPromptCacheBoundary } from "./system-prompt-cache-boundary.js";
 import { transformTransportMessages } from "./transport-message-transform.js";
 import {
-  coerceTransportToolCallArguments,
   createEmptyTransportUsage,
   createWritableTransportEventStream,
   failTransportStream,
@@ -114,11 +112,11 @@ type GoogleSseChunk = {
 let toolCallCounter = 0;
 
 function isGemini3ProModel(modelId: string): boolean {
-  return /gemini-3(?:\.\d+)?-pro/.test(normalizeLowercaseStringOrEmpty(modelId));
+  return /gemini-3(?:\.\d+)?-pro/.test(modelId.toLowerCase());
 }
 
 function isGemini3FlashModel(modelId: string): boolean {
-  return /gemini-3(?:\.\d+)?-flash/.test(normalizeLowercaseStringOrEmpty(modelId));
+  return /gemini-3(?:\.\d+)?-flash/.test(modelId.toLowerCase());
 }
 
 function requiresToolCallId(modelId: string): boolean {
@@ -126,7 +124,7 @@ function requiresToolCallId(modelId: string): boolean {
 }
 
 function supportsMultimodalFunctionResponse(modelId: string): boolean {
-  const match = normalizeLowercaseStringOrEmpty(modelId).match(/^gemini(?:-live)?-(\d+)/);
+  const match = modelId.toLowerCase().match(/^gemini(?:-live)?-(\d+)/);
   if (!match) {
     return true;
   }
@@ -210,7 +208,6 @@ function resolveThinkingLevel(level: ThinkingLevel, modelId: string): GoogleThin
     case "xhigh":
       return "HIGH";
   }
-  throw new Error("Unsupported thinking level");
 }
 
 function getDisabledThinkingConfig(modelId: string): Record<string, unknown> {
@@ -343,7 +340,7 @@ function convertGoogleMessages(model: GoogleTransportModel, context: Context) {
           parts.push({
             functionCall: {
               name: block.name,
-              args: coerceTransportToolCallArguments(block.arguments),
+              args: block.arguments ?? {},
               ...(requiresToolCallId(model.id) ? { id: block.id } : {}),
             },
             ...(isSameProviderAndModel && block.thoughtSignature

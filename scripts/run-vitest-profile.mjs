@@ -3,7 +3,6 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { formatErrorMessage } from "./lib/error-format.mjs";
 
 export function parseArgs(argv) {
   const args = {
@@ -52,7 +51,7 @@ export function buildVitestProfileCommand({ mode, outputDir }) {
         "./node_modules/vitest/vitest.mjs",
         "run",
         "--config",
-        "test/vitest/vitest.unit.config.ts",
+        "vitest.unit.config.ts",
         "--no-file-parallelism",
       ],
     };
@@ -64,7 +63,7 @@ export function buildVitestProfileCommand({ mode, outputDir }) {
       "vitest",
       "run",
       "--config",
-      "test/vitest/vitest.unit.config.ts",
+      "vitest.unit.config.ts",
       "--no-file-parallelism",
       "--execArgv=--cpu-prof",
       `--execArgv=--cpu-prof-dir=${outputDir}`,
@@ -107,7 +106,7 @@ if (isMain) {
   try {
     main();
   } catch (error) {
-    console.error(formatErrorMessage(error));
+    console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);
   }
 }

@@ -2,7 +2,6 @@ import { resolveFailoverReasonFromError } from "../../agents/failover-error.js";
 import type { CronConfig, CronRetryOn } from "../../config/types.cron.js";
 import type { HeartbeatRunResult } from "../../infra/heartbeat-wake.js";
 import { DEFAULT_AGENT_ID } from "../../routing/session-key.js";
-import { normalizeOptionalLowercaseString } from "../../shared/string-coerce.js";
 import {
   completeTaskRunByRunId,
   createRunningTaskRun,
@@ -20,11 +19,8 @@ import type {
   CronRunTelemetry,
 } from "../types.js";
 import {
-  DEFAULT_ERROR_BACKOFF_SCHEDULE_MS,
   computeJobPreviousRunAtMs,
   computeJobNextRunAtMs,
-  errorBackoffMs,
-  hasScheduledNextRunAtMs,
   isJobEnabled,
   nextWakeAtMs,
   recomputeNextRunsForMaintenance,
@@ -201,6 +197,26 @@ function tryFinishCronTaskRun(
     );
   }
 }
+/**
+ * Exponential backoff delays (in ms) indexed by consecutive error count.
+ * After the last entry the delay stays constant.
+ */
+const DEFAULT_BACKOFF_SCHEDULE_MS = [
+  30_000, // 1st error  →  30 s
+  60_000, // 2nd error  →   1 min
+  5 * 60_000, // 3rd error  →   5 min
+  15 * 60_000, // 4th error  →  15 min
+  60 * 60_000, // 5th+ error →  60 min
+];
+
+function errorBackoffMs(
+  consecutiveErrors: number,
+  scheduleMs = DEFAULT_BACKOFF_SCHEDULE_MS,
+): number {
+  const idx = Math.min(consecutiveErrors - 1, scheduleMs.length - 1);
+  return scheduleMs[Math.max(0, idx)];
+}
+
 /** Default max retries for one-shot jobs on transient errors (#24355). */
 const DEFAULT_MAX_TRANSIENT_RETRIES = 3;
 
@@ -222,27 +238,6 @@ function isTransientCronError(error: string | undefined, retryOn?: CronRetryOn[]
   return keys.some((k) => TRANSIENT_PATTERNS[k]?.test(error));
 }
 
-function resolveCronNextRunWithLowerBound(params: {
-  state: CronServiceState;
-  job: CronJob;
-  naturalNext: number | undefined;
-  lowerBoundMs: number;
-  context: "completion" | "error_backoff";
-}): number | undefined {
-  if (params.naturalNext === undefined) {
-    params.state.deps.log.warn(
-      {
-        jobId: params.job.id,
-        jobName: params.job.name,
-        context: params.context,
-      },
-      "cron: next run unresolved; clearing schedule to avoid a refire loop",
-    );
-    return undefined;
-  }
-  return Math.max(params.naturalNext, params.lowerBoundMs);
-}
-
 function resolveRetryConfig(cronConfig?: CronConfig) {
   const retry = cronConfig?.retry;
   return {
@@ -251,7 +246,7 @@ function resolveRetryConfig(cronConfig?: CronConfig) {
     backoffMs:
       Array.isArray(retry?.backoffMs) && retry.backoffMs.length > 0
         ? retry.backoffMs
-        : DEFAULT_ERROR_BACKOFF_SCHEDULE_MS.slice(0, 3),
+        : DEFAULT_BACKOFF_SCHEDULE_MS.slice(0, 3),
     retryOn: Array.isArray(retry?.retryOn) && retry.retryOn.length > 0 ? retry.retryOn : undefined,
   };
 }
@@ -267,7 +262,10 @@ function resolveDeliveryStatus(params: { job: CronJob; delivered?: boolean }): C
 }
 
 function normalizeCronMessageChannel(input: unknown): CronMessageChannel | undefined {
-  const channel = normalizeOptionalLowercaseString(input);
+  if (typeof input !== "string") {
+    return undefined;
+  }
+  const channel = input.trim().toLowerCase();
   return channel ? (channel as CronMessageChannel) : undefined;
 }
 
@@ -521,17 +519,7 @@ export function applyJobResult(
       const backoffNext = result.endedAt + backoff;
       // Use whichever is later: the natural next run or the backoff delay.
       job.state.nextRunAtMs =
-        job.schedule.kind === "cron"
-          ? resolveCronNextRunWithLowerBound({
-              state,
-              job,
-              naturalNext: normalNext,
-              lowerBoundMs: backoffNext,
-              context: "error_backoff",
-            })
-          : normalNext !== undefined
-            ? Math.max(normalNext, backoffNext)
-            : backoffNext;
+        normalNext !== undefined ? Math.max(normalNext, backoffNext) : backoffNext;
       state.deps.log.info(
         {
           jobId: job.id,
@@ -560,13 +548,8 @@ export function applyJobResult(
         // schedule computation lands in the same second due to
         // timezone/croner edge cases (see #17821).
         const minNext = result.endedAt + MIN_REFIRE_GAP_MS;
-        job.state.nextRunAtMs = resolveCronNextRunWithLowerBound({
-          state,
-          job,
-          naturalNext,
-          lowerBoundMs: minNext,
-          context: "completion",
-        });
+        job.state.nextRunAtMs =
+          naturalNext !== undefined ? Math.max(naturalNext, minNext) : minNext;
       } else {
         job.state.nextRunAtMs = naturalNext;
       }
@@ -625,16 +608,12 @@ export function armTimer(state: CronServiceState) {
     const jobCount = state.store?.jobs.length ?? 0;
     const enabledCount = state.store?.jobs.filter((j) => j.enabled).length ?? 0;
     const withNextRun =
-      state.store?.jobs.filter((j) => j.enabled && hasScheduledNextRunAtMs(j.state.nextRunAtMs))
-        .length ?? 0;
-    if (enabledCount > 0) {
-      armRunningRecheckTimer(state);
-      state.deps.log.debug(
-        { jobCount, enabledCount, withNextRun, delayMs: MAX_TIMER_DELAY_MS },
-        "cron: timer armed for maintenance recheck",
-      );
-      return;
-    }
+      state.store?.jobs.filter(
+        (j) =>
+          j.enabled &&
+          typeof j.state.nextRunAtMs === "number" &&
+          Number.isFinite(j.state.nextRunAtMs),
+      ).length ?? 0;
     state.deps.log.debug(
       { jobCount, enabledCount, withNextRun },
       "cron: armTimer skipped - no jobs with nextRunAtMs",
@@ -888,10 +867,15 @@ function isRunnableJob(params: {
     return false;
   }
   const next = job.state.nextRunAtMs;
-  if (hasScheduledNextRunAtMs(next) && nowMs >= next) {
+  if (typeof next === "number" && Number.isFinite(next) && nowMs >= next) {
     return true;
   }
-  if (hasScheduledNextRunAtMs(next) && next > nowMs && isErrorBackoffPending(job, nowMs)) {
+  if (
+    typeof next === "number" &&
+    Number.isFinite(next) &&
+    next > nowMs &&
+    isErrorBackoffPending(job, nowMs)
+  ) {
     // Respect active retry backoff windows on restart, but allow missed-slot
     // replay once the backoff window has elapsed.
     return false;
@@ -1327,7 +1311,7 @@ export async function executeJob(
   } & CronRunOutcome &
     CronRunTelemetry;
   try {
-    coreResult = await executeJobCoreWithTimeout(state, job);
+    coreResult = await executeJobCore(state, job);
   } catch (err) {
     coreResult = { status: "error", error: String(err) };
   }

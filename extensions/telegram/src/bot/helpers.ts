@@ -7,7 +7,6 @@ import type {
 } from "openclaw/plugin-sdk/config-runtime";
 import { readChannelAllowFromStore } from "openclaw/plugin-sdk/conversation-runtime";
 import { normalizeAccountId } from "openclaw/plugin-sdk/routing";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import { firstDefined, normalizeAllowFrom, type NormalizedAllowFrom } from "../bot-access.js";
 import { normalizeTelegramReplyToMessageId } from "../outbound-params.js";
 import { resolveTelegramPreviewStreamMode } from "../preview-streaming.js";
@@ -18,9 +17,7 @@ import {
   extractTelegramLocation,
   getTelegramTextParts,
   hasBotMention,
-  isBinaryContent,
   normalizeForwardedContext,
-  resolveTelegramTextContent,
   resolveTelegramMediaPlaceholder,
   type TelegramForwardedContext,
 } from "./body-helpers.js";
@@ -34,16 +31,11 @@ export {
   extractTelegramLocation,
   getTelegramTextParts,
   hasBotMention,
-  isBinaryContent,
   normalizeForwardedContext,
   resolveTelegramMediaPlaceholder,
 };
 
 const TELEGRAM_GENERAL_TOPIC_ID = 1;
-
-function hadUnsafeTelegramText(raw: unknown, sanitized: string): boolean {
-  return typeof raw === "string" && raw.trim().length > 0 && sanitized.trim().length === 0;
-}
 
 export type TelegramThreadSpec = {
   id?: number;
@@ -287,8 +279,7 @@ export function resolveTelegramDirectPeerId(params: {
   chatId: number | string;
   senderId?: number | string | null;
 }) {
-  const senderId =
-    params.senderId != null ? (normalizeOptionalString(String(params.senderId)) ?? "") : "";
+  const senderId = params.senderId != null ? String(params.senderId).trim() : "";
   if (senderId) {
     return senderId;
   }
@@ -335,7 +326,7 @@ export type TelegramReplyTarget = {
   sender: string;
   senderId?: string;
   senderUsername?: string;
-  body?: string;
+  body: string;
   kind: "reply" | "quote";
   /** Forward context if the reply target was itself a forwarded message (issue #9619). */
   forwardedFrom?: TelegramForwardedContext;
@@ -344,30 +335,28 @@ export type TelegramReplyTarget = {
 export function describeReplyTarget(msg: Message): TelegramReplyTarget | null {
   const reply = msg.reply_to_message;
   const externalReply = (msg as Message & { external_reply?: Message }).external_reply;
-  const rawQuoteText =
+  const quoteText =
     msg.quote?.text ??
     (externalReply as (Message & { quote?: { text?: string } }) | undefined)?.quote?.text;
-  const quoteText = resolveTelegramTextContent(rawQuoteText);
   let body = "";
   let kind: TelegramReplyTarget["kind"] = "reply";
-  const filteredQuoteText = hadUnsafeTelegramText(rawQuoteText, quoteText);
 
-  body = quoteText.trim();
-  if (body) {
-    kind = "quote";
+  if (typeof quoteText === "string") {
+    body = quoteText.trim();
+    if (body) {
+      kind = "quote";
+    }
   }
 
   const replyLike = reply ?? externalReply;
-  let filteredReplyText = false;
   if (!body && replyLike) {
-    const rawReplyText =
+    const replyBody = (
       typeof replyLike.text === "string"
         ? replyLike.text
         : typeof replyLike.caption === "string"
           ? replyLike.caption
-          : undefined;
-    const replyBody = resolveTelegramTextContent(rawReplyText).trim();
-    filteredReplyText = hadUnsafeTelegramText(rawReplyText, replyBody);
+          : ""
+    ).trim();
     body = replyBody;
     if (!body) {
       body = resolveTelegramMediaPlaceholder(replyLike) ?? "";
@@ -379,10 +368,7 @@ export function describeReplyTarget(msg: Message): TelegramReplyTarget | null {
       }
     }
   }
-  if (!body && !replyLike) {
-    return null;
-  }
-  if (!body && !filteredQuoteText && !filteredReplyText) {
+  if (!body) {
     return null;
   }
   const sender = replyLike ? buildSenderName(replyLike) : undefined;
@@ -396,7 +382,7 @@ export function describeReplyTarget(msg: Message): TelegramReplyTarget | null {
     sender: senderLabel,
     senderId: replyLike?.from?.id != null ? String(replyLike.from.id) : undefined,
     senderUsername: replyLike?.from?.username ?? undefined,
-    body: body || undefined,
+    body,
     kind,
     forwardedFrom,
   };

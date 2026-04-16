@@ -2,14 +2,10 @@ import { resolveSessionAgentId } from "../../agents/agent-scope.js";
 import { getFinishedSession, getSession } from "../../agents/bash-process-registry.js";
 import { createExecTool } from "../../agents/bash-tools.js";
 import { resolveSandboxRuntimeStatus } from "../../agents/sandbox.js";
-import { isCommandFlagEnabled } from "../../config/commands.flags.js";
-import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import { isCommandFlagEnabled } from "../../config/commands.js";
+import type { OpenClawConfig } from "../../config/config.js";
 import { logVerbose } from "../../globals.js";
 import { formatErrorMessage } from "../../infra/errors.js";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-} from "../../shared/string-coerce.js";
 import { clampInt } from "../../utils.js";
 import type { MsgContext } from "../templating.js";
 import type { ReplyPayload } from "../types.js";
@@ -66,7 +62,7 @@ function formatOutputBlock(text: string) {
 function parseBashRequest(raw: string): BashRequest | null {
   const trimmed = raw.trimStart();
   let restSource = "";
-  if (normalizeLowercaseStringOrEmpty(trimmed).startsWith("/bash")) {
+  if (trimmed.toLowerCase().startsWith("/bash")) {
     const match = trimmed.match(/^\/bash(?:\s*:\s*|\s+|$)([\s\S]*)$/i);
     if (!match) {
       return null;
@@ -86,9 +82,9 @@ function parseBashRequest(raw: string): BashRequest | null {
     return { action: "help" };
   }
   const tokenMatch = rest.match(/^(\S+)(?:\s+([\s\S]+))?$/);
-  const token = normalizeOptionalString(tokenMatch?.[1]) ?? "";
-  const remainder = normalizeOptionalString(tokenMatch?.[2]) ?? "";
-  const lowered = normalizeLowercaseStringOrEmpty(token);
+  const token = tokenMatch?.[1]?.trim() ?? "";
+  const remainder = tokenMatch?.[2]?.trim() ?? "";
+  const lowered = token.toLowerCase();
   if (lowered === "poll") {
     return { action: "poll", sessionId: remainder || undefined };
   }
@@ -210,13 +206,13 @@ export async function handleBashChatCommand(params: {
   if (!params.elevated.enabled || !params.elevated.allowed) {
     const runtimeSandboxed = resolveSandboxRuntimeStatus({
       cfg: params.cfg,
-      sessionKey: params.sessionKey,
+      sessionKey: params.ctx.SessionKey,
     }).sandboxed;
     return {
       text: formatElevatedUnavailableMessage({
         runtimeSandboxed,
         failures: params.elevated.failures,
-        sessionKey: params.sessionKey,
+        sessionKey: params.ctx.SessionKey,
       }),
     };
   }
@@ -240,8 +236,7 @@ export async function handleBashChatCommand(params: {
 
   if (request.action === "poll") {
     const sessionId =
-      normalizeOptionalString(request.sessionId) ||
-      (liveJob?.state === "running" ? liveJob.sessionId : "");
+      request.sessionId?.trim() || (liveJob?.state === "running" ? liveJob.sessionId : "");
     if (!sessionId) {
       return { text: "⚙️ No active bash job." };
     }
@@ -284,8 +279,7 @@ export async function handleBashChatCommand(params: {
 
   if (request.action === "stop") {
     const sessionId =
-      normalizeOptionalString(request.sessionId) ||
-      (liveJob?.state === "running" ? liveJob.sessionId : "");
+      request.sessionId?.trim() || (liveJob?.state === "running" ? liveJob.sessionId : "");
     if (!sessionId) {
       return { text: "⚙️ No active bash job." };
     }

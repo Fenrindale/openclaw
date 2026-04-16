@@ -5,11 +5,10 @@ import {
 } from "openclaw/plugin-sdk/approval-client-runtime";
 import { doesApprovalRequestMatchChannelAccount } from "openclaw/plugin-sdk/approval-native-runtime";
 import type { OpenClawConfig } from "openclaw/plugin-sdk/config-runtime";
-import { normalizeStringifiedOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import { resolveSlackAccount } from "./accounts.js";
 
 export function normalizeSlackApproverId(value: string | number): string | undefined {
-  const trimmed = normalizeStringifiedOptionalString(value);
+  const trimmed = String(value).trim();
   if (!trimmed) {
     return undefined;
   }

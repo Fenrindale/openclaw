@@ -1,5 +1,3 @@
-import { normalizeStringEntries } from "../shared/string-normalization.js";
-
 type CompatMutationResult = {
   entry: Record<string, unknown>;
   changed: boolean;
@@ -34,8 +32,8 @@ function allowFromListsMatch(left: unknown, right: unknown): boolean {
   if (!Array.isArray(left) || !Array.isArray(right)) {
     return false;
   }
-  const normalizedLeft = normalizeStringEntries(left);
-  const normalizedRight = normalizeStringEntries(right);
+  const normalizedLeft = left.map((value) => String(value).trim()).filter(Boolean);
+  const normalizedRight = right.map((value) => String(value).trim()).filter(Boolean);
   if (normalizedLeft.length !== normalizedRight.length) {
     return false;
   }

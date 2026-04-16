@@ -457,8 +457,8 @@ describe("shared Node TLS env defaults", () => {
     expect(env.NODE_EXTRA_CA_CERTS).toBe("/etc/ssl/cert.pem");
   });
 
-  it.each(builders)("$name does not default NODE_EXTRA_CA_CERTS on Windows", ({ build }) => {
-    const env = build({ HOME: "/home/user" }, "win32");
+  it.each(builders)("$name does not default NODE_EXTRA_CA_CERTS on non-macOS", ({ build }) => {
+    const env = build({ HOME: "/home/user" }, "linux");
     expect(env.NODE_EXTRA_CA_CERTS).toBeUndefined();
   });
 

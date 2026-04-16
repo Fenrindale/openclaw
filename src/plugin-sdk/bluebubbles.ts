@@ -1,12 +1,11 @@
-import type { ChannelStatusIssue } from "../channels/plugins/types.public.js";
-import type { OpenClawConfig } from "../config/types.openclaw.js";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
+import type { ChannelStatusIssue } from "../channels/plugins/types.js";
+import type { OpenClawConfig } from "../config/config.js";
 import {
   parseChatTargetPrefixesOrThrow,
   resolveServicePrefixedTarget,
   type ParsedChatTarget,
 } from "./channel-targets.js";
-import { loadBundledPluginPublicSurfaceModuleSync } from "./facade-loader.js";
+import { loadBundledPluginPublicSurfaceModuleSync } from "./facade-runtime.js";
 
 // Narrow plugin-sdk surface for the bundled BlueBubbles plugin.
 // Keep this list additive and scoped to the conversation-binding seam only.
@@ -84,7 +83,7 @@ function stripBlueBubblesPrefix(value: string): string {
   if (!trimmed) {
     return "";
   }
-  if (!normalizeLowercaseStringOrEmpty(trimmed).startsWith("bluebubbles:")) {
+  if (!trimmed.toLowerCase().startsWith("bluebubbles:")) {
     return trimmed;
   }
   return trimmed.slice("bluebubbles:".length).trim();
@@ -136,7 +135,7 @@ function normalizeBlueBubblesHandle(raw: string): string {
   if (!trimmed) {
     return "";
   }
-  const lowered = normalizeLowercaseStringOrEmpty(trimmed);
+  const lowered = trimmed.toLowerCase();
   if (lowered.startsWith("imessage:")) {
     return normalizeBlueBubblesHandle(trimmed.slice(9));
   }
@@ -147,7 +146,7 @@ function normalizeBlueBubblesHandle(raw: string): string {
     return normalizeBlueBubblesHandle(trimmed.slice(5));
   }
   if (trimmed.includes("@")) {
-    return normalizeLowercaseStringOrEmpty(trimmed);
+    return trimmed.toLowerCase();
   }
   return trimmed.replace(/\s+/g, "");
 }
@@ -168,7 +167,7 @@ function parseBlueBubblesTarget(raw: string): BlueBubblesTarget {
   if (!trimmed) {
     throw new Error("BlueBubbles target is required");
   }
-  const lower = normalizeLowercaseStringOrEmpty(trimmed);
+  const lower = trimmed.toLowerCase();
 
   const servicePrefixed = resolveServicePrefixedTarget({
     trimmed,
@@ -317,7 +316,7 @@ export type {
   ChannelAccountSnapshot,
   ChannelMessageActionAdapter,
   ChannelMessageActionName,
-} from "../channels/plugins/types.public.js";
+} from "../channels/plugins/types.js";
 export type { ChannelPlugin } from "../channels/plugins/types.plugin.js";
 export { createChannelReplyPipeline } from "./channel-reply-pipeline.js";
 export type { OpenClawConfig } from "../config/config.js";

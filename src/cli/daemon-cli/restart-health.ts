@@ -8,10 +8,6 @@ import {
   type PortUsage,
 } from "../../infra/ports.js";
 import { killProcessTree } from "../../process/kill-tree.js";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-} from "../../shared/string-coerce.js";
 import { sleep } from "../../utils.js";
 
 export const DEFAULT_RESTART_HEALTH_TIMEOUT_MS = 60_000;
@@ -59,7 +55,7 @@ function looksLikeAuthClose(code: number | undefined, reason: string | undefined
   if (code !== 1008) {
     return false;
   }
-  const normalized = normalizeLowercaseStringOrEmpty(reason);
+  const normalized = (reason ?? "").toLowerCase();
   return (
     normalized.includes("auth") ||
     normalized.includes("token") ||
@@ -70,8 +66,8 @@ function looksLikeAuthClose(code: number | undefined, reason: string | undefined
 }
 
 async function confirmGatewayReachable(port: number): Promise<boolean> {
-  const token = normalizeOptionalString(process.env.OPENCLAW_GATEWAY_TOKEN);
-  const password = normalizeOptionalString(process.env.OPENCLAW_GATEWAY_PASSWORD);
+  const token = process.env.OPENCLAW_GATEWAY_TOKEN?.trim() || undefined;
+  const password = process.env.OPENCLAW_GATEWAY_PASSWORD?.trim() || undefined;
   const probe = await probeGateway({
     url: `ws://127.0.0.1:${port}`,
     auth: token || password ? { token, password } : undefined,

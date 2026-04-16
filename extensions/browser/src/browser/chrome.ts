@@ -2,7 +2,6 @@ import { type ChildProcess, type ChildProcessWithoutNullStreams, spawn } from "n
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import type { SsrFPolicy } from "../infra/net/ssrf.js";
 import { ensurePortAvailable } from "../infra/ports.js";
 import { rawDataToString } from "../infra/ws.js";
@@ -171,22 +170,14 @@ async function fetchChromeVersion(
   const ctrl = new AbortController();
   const t = setTimeout(ctrl.abort.bind(ctrl), timeoutMs);
   try {
+    await assertCdpEndpointAllowed(cdpUrl, ssrfPolicy);
     const versionUrl = appendCdpPath(cdpUrl, "/json/version");
-    const { response, release } = await fetchCdpChecked(
-      versionUrl,
-      timeoutMs,
-      { signal: ctrl.signal },
-      ssrfPolicy,
-    );
-    try {
-      const data = (await response.json()) as ChromeVersion;
-      if (!data || typeof data !== "object") {
-        return null;
-      }
-      return data;
-    } finally {
-      await release();
+    const res = await fetchCdpChecked(versionUrl, timeoutMs, { signal: ctrl.signal });
+    const data = (await res.json()) as ChromeVersion;
+    if (!data || typeof data !== "object") {
+      return null;
     }
+    return data;
   } catch {
     return null;
   } finally {
@@ -205,7 +196,7 @@ export async function getChromeWebSocketUrl(
     return cdpUrl;
   }
   const version = await fetchChromeVersion(cdpUrl, timeoutMs, ssrfPolicy);
-  const wsUrl = normalizeOptionalString(version?.webSocketDebuggerUrl) ?? "";
+  const wsUrl = String(version?.webSocketDebuggerUrl ?? "").trim();
   if (!wsUrl) {
     return null;
   }
@@ -418,8 +409,7 @@ export async function launchOpenClawChrome(
   }
 
   if (!(await isChromeReachable(profile.cdpUrl))) {
-    const stderrOutput =
-      normalizeOptionalString(Buffer.concat(stderrChunks).toString("utf8")) ?? "";
+    const stderrOutput = Buffer.concat(stderrChunks).toString("utf8").trim();
     const stderrHint = stderrOutput
       ? `\nChrome stderr:\n${stderrOutput.slice(0, CHROME_STDERR_HINT_MAX_CHARS)}`
       : "";

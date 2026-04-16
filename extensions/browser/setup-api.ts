@@ -1,12 +1,11 @@
 import type { OpenClawConfig } from "openclaw/plugin-sdk/plugin-entry";
 import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
-import { normalizeOptionalLowercaseString } from "openclaw/plugin-sdk/text-runtime";
 import { isRecord } from "./src/record-shared.js";
 
 function listContainsBrowser(value: unknown): boolean {
   return (
     Array.isArray(value) &&
-    value.some((entry) => normalizeOptionalLowercaseString(entry) === "browser")
+    value.some((entry) => typeof entry === "string" && entry.trim().toLowerCase() === "browser")
   );
 }
 

@@ -1,13 +1,7 @@
 import { hasOutboundReplyContent } from "openclaw/plugin-sdk/reply-payload";
 import { splitMediaFromOutput } from "../../media/parse.js";
 import { parseInlineDirectives } from "../../utils/directive-tags.js";
-import {
-  isSilentReplyPrefixText,
-  isSilentReplyText,
-  SILENT_REPLY_TOKEN,
-  startsWithSilentToken,
-  stripLeadingSilentToken,
-} from "../tokens.js";
+import { isSilentReplyPrefixText, isSilentReplyText, SILENT_REPLY_TOKEN } from "../tokens.js";
 import type { ReplyDirectiveParseResult } from "./reply-directives.js";
 
 type PendingReplyState = {
@@ -58,8 +52,6 @@ const parseChunk = (raw: string, options?: { silentToken?: string }): ParsedChun
     isSilentReplyText(text, silentToken) || isSilentReplyPrefixText(text, silentToken);
   if (isSilent) {
     text = "";
-  } else if (startsWithSilentToken(text, silentToken)) {
-    text = stripLeadingSilentToken(text, silentToken);
   }
 
   return {

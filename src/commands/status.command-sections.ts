@@ -1,6 +1,5 @@
 import type { HeartbeatEventPayload } from "../infra/heartbeat-events.js";
 import type { Tone } from "../memory-host-sdk/status.js";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 import type { TableColumn } from "../terminal/table.js";
 import type { HealthSummary } from "./health.js";
 import type { AgentLocalStatus } from "./status.agent-local.js";
@@ -254,7 +253,7 @@ export function buildStatusHealthRows(params: {
     }
     const item = line.slice(0, colon).trim();
     const detail = line.slice(colon + 1).trim();
-    const normalized = normalizeLowercaseStringOrEmpty(detail);
+    const normalized = detail.toLowerCase();
     const status = normalized.startsWith("ok")
       ? params.ok("OK")
       : normalized.startsWith("failed")

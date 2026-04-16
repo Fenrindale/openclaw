@@ -3,7 +3,6 @@ import {
   FILE_REF_EXTENSIONS_WITH_TLD,
   isAutoLinkedFileRef,
   markdownToIR,
-  normalizeLowercaseStringOrEmpty,
   type MarkdownLinkSpan,
   type MarkdownIR,
   renderMarkdownIRChunksWithinLimit,
@@ -183,7 +182,7 @@ export function wrapFileReferencesInHtml(html: string): string {
     const tagStart = match.index;
     const tagEnd = HTML_TAG_PATTERN.lastIndex;
     const isClosing = match[1] === "</";
-    const tagName = normalizeLowercaseStringOrEmpty(match[2]);
+    const tagName = match[2].toLowerCase();
 
     // Process text before this tag
     const textBefore = deLinkified.slice(lastIndex, tagStart);
@@ -394,7 +393,7 @@ export function splitTelegramHtmlChunks(html: string, limit: number): string[] {
 
     const rawTag = match[0];
     const isClosing = match[1] === "</";
-    const tagName = normalizeLowercaseStringOrEmpty(match[2]);
+    const tagName = match[2].toLowerCase();
     const isSelfClosing =
       !isClosing &&
       (TELEGRAM_SELF_CLOSING_HTML_TAGS.has(tagName) || rawTag.trimEnd().endsWith("/>"));

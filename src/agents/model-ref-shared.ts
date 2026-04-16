@@ -1,8 +1,7 @@
 import {
   normalizeGooglePreviewModelId,
   normalizeNativeXaiModelId,
-} from "../plugin-sdk/provider-model-id-normalize.js";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
+} from "../plugin-sdk/provider-model-shared.js";
 import { normalizeProviderId } from "./provider-id.js";
 
 export type StaticModelRef = {
@@ -19,9 +18,7 @@ export function modelKey(provider: string, model: string): string {
   if (!modelId) {
     return providerId;
   }
-  return normalizeLowercaseStringOrEmpty(modelId).startsWith(
-    `${normalizeLowercaseStringOrEmpty(providerId)}/`,
-  )
+  return modelId.toLowerCase().startsWith(`${providerId.toLowerCase()}/`)
     ? modelId
     : `${providerId}/${modelId}`;
 }
@@ -31,7 +28,7 @@ export function normalizeAnthropicModelId(model: string): string {
   if (!trimmed) {
     return trimmed;
   }
-  switch (normalizeLowercaseStringOrEmpty(trimmed)) {
+  switch (trimmed.toLowerCase()) {
     case "opus-4.6":
       return "claude-opus-4-6";
     case "opus-4.5":
@@ -51,9 +48,7 @@ function normalizeHuggingfaceModelId(model: string): string {
     return trimmed;
   }
   const prefix = "huggingface/";
-  return normalizeLowercaseStringOrEmpty(trimmed).startsWith(prefix)
-    ? trimmed.slice(prefix.length)
-    : trimmed;
+  return trimmed.toLowerCase().startsWith(prefix) ? trimmed.slice(prefix.length) : trimmed;
 }
 
 export function normalizeStaticProviderModelId(provider: string, model: string): string {

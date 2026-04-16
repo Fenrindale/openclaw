@@ -1,7 +1,6 @@
 import type { Command } from "commander";
 import { loadNodeHostConfig } from "../../node-host/config.js";
 import { runNodeHost } from "../../node-host/runner.js";
-import { normalizeOptionalString } from "../../shared/string-coerce.js";
 import { formatDocsLink } from "../../terminal/links.js";
 import { theme } from "../../terminal/theme.js";
 import { parsePort } from "../daemon-cli/shared.js";
@@ -49,9 +48,7 @@ export function registerNodeCli(program: Command) {
     .action(async (opts) => {
       const existing = await loadNodeHostConfig();
       const host =
-        normalizeOptionalString(opts.host as string | undefined) ||
-        existing?.gateway?.host ||
-        "127.0.0.1";
+        (opts.host as string | undefined)?.trim() || existing?.gateway?.host || "127.0.0.1";
       const port = parsePortWithFallback(opts.port, existing?.gateway?.port ?? 18789);
       await runNodeHost({
         gatewayHost: host,

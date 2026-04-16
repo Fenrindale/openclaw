@@ -8,7 +8,6 @@ import {
   sendApnsAlert,
   shouldClearStoredApnsRegistration,
 } from "../../infra/push-apns.js";
-import { normalizeStringifiedOptionalString } from "../../shared/string-coerce.js";
 import { ErrorCodes, errorShape, validatePushTestParams } from "../protocol/index.js";
 import { respondInvalidParams, respondUnavailableOnThrow } from "./nodes.helpers.js";
 import { normalizeTrimmedString } from "./record-shared.js";
@@ -25,7 +24,7 @@ export const pushHandlers: GatewayRequestHandlers = {
       return;
     }
 
-    const nodeId = normalizeStringifiedOptionalString(params.nodeId) ?? "";
+    const nodeId = String(params.nodeId ?? "").trim();
     if (!nodeId) {
       respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "nodeId required"));
       return;

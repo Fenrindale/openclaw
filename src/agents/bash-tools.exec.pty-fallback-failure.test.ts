@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, beforeEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 let createExecTool: typeof import("./bash-tools.exec.js").createExecTool;
 let listRunningSessions: typeof import("./bash-process-registry.js").listRunningSessions;
 let resetProcessRegistryForTests: typeof import("./bash-process-registry.js").resetProcessRegistryForTests;
@@ -22,14 +22,11 @@ vi.mock("../process/supervisor/index.js", () => ({
   getProcessSupervisor: () => makeSupervisor(),
 }));
 
-beforeAll(async () => {
+beforeEach(async () => {
+  vi.resetModules();
   ({ createExecTool } = await import("./bash-tools.exec.js"));
   ({ listRunningSessions, resetProcessRegistryForTests } =
     await import("./bash-process-registry.js"));
-});
-
-beforeEach(() => {
-  supervisorSpawnMock.mockReset();
 });
 
 afterEach(() => {

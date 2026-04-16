@@ -1,11 +1,10 @@
 import type { LookupFn } from "../../infra/net/ssrf.js";
-import { normalizeLowercaseStringOrEmpty } from "../../shared/string-coerce.js";
 
 export function makeFetchHeaders(map: Record<string, string>): {
   get: (key: string) => string | null;
 } {
   return {
-    get: (key) => map[normalizeLowercaseStringOrEmpty(key)] ?? null,
+    get: (key) => map[key.toLowerCase()] ?? null,
   };
 }
 

@@ -1,21 +1,9 @@
+// Manual facade. Keep loader boundary explicit.
+type FacadeModule = typeof import("@openclaw/speech-core/runtime-api.js");
 import {
   createLazyFacadeObjectValue,
   loadActivatedBundledPluginPublicSurfaceModuleSync,
 } from "./facade-runtime.js";
-import type {
-  ResolvedTtsConfig,
-  ResolvedTtsModelOverrides,
-  TtsDirectiveOverrides,
-  TtsDirectiveParseResult,
-  TtsResult,
-  TtsRuntimeFacade,
-  TtsSynthesisResult,
-  TtsTelephonyResult,
-} from "./tts-runtime.types.js";
-
-// Manual facade. Keep loader boundary explicit and avoid typing this public SDK
-// seam through the bundled speech-core runtime surface.
-type FacadeModule = TtsRuntimeFacade;
 
 function loadFacadeModule(): FacadeModule {
   return loadActivatedBundledPluginPublicSurfaceModuleSync<FacadeModule>({
@@ -46,8 +34,6 @@ export const listSpeechVoices: FacadeModule["listSpeechVoices"] =
   createLazyFacadeValue("listSpeechVoices");
 export const maybeApplyTtsToPayload: FacadeModule["maybeApplyTtsToPayload"] =
   createLazyFacadeValue("maybeApplyTtsToPayload");
-export const resolveExplicitTtsOverrides: FacadeModule["resolveExplicitTtsOverrides"] =
-  createLazyFacadeValue("resolveExplicitTtsOverrides");
 export const resolveTtsAutoMode: FacadeModule["resolveTtsAutoMode"] =
   createLazyFacadeValue("resolveTtsAutoMode");
 export const resolveTtsConfig: FacadeModule["resolveTtsConfig"] =
@@ -73,15 +59,16 @@ export const textToSpeech: FacadeModule["textToSpeech"] = createLazyFacadeValue(
 export const textToSpeechTelephony: FacadeModule["textToSpeechTelephony"] =
   createLazyFacadeValue("textToSpeechTelephony");
 
-export type {
-  ResolvedTtsConfig,
-  ResolvedTtsModelOverrides,
-  TtsDirectiveOverrides,
-  TtsDirectiveParseResult,
-  TtsResult,
-  TtsSynthesisResult,
-  TtsTelephonyResult,
-} from "./tts-runtime.types.js";
+export type ResolvedTtsConfig = import("@openclaw/speech-core/runtime-api.js").ResolvedTtsConfig;
+export type ResolvedTtsModelOverrides =
+  import("@openclaw/speech-core/runtime-api.js").ResolvedTtsModelOverrides;
+export type TtsDirectiveOverrides =
+  import("@openclaw/speech-core/runtime-api.js").TtsDirectiveOverrides;
+export type TtsDirectiveParseResult =
+  import("@openclaw/speech-core/runtime-api.js").TtsDirectiveParseResult;
+export type TtsResult = import("@openclaw/speech-core/runtime-api.js").TtsResult;
+export type TtsSynthesisResult = import("@openclaw/speech-core/runtime-api.js").TtsSynthesisResult;
+export type TtsTelephonyResult = import("@openclaw/speech-core/runtime-api.js").TtsTelephonyResult;
 
 function createLazyFacadeValue<K extends keyof FacadeModule>(key: K): FacadeModule[K] {
   return ((...args: unknown[]) => {

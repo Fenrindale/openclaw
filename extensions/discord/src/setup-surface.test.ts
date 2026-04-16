@@ -1,21 +1,6 @@
 import type { OpenClawConfig } from "openclaw/plugin-sdk/config-runtime";
 import { describe, expect, it } from "vitest";
-import { createDiscordSetupWizardBase } from "./setup-core.js";
-
-const discordSetupWizard = createDiscordSetupWizardBase({
-  promptAllowFrom: async ({ cfg }) => cfg,
-  resolveAllowFromEntries: async ({ entries }) =>
-    entries.map((entry) => ({
-      input: entry,
-      resolved: false,
-      id: null,
-    })),
-  resolveGroupAllowlist: async ({ entries }) =>
-    entries.map((entry) => ({
-      input: entry,
-      resolved: false,
-    })),
-});
+import { discordSetupWizard } from "./setup-surface.js";
 
 describe("discordSetupWizard.dmPolicy", () => {
   it("reads the named-account DM policy instead of the channel root", () => {

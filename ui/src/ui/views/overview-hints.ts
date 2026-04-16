@@ -1,5 +1,4 @@
 import { ConnectErrorDetailCodes } from "../../../../src/gateway/protocol/connect-error-details.js";
-import { normalizeLowercaseStringOrEmpty } from "../string-coerce.ts";
 
 const AUTH_REQUIRED_CODES = new Set<string>([
   ConnectErrorDetailCodes.AUTH_REQUIRED,
@@ -41,7 +40,7 @@ export function shouldShowPairingHint(
   if (lastErrorCode === ConnectErrorDetailCodes.PAIRING_REQUIRED) {
     return true;
   }
-  return normalizeLowercaseStringOrEmpty(lastError).includes("pairing required");
+  return lastError.toLowerCase().includes("pairing required");
 }
 
 /**
@@ -67,7 +66,7 @@ export function resolveAuthHintKind(params: {
     return AUTH_REQUIRED_CODES.has(params.lastErrorCode) ? "required" : "failed";
   }
 
-  const lower = normalizeLowercaseStringOrEmpty(params.lastError);
+  const lower = params.lastError.toLowerCase();
   if (!lower.includes("unauthorized")) {
     return null;
   }
@@ -85,6 +84,6 @@ export function shouldShowInsecureContextHint(
   if (lastErrorCode) {
     return INSECURE_CONTEXT_CODES.has(lastErrorCode);
   }
-  const lower = normalizeLowercaseStringOrEmpty(lastError);
+  const lower = lastError.toLowerCase();
   return lower.includes("secure context") || lower.includes("device identity required");
 }

@@ -1,14 +1,9 @@
 import { Type } from "@sinclair/typebox";
-import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import type { OpenClawConfig } from "../../config/config.js";
 import { SsrFBlockedError, type LookupFn } from "../../infra/net/ssrf.js";
 import { logDebug } from "../../logger.js";
 import type { RuntimeWebFetchMetadata } from "../../secrets/runtime-web-tools.types.js";
 import { wrapExternalContent, wrapWebContent } from "../../security/external-content.js";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalLowercaseString,
-  normalizeOptionalString,
-} from "../../shared/string-coerce.js";
 import { isRecord } from "../../utils.js";
 import { resolveWebFetchDefinition } from "../../web-fetch/runtime.js";
 import { resolveWebProviderConfig } from "../../web/provider-runtime-shared.js";
@@ -40,8 +35,8 @@ export { extractReadableContent } from "./web-fetch-utils.js";
 
 const EXTRACT_MODES = ["markdown", "text"] as const;
 
-const DEFAULT_FETCH_MAX_CHARS = 20_000;
-const DEFAULT_FETCH_MAX_RESPONSE_BYTES = 750_000;
+const DEFAULT_FETCH_MAX_CHARS = 50_000;
+const DEFAULT_FETCH_MAX_RESPONSE_BYTES = 2_000_000;
 const FETCH_MAX_RESPONSE_BYTES_MIN = 32_000;
 const FETCH_MAX_RESPONSE_BYTES_MAX = 10_000_000;
 const DEFAULT_FETCH_MAX_REDIRECTS = 3;
@@ -131,7 +126,7 @@ function looksLikeHtml(value: string): boolean {
   if (!trimmed) {
     return false;
   }
-  const head = normalizeLowercaseStringOrEmpty(trimmed.slice(0, 256));
+  const head = trimmed.slice(0, 256).toLowerCase();
   return head.startsWith("<!doctype html") || head.startsWith("<html");
 }
 
@@ -145,7 +140,7 @@ function formatWebFetchErrorDetail(params: {
     return "";
   }
   let text = detail;
-  const contentTypeLower = normalizeOptionalLowercaseString(contentType);
+  const contentTypeLower = contentType?.toLowerCase();
   if (contentTypeLower?.includes("text/html") || looksLikeHtml(detail)) {
     const rendered = htmlToMarkdown(detail);
     const withTitle = rendered.title ? `${rendered.title}\n${rendered.text}` : rendered.text;
@@ -247,15 +242,15 @@ type WebFetchRuntimeParams = {
   cacheTtlMs: number;
   userAgent: string;
   readabilityEnabled: boolean;
-  ssrfPolicy?: {
-    allowRfc2544BenchmarkRange?: boolean;
-  };
   lookupFn?: LookupFn;
   resolveProviderFallback: () => ReturnType<typeof resolveWebFetchDefinition>;
 };
 
 function normalizeProviderFinalUrl(value: unknown): string | undefined {
-  const trimmed = normalizeOptionalString(value);
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
   if (!trimmed) {
     return undefined;
   }
@@ -363,9 +358,8 @@ async function maybeFetchProviderWebFetchPayload(
 }
 
 async function runWebFetch(params: WebFetchRuntimeParams): Promise<Record<string, unknown>> {
-  const allowRfc2544BenchmarkRange = params.ssrfPolicy?.allowRfc2544BenchmarkRange === true;
   const cacheKey = normalizeCacheKey(
-    `fetch:${params.url}:${params.extractMode}:${params.maxChars}${allowRfc2544BenchmarkRange ? ":allow-rfc2544" : ""}`,
+    `fetch:${params.url}:${params.extractMode}:${params.maxChars}`,
   );
   const cached = readCache(FETCH_CACHE, cacheKey);
   if (cached) {
@@ -392,7 +386,6 @@ async function runWebFetch(params: WebFetchRuntimeParams): Promise<Record<string
       maxRedirects: params.maxRedirects,
       timeoutSeconds: params.timeoutSeconds,
       lookupFn: params.lookupFn,
-      policy: allowRfc2544BenchmarkRange ? { allowRfc2544BenchmarkRange } : undefined,
       init: {
         headers: {
           Accept: "text/markdown, text/html;q=0.9, */*;q=0.1",
@@ -622,7 +615,6 @@ export function createWebFetchTool(options?: {
         cacheTtlMs: resolveCacheTtlMs(fetch?.cacheTtlMinutes, DEFAULT_CACHE_TTL_MINUTES),
         userAgent,
         readabilityEnabled,
-        ssrfPolicy: fetch?.ssrfPolicy,
         lookupFn: options?.lookupFn,
         resolveProviderFallback,
       });

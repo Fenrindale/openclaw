@@ -6,14 +6,10 @@ const isDangerousNameMatchingEnabled = vi.hoisted(() => vi.fn());
 const resolveAllowlistProviderRuntimeGroupPolicy = vi.hoisted(() => vi.fn());
 const resolveDefaultGroupPolicy = vi.hoisted(() => vi.fn());
 const resolveDmGroupAccessWithLists = vi.hoisted(() => vi.fn());
-const resolveInboundMentionDecision = vi.hoisted(() => vi.fn());
+const resolveMentionGatingWithBypass = vi.hoisted(() => vi.fn());
 const resolveSenderScopedGroupPolicy = vi.hoisted(() => vi.fn());
 const warnMissingProviderGroupPolicyFallbackOnce = vi.hoisted(() => vi.fn());
 const sendGoogleChatMessage = vi.hoisted(() => vi.fn());
-
-vi.mock("openclaw/plugin-sdk/channel-inbound", () => ({
-  resolveInboundMentionDecision,
-}));
 
 vi.mock("../runtime-api.js", () => ({
   GROUP_POLICY_BLOCKED_LABEL: { space: "space" },
@@ -23,6 +19,7 @@ vi.mock("../runtime-api.js", () => ({
   resolveAllowlistProviderRuntimeGroupPolicy,
   resolveDefaultGroupPolicy,
   resolveDmGroupAccessWithLists,
+  resolveMentionGatingWithBypass,
   resolveSenderScopedGroupPolicy,
   warnMissingProviderGroupPolicyFallbackOnce,
 }));
@@ -87,7 +84,7 @@ function allowInboundGroupTraffic(options?: {
     effectiveAllowFrom: [],
     effectiveGroupAllowFrom: options?.effectiveGroupAllowFrom ?? ["users/alice"],
   });
-  resolveInboundMentionDecision.mockReturnValue({
+  resolveMentionGatingWithBypass.mockReturnValue({
     shouldSkip: false,
     effectiveWasMentioned: options?.effectiveWasMentioned ?? true,
   });

@@ -136,11 +136,11 @@ export function createBraveWebSearchProvider(): WebSearchProviderPlugin {
     createTool: (ctx) =>
       createBraveToolDefinition(
         mergeScopedSearchConfig(
-          ctx.searchConfig,
+          ctx.searchConfig as SearchConfigRecord | undefined,
           "brave",
           resolveProviderWebSearchPluginConfig(ctx.config, "brave"),
           { mirrorApiKeyToTopLevel: true },
-        ),
+        ) as SearchConfigRecord | undefined,
       ),
   };
 }

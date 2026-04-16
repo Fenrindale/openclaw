@@ -4,7 +4,6 @@ import type {
   ChannelMessageActionAdapter,
   ChannelMessageActionName,
 } from "openclaw/plugin-sdk/channel-contract";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 import { removeReactionSignal, sendReactionSignal } from "../reaction-runtime-api.js";
 import { listEnabledSignalAccounts, resolveSignalAccount } from "./accounts.js";
 import { resolveSignalReactionLevel } from "./reaction-level.js";
@@ -21,7 +20,7 @@ function normalizeSignalReactionRecipient(raw: string): string {
   if (!withoutSignal) {
     return withoutSignal;
   }
-  if (normalizeLowercaseStringOrEmpty(withoutSignal).startsWith("uuid:")) {
+  if (withoutSignal.toLowerCase().startsWith("uuid:")) {
     return withoutSignal.slice("uuid:".length).trim();
   }
   return withoutSignal;
@@ -36,7 +35,7 @@ function resolveSignalReactionTarget(raw: string): { recipient?: string; groupId
   if (!withoutSignal) {
     return {};
   }
-  if (normalizeLowercaseStringOrEmpty(withoutSignal).startsWith(GROUP_PREFIX)) {
+  if (withoutSignal.toLowerCase().startsWith(GROUP_PREFIX)) {
     const groupId = withoutSignal.slice(GROUP_PREFIX.length).trim();
     return groupId ? { groupId } : {};
   }

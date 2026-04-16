@@ -1,11 +1,12 @@
 import {
-  createWebSearchProviderContractFields,
+  getScopedCredentialValue,
+  resolveProviderWebSearchPluginConfig,
+  setProviderWebSearchPluginConfigValue,
+  setScopedCredentialValue,
   type WebSearchProviderPlugin,
-} from "openclaw/plugin-sdk/provider-web-search-config-contract";
+} from "openclaw/plugin-sdk/provider-web-search-contract";
 
 export function createGeminiWebSearchProvider(): WebSearchProviderPlugin {
-  const credentialPath = "plugins.entries.google.config.webSearch.apiKey";
-
   return {
     id: "gemini",
     label: "Gemini (Google Search)",
@@ -17,12 +18,16 @@ export function createGeminiWebSearchProvider(): WebSearchProviderPlugin {
     signupUrl: "https://aistudio.google.com/apikey",
     docsUrl: "https://docs.openclaw.ai/tools/web",
     autoDetectOrder: 20,
-    credentialPath,
-    ...createWebSearchProviderContractFields({
-      credentialPath,
-      searchCredential: { type: "scoped", scopeId: "gemini" },
-      configuredCredential: { pluginId: "google" },
-    }),
+    credentialPath: "plugins.entries.google.config.webSearch.apiKey",
+    inactiveSecretPaths: ["plugins.entries.google.config.webSearch.apiKey"],
+    getCredentialValue: (searchConfig) => getScopedCredentialValue(searchConfig, "gemini"),
+    setCredentialValue: (searchConfigTarget, value) =>
+      setScopedCredentialValue(searchConfigTarget, "gemini", value),
+    getConfiguredCredentialValue: (config) =>
+      resolveProviderWebSearchPluginConfig(config, "google")?.apiKey,
+    setConfiguredCredentialValue: (configTarget, value) => {
+      setProviderWebSearchPluginConfigValue(configTarget, "google", "apiKey", value);
+    },
     createTool: () => null,
   };
 }

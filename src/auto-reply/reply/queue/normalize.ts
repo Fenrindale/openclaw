@@ -1,11 +1,10 @@
-import { normalizeOptionalLowercaseString } from "../../../shared/string-coerce.js";
 import type { QueueDropPolicy, QueueMode } from "./types.js";
 
 export function normalizeQueueMode(raw?: string): QueueMode | undefined {
-  const cleaned = normalizeOptionalLowercaseString(raw);
-  if (!cleaned) {
+  if (!raw) {
     return undefined;
   }
+  const cleaned = raw.trim().toLowerCase();
   if (cleaned === "queue" || cleaned === "queued") {
     return "steer";
   }
@@ -28,10 +27,10 @@ export function normalizeQueueMode(raw?: string): QueueMode | undefined {
 }
 
 export function normalizeQueueDropPolicy(raw?: string): QueueDropPolicy | undefined {
-  const cleaned = normalizeOptionalLowercaseString(raw);
-  if (!cleaned) {
+  if (!raw) {
     return undefined;
   }
+  const cleaned = raw.trim().toLowerCase();
   if (cleaned === "old" || cleaned === "oldest") {
     return "old";
   }

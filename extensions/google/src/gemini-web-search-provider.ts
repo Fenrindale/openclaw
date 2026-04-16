@@ -25,7 +25,6 @@ import {
   wrapWebContent,
   writeCachedSearchPayload,
 } from "openclaw/plugin-sdk/provider-web-search";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import { DEFAULT_GOOGLE_API_BASE_URL } from "../api.js";
 
 const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
@@ -74,7 +73,7 @@ function resolveGeminiApiKey(gemini?: GeminiConfig): string | undefined {
 }
 
 function resolveGeminiModel(gemini?: GeminiConfig): string {
-  const model = normalizeOptionalString(gemini?.model) ?? "";
+  const model = typeof gemini?.model === "string" ? gemini.model.trim() : "";
   return model || DEFAULT_GEMINI_MODEL;
 }
 

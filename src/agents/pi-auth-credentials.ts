@@ -1,6 +1,5 @@
-import { normalizeOptionalString } from "../shared/string-coerce.js";
 import type { AuthProfileCredential, AuthProfileStore } from "./auth-profiles.js";
-import { normalizeProviderId } from "./provider-id.js";
+import { normalizeProviderId } from "./model-selection.js";
 
 export type PiApiKeyCredential = { type: "api_key"; key: string };
 export type PiOAuthCredential = {
@@ -15,7 +14,7 @@ export type PiCredentialMap = Record<string, PiCredential>;
 
 export function convertAuthProfileCredentialToPi(cred: AuthProfileCredential): PiCredential | null {
   if (cred.type === "api_key") {
-    const key = normalizeOptionalString(cred.key) ?? "";
+    const key = typeof cred.key === "string" ? cred.key.trim() : "";
     if (!key) {
       return null;
     }
@@ -23,7 +22,7 @@ export function convertAuthProfileCredentialToPi(cred: AuthProfileCredential): P
   }
 
   if (cred.type === "token") {
-    const token = normalizeOptionalString(cred.token) ?? "";
+    const token = typeof cred.token === "string" ? cred.token.trim() : "";
     if (!token) {
       return null;
     }
@@ -38,8 +37,8 @@ export function convertAuthProfileCredentialToPi(cred: AuthProfileCredential): P
   }
 
   if (cred.type === "oauth") {
-    const access = normalizeOptionalString(cred.access) ?? "";
-    const refresh = normalizeOptionalString(cred.refresh) ?? "";
+    const access = typeof cred.access === "string" ? cred.access.trim() : "";
+    const refresh = typeof cred.refresh === "string" ? cred.refresh.trim() : "";
     if (!access || !refresh || !Number.isFinite(cred.expires) || cred.expires <= 0) {
       return null;
     }
@@ -57,7 +56,7 @@ export function convertAuthProfileCredentialToPi(cred: AuthProfileCredential): P
 export function resolvePiCredentialMapFromStore(store: AuthProfileStore): PiCredentialMap {
   const credentials: PiCredentialMap = {};
   for (const credential of Object.values(store.profiles)) {
-    const provider = normalizeProviderId(credential.provider ?? "");
+    const provider = normalizeProviderId(String(credential.provider ?? "")).trim();
     if (!provider || credentials[provider]) {
       continue;
     }

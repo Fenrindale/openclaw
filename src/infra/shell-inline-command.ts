@@ -1,5 +1,3 @@
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
-
 export const POSIX_INLINE_COMMAND_FLAGS = new Set(["-lc", "-c", "--command"]);
 export const POWERSHELL_INLINE_COMMAND_FLAGS = new Set([
   "-c",
@@ -22,7 +20,7 @@ export function resolveInlineCommandMatch(
     if (!token) {
       continue;
     }
-    const lower = normalizeLowercaseStringOrEmpty(token);
+    const lower = token.toLowerCase();
     if (lower === "--") {
       break;
     }

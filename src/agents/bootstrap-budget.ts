@@ -1,5 +1,4 @@
 import path from "node:path";
-import { normalizeOptionalString } from "../shared/string-coerce.js";
 import type { EmbeddedContextFile } from "./pi-embedded-helpers.js";
 import type { WorkspaceBootstrapFile } from "./workspace.js";
 
@@ -75,7 +74,7 @@ function normalizeSeenSignatures(signatures?: string[]): string[] {
   const seen = new Set<string>();
   const result: string[] = [];
   for (const signature of signatures) {
-    const value = normalizeOptionalString(signature) ?? "";
+    const value = typeof signature === "string" ? signature.trim() : "";
     if (!value || seen.has(value)) {
       continue;
     }
@@ -117,7 +116,7 @@ export function resolveBootstrapWarningSignaturesSeen(report?: {
   }
   const single =
     typeof truncation?.promptWarningSignature === "string"
-      ? (normalizeOptionalString(truncation.promptWarningSignature) ?? "")
+      ? truncation.promptWarningSignature.trim()
       : "";
   return single ? [single] : [];
 }
@@ -129,7 +128,7 @@ export function buildBootstrapInjectionStats(params: {
   const injectedByPath = new Map<string, string>();
   const injectedByBaseName = new Map<string, string>();
   for (const file of params.injectedFiles) {
-    const pathValue = normalizeOptionalString(file.path) ?? "";
+    const pathValue = typeof file.path === "string" ? file.path.trim() : "";
     if (!pathValue) {
       continue;
     }
@@ -143,7 +142,7 @@ export function buildBootstrapInjectionStats(params: {
     }
   }
   return params.bootstrapFiles.map((file) => {
-    const pathValue = normalizeOptionalString(file.path) ?? "";
+    const pathValue = typeof file.path === "string" ? file.path.trim() : "";
     const rawChars = file.missing ? 0 : (file.content ?? "").trimEnd().length;
     const injected =
       (pathValue ? injectedByPath.get(pathValue) : undefined) ??

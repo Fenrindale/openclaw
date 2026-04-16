@@ -1,5 +1,4 @@
 import type { CliBackendConfig } from "../config/types.js";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 import { isRecord } from "../utils.js";
 
 type CliUsage = {
@@ -12,10 +11,8 @@ type CliUsage = {
 
 export type CliOutput = {
   text: string;
-  rawText?: string;
   sessionId?: string;
   usage?: CliUsage;
-  finalPromptText?: string;
 };
 
 export type CliStreamingDelta = {
@@ -26,16 +23,7 @@ export type CliStreamingDelta = {
 };
 
 function isClaudeCliProvider(providerId: string): boolean {
-  return normalizeLowercaseStringOrEmpty(providerId) === "claude-cli";
-}
-
-function usesClaudeStreamJsonDialect(params: {
-  backend: CliBackendConfig;
-  providerId: string;
-}): boolean {
-  return (
-    params.backend.jsonlDialect === "claude-stream-json" || isClaudeCliProvider(params.providerId)
-  );
+  return providerId.trim().toLowerCase() === "claude-cli";
 }
 
 function extractJsonObjectCandidates(raw: string): string[] {
@@ -114,67 +102,19 @@ function parseJsonRecordCandidates(raw: string): Record<string, unknown>[] {
   return parsedRecords;
 }
 
-function readNestedErrorMessage(parsed: Record<string, unknown>): string | undefined {
-  if (isRecord(parsed.error)) {
-    const errorMessage = readNestedErrorMessage(parsed.error);
-    if (errorMessage) {
-      return errorMessage;
-    }
-  }
-  if (typeof parsed.message === "string") {
-    const trimmed = parsed.message.trim();
-    if (trimmed) {
-      return trimmed;
-    }
-  }
-  if (typeof parsed.error === "string") {
-    const trimmed = parsed.error.trim();
-    if (trimmed) {
-      return trimmed;
-    }
-  }
-  return undefined;
-}
-
-function unwrapCliErrorText(raw: string): string {
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    return "";
-  }
-  for (const parsed of parseJsonRecordCandidates(trimmed)) {
-    const nested = readNestedErrorMessage(parsed);
-    if (nested) {
-      return nested;
-    }
-  }
-  return trimmed;
-}
-
 function toCliUsage(raw: Record<string, unknown>): CliUsage | undefined {
-  const readNestedCached = (key: "input_tokens_details" | "prompt_tokens_details") => {
-    const nested = raw[key];
-    if (!isRecord(nested)) {
-      return undefined;
-    }
-    return typeof nested.cached_tokens === "number" && nested.cached_tokens > 0
-      ? nested.cached_tokens
-      : undefined;
-  };
   const pick = (key: string) =>
     typeof raw[key] === "number" && raw[key] > 0 ? raw[key] : undefined;
   const totalInput = pick("input_tokens") ?? pick("inputTokens");
   const output = pick("output_tokens") ?? pick("outputTokens");
-  const nestedCached =
-    readNestedCached("input_tokens_details") ?? readNestedCached("prompt_tokens_details");
   const cacheRead =
     pick("cache_read_input_tokens") ??
     pick("cached_input_tokens") ??
     pick("cacheRead") ??
-    pick("cached") ??
-    nestedCached;
+    pick("cached");
   const input =
     pick("input") ??
-    ((Object.hasOwn(raw, "cached") || nestedCached !== undefined) && typeof totalInput === "number"
+    (Object.hasOwn(raw, "cached") && typeof totalInput === "number"
       ? Math.max(0, totalInput - (cacheRead ?? 0))
       : totalInput);
   const cacheWrite =
@@ -230,35 +170,6 @@ function collectCliText(value: unknown): string {
   if (isRecord(value.message)) {
     return collectCliText(value.message);
   }
-  return "";
-}
-
-function collectExplicitCliErrorText(parsed: Record<string, unknown>): string {
-  const nested = readNestedErrorMessage(parsed);
-  if (nested) {
-    return unwrapCliErrorText(nested);
-  }
-
-  if (parsed.is_error === true && typeof parsed.result === "string") {
-    return unwrapCliErrorText(parsed.result);
-  }
-
-  if (parsed.type === "assistant") {
-    const text = collectCliText(parsed.message);
-    if (/^\s*API Error:/i.test(text)) {
-      return unwrapCliErrorText(text);
-    }
-  }
-
-  if (parsed.type === "error") {
-    const text =
-      collectCliText(parsed.message) ||
-      collectCliText(parsed.content) ||
-      collectCliText(parsed.result) ||
-      collectCliText(parsed);
-    return unwrapCliErrorText(text);
-  }
-
   return "";
 }
 
@@ -318,13 +229,12 @@ export function parseCliJson(raw: string, backend: CliBackendConfig): CliOutput 
 }
 
 function parseClaudeCliJsonlResult(params: {
-  backend: CliBackendConfig;
   providerId: string;
   parsed: Record<string, unknown>;
   sessionId?: string;
   usage?: CliUsage;
 }): CliOutput | null {
-  if (!usesClaudeStreamJsonDialect(params)) {
+  if (!isClaudeCliProvider(params.providerId)) {
     return null;
   }
   if (
@@ -344,14 +254,13 @@ function parseClaudeCliJsonlResult(params: {
 }
 
 function parseClaudeCliStreamingDelta(params: {
-  backend: CliBackendConfig;
   providerId: string;
   parsed: Record<string, unknown>;
   textSoFar: string;
   sessionId?: string;
   usage?: CliUsage;
 }): CliStreamingDelta | null {
-  if (!usesClaudeStreamJsonDialect(params)) {
+  if (!isClaudeCliProvider(params.providerId)) {
     return null;
   }
   if (params.parsed.type !== "stream_event" || !isRecord(params.parsed.event)) {
@@ -396,7 +305,6 @@ export function createCliJsonlStreamingParser(params: {
     }
 
     const delta = parseClaudeCliStreamingDelta({
-      backend: params.backend,
       providerId: params.providerId,
       parsed,
       textSoFar: assistantText,
@@ -478,7 +386,6 @@ export function parseCliJsonl(
       usage = readCliUsage(parsed) ?? usage;
 
       const claudeResult = parseClaudeCliJsonlResult({
-        backend,
         providerId,
         parsed,
         sessionId,
@@ -490,7 +397,7 @@ export function parseCliJsonl(
 
       const item = isRecord(parsed.item) ? parsed.item : null;
       if (item && typeof item.text === "string") {
-        const type = normalizeLowercaseStringOrEmpty(item.type);
+        const type = typeof item.type === "string" ? item.type.toLowerCase() : "";
         if (!type || type.includes("message")) {
           texts.push(item.text);
         }
@@ -529,21 +436,4 @@ export function parseCliOutput(params: {
       sessionId: params.fallbackSessionId,
     }
   );
-}
-
-export function extractCliErrorMessage(raw: string): string | null {
-  const parsedRecords = parseJsonRecordCandidates(raw);
-  if (parsedRecords.length === 0) {
-    return null;
-  }
-
-  let errorText = "";
-  for (const parsed of parsedRecords) {
-    const next = collectExplicitCliErrorText(parsed);
-    if (next) {
-      errorText = next;
-    }
-  }
-
-  return errorText || null;
 }

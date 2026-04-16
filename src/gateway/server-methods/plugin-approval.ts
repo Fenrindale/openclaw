@@ -6,7 +6,6 @@ import {
   DEFAULT_PLUGIN_APPROVAL_TIMEOUT_MS,
   MAX_PLUGIN_APPROVAL_TIMEOUT_MS,
 } from "../../infra/plugin-approvals.js";
-import { normalizeOptionalString } from "../../shared/string-coerce.js";
 import type { ExecApprovalManager } from "../exec-approval-manager.js";
 import {
   ErrorCodes,
@@ -28,18 +27,6 @@ export function createPluginApprovalHandlers(
   opts?: { forwarder?: ExecApprovalForwarder },
 ): GatewayRequestHandlers {
   return {
-    "plugin.approval.list": async ({ respond }) => {
-      respond(
-        true,
-        manager.listPendingRecords().map((record) => ({
-          id: record.id,
-          request: record.request,
-          createdAtMs: record.createdAtMs,
-          expiresAtMs: record.expiresAtMs,
-        })),
-        undefined,
-      );
-    },
     "plugin.approval.request": async ({ params, client, respond, context }) => {
       if (!validatePluginApprovalRequestParams(params)) {
         respond(
@@ -77,7 +64,7 @@ export function createPluginApprovalHandlers(
       );
 
       const normalizeTrimmedString = (value?: string | null): string | null =>
-        normalizeOptionalString(value) || null;
+        value?.trim() || null;
 
       const request: PluginApprovalRequestPayload = {
         pluginId: p.pluginId ?? null,

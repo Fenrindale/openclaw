@@ -1,5 +1,4 @@
 import { rmSync } from "node:fs";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 
 // Public speech helpers for bundled or third-party plugins.
 //
@@ -56,7 +55,7 @@ export function normalizeLanguageCode(code?: string): string | undefined {
   if (!trimmed) {
     return undefined;
   }
-  const normalized = normalizeLowercaseStringOrEmpty(trimmed);
+  const normalized = trimmed.toLowerCase();
   if (!/^[a-z]{2}$/.test(normalized)) {
     throw new Error("languageCode must be a 2-letter ISO 639-1 code (e.g. en, de, fr)");
   }
@@ -68,7 +67,7 @@ export function normalizeApplyTextNormalization(mode?: string): "auto" | "on" | 
   if (!trimmed) {
     return undefined;
   }
-  const normalized = normalizeLowercaseStringOrEmpty(trimmed);
+  const normalized = trimmed.toLowerCase();
   if (normalized === "auto" || normalized === "on" || normalized === "off") {
     return normalized;
   }

@@ -17,16 +17,12 @@ function buildModel(id: string): NonNullable<ProviderConfig["models"]>[number] {
   };
 }
 
-function buildProvider(
-  modelIds: string[],
-  overrides: Partial<ProviderConfig> = {},
-): ProviderConfig {
+function buildProvider(modelIds: string[]): ProviderConfig {
   return {
     baseUrl: "https://example.invalid/v1",
     api: "openai-completions",
     apiKey: "EXAMPLE_KEY", // pragma: allowlist secret
     models: modelIds.map((id) => buildModel(id)),
-    ...overrides,
   };
 }
 
@@ -73,9 +69,7 @@ describe("google-vertex provider normalization", () => {
   it("normalizes gemini flash-lite IDs for google-vertex providers", () => {
     const agentDir = mkdtempSync(join(tmpdir(), "openclaw-test-"));
     const providers = {
-      "google-vertex": buildProvider(["gemini-3.1-flash-lite", "gemini-3-flash-preview"], {
-        api: undefined,
-      }),
+      "google-vertex": buildProvider(["gemini-3.1-flash-lite", "gemini-3-flash-preview"]),
       openai: buildProvider(["gpt-5"]),
     };
 
@@ -92,9 +86,7 @@ describe("google-vertex provider normalization", () => {
   it("returns original providers object when no google-vertex IDs need normalization", () => {
     const agentDir = mkdtempSync(join(tmpdir(), "openclaw-test-"));
     const providers = {
-      "google-vertex": buildProvider(["gemini-3.1-flash-lite-preview", "gemini-3-flash-preview"], {
-        api: undefined,
-      }),
+      "google-vertex": buildProvider(["gemini-3.1-flash-lite-preview", "gemini-3-flash-preview"]),
     };
 
     const normalized = normalizeProviders({ providers, agentDir });

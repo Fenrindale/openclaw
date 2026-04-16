@@ -4,7 +4,7 @@ import {
   readConfiguredProviderCatalogEntries,
   type ProviderCatalogContext,
 } from "openclaw/plugin-sdk/provider-catalog-shared";
-import { OPENAI_COMPATIBLE_REPLAY_HOOKS } from "openclaw/plugin-sdk/provider-model-shared";
+import { buildProviderReplayFamilyHooks } from "openclaw/plugin-sdk/provider-model-shared";
 import type { OpenClawConfig } from "openclaw/plugin-sdk/provider-onboard";
 import {
   applyArceeConfig,
@@ -20,6 +20,9 @@ import {
 } from "./provider-catalog.js";
 
 const PROVIDER_ID = "arcee";
+const OPENAI_COMPATIBLE_REPLAY_HOOKS = buildProviderReplayFamilyHooks({
+  family: "openai-compatible",
+});
 const ARCEE_WIZARD_GROUP = {
   groupId: "arcee",
   groupLabel: "Arcee AI",

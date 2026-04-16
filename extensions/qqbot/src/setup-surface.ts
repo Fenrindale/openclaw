@@ -6,7 +6,6 @@ import {
 } from "openclaw/plugin-sdk/setup";
 import type { ChannelSetupWizard } from "openclaw/plugin-sdk/setup";
 import { formatDocsLink } from "openclaw/plugin-sdk/setup-tools";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import {
   DEFAULT_ACCOUNT_ID,
   listQQBotAccountIds,
@@ -103,7 +102,7 @@ export const qqbotSetupWizard: ChannelSetupWizard = {
         const resolved = resolveQQBotAccount(cfg, accountId, { allowUnresolvedSecretRef: true });
         const hasConfiguredValue = Boolean(
           hasConfiguredSecretInput(resolved.config.clientSecret) ||
-          normalizeOptionalString(resolved.config.clientSecretFile) ||
+          resolved.config.clientSecretFile?.trim() ||
           resolved.clientSecret,
         );
         return {
@@ -112,7 +111,7 @@ export const qqbotSetupWizard: ChannelSetupWizard = {
           resolvedValue: resolved.appId || undefined,
           envValue:
             accountId === DEFAULT_ACCOUNT_ID
-              ? normalizeOptionalString(process.env.QQBOT_APP_ID)
+              ? process.env.QQBOT_APP_ID?.trim() || undefined
               : undefined,
         };
       },
@@ -136,7 +135,7 @@ export const qqbotSetupWizard: ChannelSetupWizard = {
         const resolved = resolveQQBotAccount(cfg, accountId, { allowUnresolvedSecretRef: true });
         const hasConfiguredValue = Boolean(
           hasConfiguredSecretInput(resolved.config.clientSecret) ||
-          normalizeOptionalString(resolved.config.clientSecretFile) ||
+          resolved.config.clientSecretFile?.trim() ||
           resolved.clientSecret,
         );
         return {
@@ -145,7 +144,7 @@ export const qqbotSetupWizard: ChannelSetupWizard = {
           resolvedValue: resolved.clientSecret || undefined,
           envValue:
             accountId === DEFAULT_ACCOUNT_ID
-              ? normalizeOptionalString(process.env.QQBOT_CLIENT_SECRET)
+              ? process.env.QQBOT_CLIENT_SECRET?.trim() || undefined
               : undefined,
         };
       },

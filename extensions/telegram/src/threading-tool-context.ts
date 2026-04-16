@@ -3,14 +3,13 @@ import type {
   ChannelThreadingToolContext,
 } from "openclaw/plugin-sdk/channel-contract";
 import type { OpenClawConfig } from "openclaw/plugin-sdk/config-runtime";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import { parseTelegramTarget } from "./targets.js";
 
 function resolveTelegramToolContextThreadId(context: ChannelThreadingContext): string | undefined {
   if (context.MessageThreadId != null) {
     return String(context.MessageThreadId);
   }
-  const currentChannelId = normalizeOptionalString(context.To);
+  const currentChannelId = context.To?.trim();
   if (!currentChannelId) {
     return undefined;
   }
@@ -28,7 +27,7 @@ export function buildTelegramThreadingToolContext(params: {
   void params.accountId;
 
   return {
-    currentChannelId: normalizeOptionalString(params.context.To),
+    currentChannelId: params.context.To?.trim() || undefined,
     currentThreadTs: resolveTelegramToolContextThreadId(params.context),
     hasRepliedRef: params.hasRepliedRef,
   };

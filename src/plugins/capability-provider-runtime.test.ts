@@ -18,16 +18,6 @@ const mocks = vi.hoisted(() => ({
   loadPluginManifestRegistry: vi.fn<() => MockManifestRegistry>(() =>
     createEmptyMockManifestRegistry(),
   ),
-  withBundledPluginAllowlistCompat: vi.fn(
-    ({ config, pluginIds }: { config?: OpenClawConfig; pluginIds: string[] }) =>
-      ({
-        ...config,
-        plugins: {
-          ...config?.plugins,
-          allow: Array.from(new Set([...(config?.plugins?.allow ?? []), ...pluginIds])),
-        },
-      }) as OpenClawConfig,
-  ),
   withBundledPluginEnablementCompat: vi.fn(({ config }) => config),
   withBundledPluginVitestCompat: vi.fn(({ config }) => config),
 }));
@@ -41,7 +31,6 @@ vi.mock("./manifest-registry.js", () => ({
 }));
 
 vi.mock("./bundled-compat.js", () => ({
-  withBundledPluginAllowlistCompat: mocks.withBundledPluginAllowlistCompat,
   withBundledPluginEnablementCompat: mocks.withBundledPluginEnablementCompat,
   withBundledPluginVitestCompat: mocks.withBundledPluginVitestCompat,
 }));
@@ -58,7 +47,6 @@ function expectNoResolvedCapabilityProviders(providers: Array<{ id: string }>) {
 
 function expectBundledCompatLoadPath(params: {
   cfg: OpenClawConfig;
-  allowlistCompat: OpenClawConfig;
   enablementCompat: {
     plugins: {
       allow?: string[];
@@ -71,7 +59,7 @@ function expectBundledCompatLoadPath(params: {
     env: process.env,
   });
   expect(mocks.withBundledPluginEnablementCompat).toHaveBeenCalledWith({
-    config: params.allowlistCompat,
+    config: params.cfg,
     pluginIds: ["openai"],
   });
   expect(mocks.withBundledPluginVitestCompat).toHaveBeenCalledWith({
@@ -86,18 +74,13 @@ function expectBundledCompatLoadPath(params: {
 
 function createCompatChainConfig() {
   const cfg = { plugins: { allow: ["custom-plugin"] } } as OpenClawConfig;
-  const allowlistCompat = {
-    plugins: {
-      allow: ["custom-plugin", "openai"],
-    },
-  } as OpenClawConfig;
   const enablementCompat = {
     plugins: {
-      allow: ["custom-plugin", "openai"],
+      allow: ["custom-plugin"],
       entries: { openai: { enabled: true } },
     },
   };
-  return { cfg, allowlistCompat, enablementCompat };
+  return { cfg, enablementCompat };
 }
 
 function setBundledCapabilityFixture(contractKey: string) {
@@ -125,12 +108,9 @@ function expectCompatChainApplied(params: {
     | "realtimeTranscriptionProviders"
     | "realtimeVoiceProviders"
     | "mediaUnderstandingProviders"
-    | "imageGenerationProviders"
-    | "videoGenerationProviders"
-    | "musicGenerationProviders";
+    | "imageGenerationProviders";
   contractKey: string;
   cfg: OpenClawConfig;
-  allowlistCompat: OpenClawConfig;
   enablementCompat: {
     plugins: {
       allow?: string[];
@@ -157,17 +137,6 @@ describe("resolvePluginCapabilityProviders", () => {
     mocks.resolveRuntimePluginRegistry.mockReturnValue(undefined);
     mocks.loadPluginManifestRegistry.mockReset();
     mocks.loadPluginManifestRegistry.mockReturnValue(createEmptyMockManifestRegistry());
-    mocks.withBundledPluginAllowlistCompat.mockClear();
-    mocks.withBundledPluginAllowlistCompat.mockImplementation(
-      ({ config, pluginIds }: { config?: OpenClawConfig; pluginIds: string[] }) =>
-        ({
-          ...config,
-          plugins: {
-            ...config?.plugins,
-            allow: Array.from(new Set([...(config?.plugins?.allow ?? []), ...pluginIds])),
-          },
-        }) as OpenClawConfig,
-    );
     mocks.withBundledPluginEnablementCompat.mockReset();
     mocks.withBundledPluginEnablementCompat.mockImplementation(({ config }) => config);
     mocks.withBundledPluginVitestCompat.mockReset();
@@ -243,16 +212,44 @@ describe("resolvePluginCapabilityProviders", () => {
     ["realtimeVoiceProviders", "realtimeVoiceProviders"],
     ["mediaUnderstandingProviders", "mediaUnderstandingProviders"],
     ["imageGenerationProviders", "imageGenerationProviders"],
-    ["videoGenerationProviders", "videoGenerationProviders"],
-    ["musicGenerationProviders", "musicGenerationProviders"],
   ] as const)("applies bundled compat before fallback loading for %s", (key, contractKey) => {
-    const { cfg, allowlistCompat, enablementCompat } = createCompatChainConfig();
+    const { cfg, enablementCompat } = createCompatChainConfig();
     expectCompatChainApplied({
       key,
       contractKey,
       cfg,
-      allowlistCompat,
       enablementCompat,
+    });
+  });
+
+  it("does not re-add bundled capability plugins excluded by an explicit allowlist", () => {
+    const cfg = { plugins: { allow: ["custom-plugin"] } } as OpenClawConfig;
+    const enablementCompat = {
+      plugins: {
+        allow: ["custom-plugin"],
+        entries: { openai: { enabled: true } },
+      },
+    };
+
+    setBundledCapabilityFixture("speechProviders");
+    mocks.withBundledPluginEnablementCompat.mockReturnValue(enablementCompat);
+    mocks.withBundledPluginVitestCompat.mockReturnValue(enablementCompat);
+
+    expectNoResolvedCapabilityProviders(
+      resolvePluginCapabilityProviders({ key: "speechProviders", cfg }),
+    );
+
+    expect(mocks.withBundledPluginEnablementCompat).toHaveBeenCalledWith({
+      config: cfg,
+      pluginIds: ["openai"],
+    });
+    expect(mocks.withBundledPluginVitestCompat).toHaveBeenCalledWith({
+      config: enablementCompat,
+      pluginIds: ["openai"],
+      env: process.env,
+    });
+    expect(mocks.resolveRuntimePluginRegistry).toHaveBeenCalledWith({
+      config: enablementCompat,
     });
   });
 

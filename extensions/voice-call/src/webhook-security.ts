@@ -1,7 +1,6 @@
 import crypto from "node:crypto";
 import { safeEqualSecret } from "openclaw/plugin-sdk/browser-security-runtime";
 import { formatErrorMessage } from "openclaw/plugin-sdk/error-runtime";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 import { getHeader } from "./http-headers.js";
 import type { WebhookContext } from "./types.js";
 
@@ -191,7 +190,7 @@ function extractHostname(hostHeader: string): string | null {
       return null; // Malformed IPv6
     }
     hostname = hostHeader.substring(1, endBracket);
-    return normalizeLowercaseStringOrEmpty(hostname);
+    return hostname.toLowerCase();
   }
 
   // Handle IPv4/domain with optional port
@@ -207,7 +206,7 @@ function extractHostname(hostHeader: string): string | null {
     return null;
   }
 
-  return normalizeLowercaseStringOrEmpty(hostname);
+  return hostname.toLowerCase();
 }
 
 function extractHostnameFromHeader(headerValue: string): string | null {

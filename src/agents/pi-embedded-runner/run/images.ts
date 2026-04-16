@@ -5,7 +5,6 @@ import { assertNoWindowsNetworkPath, safeFileURLToPath } from "../../../infra/lo
 import type { PromptImageOrderEntry } from "../../../media/prompt-image-order.js";
 import { resolveMediaBufferPath, getMediaDir } from "../../../media/store.js";
 import { loadWebMedia } from "../../../media/web-media.js";
-import { normalizeLowercaseStringOrEmpty } from "../../../shared/string-coerce.js";
 import { resolveUserPath } from "../../../utils.js";
 import type { ImageSanitizationLimits } from "../../image-sanitization.js";
 import {
@@ -84,12 +83,12 @@ export interface DetectedImageRef {
  * Checks if a file extension indicates an image file.
  */
 function isImageExtension(filePath: string): boolean {
-  const ext = normalizeLowercaseStringOrEmpty(path.extname(filePath));
+  const ext = path.extname(filePath).toLowerCase();
   return IMAGE_EXTENSIONS.has(ext);
 }
 
 function normalizeRefForDedupe(raw: string): string {
-  return process.platform === "win32" ? normalizeLowercaseStringOrEmpty(raw) : raw;
+  return process.platform === "win32" ? raw.toLowerCase() : raw;
 }
 
 export function mergePromptAttachmentImages(params: {

@@ -2,25 +2,9 @@ import { DEFAULT_ACCOUNT_ID } from "openclaw/plugin-sdk/routing";
 import type { RuntimeEnv } from "openclaw/plugin-sdk/runtime-env";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createQueuedWizardPrompter } from "../../../test/helpers/plugins/setup-wizard.js";
-import { whatsappApprovalAuth } from "./approval-auth.js";
 import { whatsappPlugin } from "./channel.js";
-import { checkWhatsAppHeartbeatReady } from "./heartbeat.js";
 import type { OpenClawConfig } from "./runtime-api.js";
 import { finalizeWhatsAppSetup } from "./setup-finalize.js";
-import {
-  createWhatsAppAllowlistModeInput,
-  createWhatsAppLinkingHarness,
-  createWhatsAppOwnerAllowlistHarness,
-  createWhatsAppPersonalPhoneHarness,
-  createWhatsAppRootAllowFromConfig,
-  expectNoWhatsAppLoginFollowup,
-  expectWhatsAppAllowlistModeSetup,
-  expectWhatsAppLoginFollowup,
-  expectWhatsAppOpenPolicySetup,
-  expectWhatsAppOwnerAllowlistSetup,
-  expectWhatsAppPersonalPhoneSetup,
-  expectWhatsAppSeparatePhoneDisabledSetup,
-} from "./setup-test-helpers.js";
 
 const hoisted = vi.hoisted(() => ({
   loginWeb: vi.fn(async () => {}),
@@ -39,7 +23,7 @@ vi.mock("openclaw/plugin-sdk/setup", async () => {
     "openclaw/plugin-sdk/setup",
   );
   const normalizeE164 = (value?: string | null) => {
-    const raw = (value ?? "").trim();
+    const raw = `${value ?? ""}`.trim();
     if (!raw) {
       return "";
     }
@@ -135,15 +119,11 @@ describe("whatsapp setup wizard", () => {
     hoisted.resolveWhatsAppAuthDir.mockReturnValue({ authDir: "/tmp/openclaw-whatsapp-test" });
   });
 
-  it("exposes approval auth through approvalCapability only", () => {
-    expect(whatsappPlugin.approvalCapability).toBe(whatsappApprovalAuth);
-    expect(typeof whatsappPlugin.auth?.login).toBe("function");
-    expect("authorizeActorAction" in (whatsappPlugin.auth ?? {})).toBe(false);
-    expect("getActionAvailabilityState" in (whatsappPlugin.auth ?? {})).toBe(false);
-  });
-
   it("applies owner allowlist when forceAllowFrom is enabled", async () => {
-    const harness = createWhatsAppOwnerAllowlistHarness(createQueuedWizardPrompter);
+    const harness = createQueuedWizardPrompter({
+      confirmValues: [false],
+      textValues: ["+1 (555) 555-0123"],
+    });
 
     const result = await runConfigureWithHarness({
       harness,
@@ -152,7 +132,14 @@ describe("whatsapp setup wizard", () => {
 
     expect(result.accountId).toBe(DEFAULT_ACCOUNT_ID);
     expect(hoisted.loginWeb).not.toHaveBeenCalled();
-    expectWhatsAppOwnerAllowlistSetup(result.cfg, harness);
+    expect(result.cfg.channels?.whatsapp?.selfChatMode).toBe(true);
+    expect(result.cfg.channels?.whatsapp?.dmPolicy).toBe("allowlist");
+    expect(result.cfg.channels?.whatsapp?.allowFrom).toEqual(["+15555550123"]);
+    expect(harness.text).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "Your personal WhatsApp number (the phone you will message from)",
+      }),
+    );
   });
 
   it("supports disabled DM policy for separate-phone setup", async () => {
@@ -160,24 +147,38 @@ describe("whatsapp setup wizard", () => {
       selectValues: ["separate", "disabled"],
     });
 
-    expectWhatsAppSeparatePhoneDisabledSetup(result.cfg, harness);
+    expect(result.cfg.channels?.whatsapp?.selfChatMode).toBe(false);
+    expect(result.cfg.channels?.whatsapp?.dmPolicy).toBe("disabled");
+    expect(result.cfg.channels?.whatsapp?.allowFrom).toBeUndefined();
+    expect(harness.text).not.toHaveBeenCalled();
   });
 
   it("normalizes allowFrom entries when list mode is selected", async () => {
-    const { result } = await runSeparatePhoneFlow(createWhatsAppAllowlistModeInput());
+    const { result } = await runSeparatePhoneFlow({
+      selectValues: ["separate", "allowlist", "list"],
+      textValues: ["+1 (555) 555-0123, +15555550123, *"],
+    });
 
-    expectWhatsAppAllowlistModeSetup(result.cfg);
+    expect(result.cfg.channels?.whatsapp?.selfChatMode).toBe(false);
+    expect(result.cfg.channels?.whatsapp?.dmPolicy).toBe("allowlist");
+    expect(result.cfg.channels?.whatsapp?.allowFrom).toEqual(["+15555550123", "*"]);
   });
 
   it("enables allowlist self-chat mode for personal-phone setup", async () => {
     hoisted.pathExists.mockResolvedValue(true);
-    const harness = createWhatsAppPersonalPhoneHarness(createQueuedWizardPrompter);
+    const harness = createQueuedWizardPrompter({
+      confirmValues: [false],
+      selectValues: ["personal"],
+      textValues: ["+1 (555) 111-2222"],
+    });
 
     const result = await runConfigureWithHarness({
       harness,
     });
 
-    expectWhatsAppPersonalPhoneSetup(result.cfg);
+    expect(result.cfg.channels?.whatsapp?.selfChatMode).toBe(true);
+    expect(result.cfg.channels?.whatsapp?.dmPolicy).toBe("allowlist");
+    expect(result.cfg.channels?.whatsapp?.allowFrom).toEqual(["+15551112222"]);
   });
 
   it("forces wildcard allowFrom for open policy without allowFrom follow-up prompts", async () => {
@@ -188,15 +189,28 @@ describe("whatsapp setup wizard", () => {
 
     const result = await runConfigureWithHarness({
       harness,
-      cfg: createWhatsAppRootAllowFromConfig() as OpenClawConfig,
+      cfg: {
+        channels: {
+          whatsapp: {
+            allowFrom: ["+15555550123"],
+          },
+        },
+      },
     });
 
-    expectWhatsAppOpenPolicySetup(result.cfg, harness);
+    expect(result.cfg.channels?.whatsapp?.selfChatMode).toBe(false);
+    expect(result.cfg.channels?.whatsapp?.dmPolicy).toBe("open");
+    expect(result.cfg.channels?.whatsapp?.allowFrom).toEqual(["*", "+15555550123"]);
+    expect(harness.select).toHaveBeenCalledTimes(2);
+    expect(harness.text).not.toHaveBeenCalled();
   });
 
   it("runs WhatsApp login when not linked and user confirms linking", async () => {
     hoisted.pathExists.mockResolvedValue(false);
-    const harness = createWhatsAppLinkingHarness(createQueuedWizardPrompter);
+    const harness = createQueuedWizardPrompter({
+      confirmValues: [true],
+      selectValues: ["separate", "disabled"],
+    });
     const runtime = createRuntime();
 
     await runConfigureWithHarness({
@@ -218,7 +232,10 @@ describe("whatsapp setup wizard", () => {
     });
 
     expect(hoisted.loginWeb).not.toHaveBeenCalled();
-    expectNoWhatsAppLoginFollowup(harness);
+    expect(harness.note).not.toHaveBeenCalledWith(
+      expect.stringContaining("openclaw channels login"),
+      "WhatsApp",
+    );
   });
 
   it("shows follow-up login command note when not linked and linking is skipped", async () => {
@@ -231,11 +248,14 @@ describe("whatsapp setup wizard", () => {
       harness,
     });
 
-    expectWhatsAppLoginFollowup(harness);
+    expect(harness.note).toHaveBeenCalledWith(
+      expect.stringContaining("openclaw channels login"),
+      "WhatsApp",
+    );
   });
 
   it("heartbeat readiness uses configured defaultAccount for active listener checks", async () => {
-    const result = await checkWhatsAppHeartbeatReady({
+    const result = await whatsappPlugin.heartbeat?.checkReady?.({
       cfg: {
         channels: {
           whatsapp: {

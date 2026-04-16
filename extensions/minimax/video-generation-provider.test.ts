@@ -1,26 +1,43 @@
-import { beforeAll, describe, expect, it, vi } from "vitest";
-import { expectExplicitVideoGenerationCapabilities } from "../../test/helpers/media-generation/provider-capability-assertions.js";
-import {
-  getMinimaxProviderHttpMocks,
-  installMinimaxProviderHttpMockCleanup,
-  loadMinimaxVideoGenerationProviderModule,
-} from "./provider-http.test-helpers.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { buildMinimaxVideoGenerationProvider } from "./video-generation-provider.js";
 
-const { postJsonRequestMock, fetchWithTimeoutMock } = getMinimaxProviderHttpMocks();
+const {
+  resolveApiKeyForProviderMock,
+  postJsonRequestMock,
+  fetchWithTimeoutMock,
+  assertOkOrThrowHttpErrorMock,
+  resolveProviderHttpRequestConfigMock,
+} = vi.hoisted(() => ({
+  resolveApiKeyForProviderMock: vi.fn(async () => ({ apiKey: "minimax-key" })),
+  postJsonRequestMock: vi.fn(),
+  fetchWithTimeoutMock: vi.fn(),
+  assertOkOrThrowHttpErrorMock: vi.fn(async () => {}),
+  resolveProviderHttpRequestConfigMock: vi.fn((params) => ({
+    baseUrl: params.baseUrl ?? params.defaultBaseUrl,
+    allowPrivateNetwork: false,
+    headers: new Headers(params.defaultHeaders),
+    dispatcherPolicy: undefined,
+  })),
+}));
 
-let buildMinimaxVideoGenerationProvider: Awaited<
-  ReturnType<typeof loadMinimaxVideoGenerationProviderModule>
->["buildMinimaxVideoGenerationProvider"];
+vi.mock("openclaw/plugin-sdk/provider-auth-runtime", () => ({
+  resolveApiKeyForProvider: resolveApiKeyForProviderMock,
+}));
 
-beforeAll(async () => {
-  ({ buildMinimaxVideoGenerationProvider } = await loadMinimaxVideoGenerationProviderModule());
-});
-
-installMinimaxProviderHttpMockCleanup();
+vi.mock("openclaw/plugin-sdk/provider-http", () => ({
+  assertOkOrThrowHttpError: assertOkOrThrowHttpErrorMock,
+  fetchWithTimeout: fetchWithTimeoutMock,
+  postJsonRequest: postJsonRequestMock,
+  resolveProviderHttpRequestConfig: resolveProviderHttpRequestConfigMock,
+}));
 
 describe("minimax video generation provider", () => {
-  it("declares explicit mode capabilities", () => {
-    expectExplicitVideoGenerationCapabilities(buildMinimaxVideoGenerationProvider());
+  afterEach(() => {
+    resolveApiKeyForProviderMock.mockClear();
+    postJsonRequestMock.mockReset();
+    fetchWithTimeoutMock.mockReset();
+    assertOkOrThrowHttpErrorMock.mockClear();
+    resolveProviderHttpRequestConfigMock.mockClear();
   });
 
   it("creates a task, polls status, and downloads the generated video", async () => {

@@ -1,7 +1,4 @@
-import { normalizeOptionalString } from "../shared/string-coerce.js";
-import { normalizeTrimmedStringList } from "../shared/string-normalization.js";
-import type { PluginDiagnostic } from "./manifest-types.js";
-import type { ProviderAuthMethod, ProviderPlugin } from "./types.js";
+import type { PluginDiagnostic, ProviderAuthMethod, ProviderPlugin } from "./types.js";
 
 type ProviderWizardSetup = NonNullable<NonNullable<ProviderPlugin["wizard"]>["setup"]>;
 type ProviderWizardModelPicker = NonNullable<NonNullable<ProviderPlugin["wizard"]>["modelPicker"]>;
@@ -22,8 +19,15 @@ function pushProviderDiagnostic(params: {
   });
 }
 
+function normalizeText(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
 function normalizeTextList(values: string[] | undefined): string[] | undefined {
-  const normalized = Array.from(new Set(normalizeTrimmedStringList(values)));
+  const normalized = Array.from(
+    new Set((values ?? []).map((value) => value.trim()).filter(Boolean)),
+  );
   return normalized.length > 0 ? normalized : undefined;
 }
 
@@ -49,8 +53,8 @@ function normalizeProviderOAuthProfileIdRepairs(
   }
   const normalized = values
     .map((value) => {
-      const legacyProfileId = normalizeOptionalString(value?.legacyProfileId);
-      const promptLabel = normalizeOptionalString(value?.promptLabel);
+      const legacyProfileId = normalizeText(value?.legacyProfileId);
+      const promptLabel = normalizeText(value?.promptLabel);
       if (!legacyProfileId && !promptLabel) {
         return null;
       }
@@ -96,7 +100,7 @@ function buildNormalizedModelAllowlist(
   }
   const allowedKeys = normalizeTextList(modelAllowlist.allowedKeys);
   const initialSelections = normalizeTextList(modelAllowlist.initialSelections);
-  const message = normalizeOptionalString(modelAllowlist.message);
+  const message = normalizeText(modelAllowlist.message);
   if (!allowedKeys && !initialSelections && !message) {
     return undefined;
   }
@@ -111,12 +115,12 @@ function buildNormalizedWizardSetup(params: {
   setup: ProviderWizardSetup;
   methodId: string | undefined;
 }): ProviderWizardSetup {
-  const choiceId = normalizeOptionalString(params.setup.choiceId);
-  const choiceLabel = normalizeOptionalString(params.setup.choiceLabel);
-  const choiceHint = normalizeOptionalString(params.setup.choiceHint);
-  const groupId = normalizeOptionalString(params.setup.groupId);
-  const groupLabel = normalizeOptionalString(params.setup.groupLabel);
-  const groupHint = normalizeOptionalString(params.setup.groupHint);
+  const choiceId = normalizeText(params.setup.choiceId);
+  const choiceLabel = normalizeText(params.setup.choiceLabel);
+  const choiceHint = normalizeText(params.setup.choiceHint);
+  const groupId = normalizeText(params.setup.groupId);
+  const groupLabel = normalizeText(params.setup.groupLabel);
+  const groupHint = normalizeText(params.setup.groupHint);
   const onboardingScopes = normalizeOnboardingScopes(params.setup.onboardingScopes);
   const modelAllowlist = buildNormalizedModelAllowlist(params.setup.modelAllowlist);
   return {
@@ -144,8 +148,8 @@ function buildNormalizedModelPicker(
   modelPicker: ProviderWizardModelPicker,
   methodId: string | undefined,
 ): ProviderWizardModelPicker {
-  const label = normalizeOptionalString(modelPicker.label);
-  const hint = normalizeOptionalString(modelPicker.hint);
+  const label = normalizeText(modelPicker.label);
+  const hint = normalizeText(modelPicker.hint);
   return {
     ...(label ? { label } : {}),
     ...(hint ? { hint } : {}),
@@ -180,7 +184,7 @@ function normalizeProviderWizardSetup(params: {
     pluginId: params.pluginId,
     source: params.source,
     auth: params.auth,
-    methodId: normalizeOptionalString(params.setup.methodId),
+    methodId: normalizeText(params.setup.methodId),
     metadataKind: "setup",
     pushDiagnostic: params.pushDiagnostic,
   });
@@ -201,7 +205,7 @@ function normalizeProviderAuthMethods(params: {
   const normalized: ProviderAuthMethod[] = [];
 
   for (const method of params.auth) {
-    const methodId = normalizeOptionalString(method.id);
+    const methodId = normalizeText(method.id);
     if (!methodId) {
       pushProviderDiagnostic({
         level: "error",
@@ -237,10 +241,8 @@ function normalizeProviderAuthMethods(params: {
     normalized.push({
       ...method,
       id: methodId,
-      label: normalizeOptionalString(method.label) ?? methodId,
-      ...(normalizeOptionalString(method.hint)
-        ? { hint: normalizeOptionalString(method.hint) }
-        : {}),
+      label: normalizeText(method.label) ?? methodId,
+      ...(normalizeText(method.hint) ? { hint: normalizeText(method.hint) } : {}),
       ...(wizard ? { wizard } : {}),
     });
   }
@@ -298,7 +300,7 @@ function normalizeProviderWizard(params: {
         pluginId: params.pluginId,
         source: params.source,
         auth: params.auth,
-        methodId: normalizeOptionalString(modelPicker.methodId),
+        methodId: normalizeText(modelPicker.methodId),
         metadataKind: "model-picker",
         pushDiagnostic: params.pushDiagnostic,
       }),
@@ -322,7 +324,7 @@ export function normalizeRegisteredProvider(params: {
   provider: ProviderPlugin;
   pushDiagnostic: (diag: PluginDiagnostic) => void;
 }): ProviderPlugin | null {
-  const id = normalizeOptionalString(params.provider.id);
+  const id = normalizeText(params.provider.id);
   if (!id) {
     pushProviderDiagnostic({
       level: "error",
@@ -341,7 +343,7 @@ export function normalizeRegisteredProvider(params: {
     auth: params.provider.auth ?? [],
     pushDiagnostic: params.pushDiagnostic,
   });
-  const docsPath = normalizeOptionalString(params.provider.docsPath);
+  const docsPath = normalizeText(params.provider.docsPath);
   const aliases = normalizeTextList(params.provider.aliases);
   const deprecatedProfileIds = normalizeTextList(params.provider.deprecatedProfileIds);
   const oauthProfileIdRepairs = normalizeProviderOAuthProfileIdRepairs(
@@ -379,7 +381,7 @@ export function normalizeRegisteredProvider(params: {
   return {
     ...restProvider,
     id,
-    label: normalizeOptionalString(params.provider.label) ?? id,
+    label: normalizeText(params.provider.label) ?? id,
     ...(docsPath ? { docsPath } : {}),
     ...(aliases ? { aliases } : {}),
     ...(deprecatedProfileIds ? { deprecatedProfileIds } : {}),

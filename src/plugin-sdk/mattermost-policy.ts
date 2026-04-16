@@ -8,7 +8,7 @@ type MattermostSenderAllowed = (params: {
 type FacadeModule = {
   isMattermostSenderAllowed: MattermostSenderAllowed;
 };
-import { loadBundledPluginPublicSurfaceModuleSync } from "./facade-loader.js";
+import { loadBundledPluginPublicSurfaceModuleSync } from "./facade-runtime.js";
 
 function loadFacadeModule(): FacadeModule {
   return loadBundledPluginPublicSurfaceModuleSync<FacadeModule>({

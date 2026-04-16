@@ -1,11 +1,6 @@
 import { randomUUID } from "node:crypto";
-import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { formatErrorMessage } from "../infra/errors.js";
 import type { PromptImageOrderEntry } from "../media/prompt-image-order.js";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-} from "../shared/string-coerce.js";
 import type { NodeEvent, NodeEventContext } from "./server-node-events-types.js";
 import {
   agentCommandFromIngress,
@@ -39,11 +34,16 @@ const MAX_EXEC_EVENT_OUTPUT_CHARS = 180;
 const MAX_NOTIFICATION_EVENT_TEXT_CHARS = 120;
 const VOICE_TRANSCRIPT_DEDUPE_WINDOW_MS = 1500;
 const MAX_RECENT_VOICE_TRANSCRIPTS = 200;
-const EXEC_FINISHED_RUN_DEDUPE_WINDOW_MS = 10 * 60 * 1000;
-const MAX_RECENT_EXEC_FINISHED_RUNS = 2000;
 
 const recentVoiceTranscripts = new Map<string, { fingerprint: string; ts: number }>();
-const recentExecFinishedRuns = new Map<string, number>();
+
+function normalizeNonEmptyString(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
 
 function normalizeFiniteInteger(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? Math.trunc(value) : null;
@@ -51,14 +51,14 @@ function normalizeFiniteInteger(value: unknown): number | null {
 
 function resolveVoiceTranscriptFingerprint(obj: Record<string, unknown>, text: string): string {
   const eventId =
-    normalizeOptionalString(obj.eventId) ??
-    normalizeOptionalString(obj.providerEventId) ??
-    normalizeOptionalString(obj.transcriptId);
+    normalizeNonEmptyString(obj.eventId) ??
+    normalizeNonEmptyString(obj.providerEventId) ??
+    normalizeNonEmptyString(obj.transcriptId);
   if (eventId) {
     return `event:${eventId}`;
   }
 
-  const callId = normalizeOptionalString(obj.providerCallId) ?? normalizeOptionalString(obj.callId);
+  const callId = normalizeNonEmptyString(obj.providerCallId) ?? normalizeNonEmptyString(obj.callId);
   const sequence = normalizeFiniteInteger(obj.sequence) ?? normalizeFiniteInteger(obj.seq);
   if (callId && sequence !== null) {
     return `call-seq:${callId}:${sequence}`;
@@ -119,48 +119,6 @@ function shouldDropDuplicateVoiceTranscript(params: {
   return false;
 }
 
-function shouldDropDuplicateExecFinished(params: {
-  sessionKey: string;
-  runId: string;
-  now: number;
-}): boolean {
-  const fingerprint = `${params.sessionKey}::${params.runId}`;
-  const previousTs = recentExecFinishedRuns.get(fingerprint);
-  if (
-    typeof previousTs === "number" &&
-    params.now - previousTs <= EXEC_FINISHED_RUN_DEDUPE_WINDOW_MS
-  ) {
-    return true;
-  }
-
-  recentExecFinishedRuns.set(fingerprint, params.now);
-  if (recentExecFinishedRuns.size > MAX_RECENT_EXEC_FINISHED_RUNS) {
-    const cutoff = params.now - EXEC_FINISHED_RUN_DEDUPE_WINDOW_MS;
-    for (const [key, ts] of recentExecFinishedRuns) {
-      if (ts < cutoff) {
-        recentExecFinishedRuns.delete(key);
-      }
-      if (recentExecFinishedRuns.size <= MAX_RECENT_EXEC_FINISHED_RUNS) {
-        break;
-      }
-    }
-    while (recentExecFinishedRuns.size > MAX_RECENT_EXEC_FINISHED_RUNS) {
-      const oldestKey = recentExecFinishedRuns.keys().next().value;
-      if (oldestKey === undefined) {
-        break;
-      }
-      recentExecFinishedRuns.delete(oldestKey);
-    }
-  }
-
-  return false;
-}
-
-export function resetNodeEventDeduplicationForTests() {
-  recentVoiceTranscripts.clear();
-  recentExecFinishedRuns.clear();
-}
-
 function compactExecEventOutput(raw: string) {
   const normalized = raw.replace(/\s+/g, " ").trim();
   if (!normalized) {
@@ -188,7 +146,7 @@ function compactNotificationEventText(raw: string) {
 type LoadedSessionEntry = ReturnType<typeof loadSessionEntry>;
 
 async function touchSessionStore(params: {
-  cfg: OpenClawConfig;
+  cfg: ReturnType<typeof loadConfig>;
   sessionKey: string;
   storePath: LoadedSessionEntry["storePath"];
   canonicalKey: LoadedSessionEntry["canonicalKey"];
@@ -226,7 +184,7 @@ async function touchSessionStore(params: {
 
 function queueSessionStoreTouch(params: {
   ctx: NodeEventContext;
-  cfg: OpenClawConfig;
+  cfg: ReturnType<typeof loadConfig>;
   sessionKey: string;
   storePath: LoadedSessionEntry["storePath"];
   canonicalKey: LoadedSessionEntry["canonicalKey"];
@@ -258,7 +216,7 @@ function parseSessionKeyFromPayloadJSON(payloadJSON: string): string | null {
     return null;
   }
   const obj = payload as Record<string, unknown>;
-  const sessionKey = normalizeOptionalString(obj.sessionKey) ?? "";
+  const sessionKey = typeof obj.sessionKey === "string" ? obj.sessionKey.trim() : "";
   return sessionKey.length > 0 ? sessionKey : null;
 }
 
@@ -278,7 +236,7 @@ function parsePayloadObject(payloadJSON?: string | null): Record<string, unknown
 }
 
 async function sendReceiptAck(params: {
-  cfg: OpenClawConfig;
+  cfg: ReturnType<typeof loadConfig>;
   deps: NodeEventContext["deps"];
   sessionKey: string;
   channel: string;
@@ -316,14 +274,14 @@ export const handleNodeEvent = async (ctx: NodeEventContext, nodeId: string, evt
       if (!obj) {
         return;
       }
-      const text = normalizeOptionalString(obj.text) ?? "";
+      const text = typeof obj.text === "string" ? obj.text.trim() : "";
       if (!text) {
         return;
       }
       if (text.length > 20_000) {
         return;
       }
-      const sessionKeyRaw = normalizeOptionalString(obj.sessionKey) ?? "";
+      const sessionKeyRaw = typeof obj.sessionKey === "string" ? obj.sessionKey.trim() : "";
       const cfg = loadConfig();
       const rawMainKey = normalizeMainKey(cfg.session?.mainKey);
       const sessionKey = sessionKeyRaw.length > 0 ? sessionKeyRaw : rawMainKey;
@@ -468,14 +426,14 @@ export const handleNodeEvent = async (ctx: NodeEventContext, nodeId: string, evt
         return;
       }
 
-      const channelRaw = normalizeOptionalString(link?.channel) ?? "";
+      const channelRaw = typeof link?.channel === "string" ? link.channel.trim() : "";
       let channel = normalizeChannelId(channelRaw) ?? undefined;
-      let to = normalizeOptionalString(link?.to);
+      let to = typeof link?.to === "string" && link.to.trim() ? link.to.trim() : undefined;
       const deliverRequested = Boolean(link?.deliver);
       const wantsReceipt = Boolean(link?.receipt);
+      const receiptTextRaw = typeof link?.receiptText === "string" ? link.receiptText.trim() : "";
       const receiptText =
-        normalizeOptionalString(link?.receiptText) ||
-        "Just received your iOS share + request, working on it.";
+        receiptTextRaw || "Just received your iOS share + request, working on it.";
 
       const now = Date.now();
       const sessionId = entry?.sessionId ?? randomUUID();
@@ -486,7 +444,7 @@ export const handleNodeEvent = async (ctx: NodeEventContext, nodeId: string, evt
           typeof entry?.lastChannel === "string"
             ? normalizeChannelId(entry.lastChannel)
             : undefined;
-        const entryTo = normalizeOptionalString(entry?.lastTo) ?? "";
+        const entryTo = typeof entry?.lastTo === "string" ? entry.lastTo.trim() : "";
         if (!channel && entryChannel) {
           channel = entryChannel;
         }
@@ -550,26 +508,24 @@ export const handleNodeEvent = async (ctx: NodeEventContext, nodeId: string, evt
       if (!obj) {
         return;
       }
-      const change = normalizeOptionalString(obj.change)
-        ? normalizeLowercaseStringOrEmpty(obj.change)
-        : undefined;
+      const change = normalizeNonEmptyString(obj.change)?.toLowerCase();
       if (change !== "posted" && change !== "removed") {
         return;
       }
-      const keyRaw = normalizeOptionalString(obj.key);
+      const keyRaw = normalizeNonEmptyString(obj.key);
       if (!keyRaw) {
         return;
       }
       const key = sanitizeInboundSystemTags(keyRaw);
-      const sessionKeyRaw = normalizeOptionalString(obj.sessionKey) ?? `node-${nodeId}`;
+      const sessionKeyRaw = normalizeNonEmptyString(obj.sessionKey) ?? `node-${nodeId}`;
       const { canonicalKey: sessionKey } = loadSessionEntry(sessionKeyRaw);
-      const packageNameRaw = normalizeOptionalString(obj.packageName);
+      const packageNameRaw = normalizeNonEmptyString(obj.packageName);
       const packageName = packageNameRaw ? sanitizeInboundSystemTags(packageNameRaw) : null;
       const title = compactNotificationEventText(
-        sanitizeInboundSystemTags(normalizeOptionalString(obj.title) ?? ""),
+        sanitizeInboundSystemTags(normalizeNonEmptyString(obj.title) ?? ""),
       );
       const text = compactNotificationEventText(
-        sanitizeInboundSystemTags(normalizeOptionalString(obj.text) ?? ""),
+        sanitizeInboundSystemTags(normalizeNonEmptyString(obj.text) ?? ""),
       );
 
       let summary = `Notification ${change} (node=${nodeId} key=${key}`;
@@ -623,7 +579,8 @@ export const handleNodeEvent = async (ctx: NodeEventContext, nodeId: string, evt
       if (!obj) {
         return;
       }
-      const sessionKeyRaw = normalizeOptionalString(obj.sessionKey) ?? `node-${nodeId}`;
+      const sessionKeyRaw =
+        typeof obj.sessionKey === "string" ? obj.sessionKey.trim() : `node-${nodeId}`;
       if (!sessionKeyRaw) {
         return;
       }
@@ -640,15 +597,15 @@ export const handleNodeEvent = async (ctx: NodeEventContext, nodeId: string, evt
         return;
       }
 
-      const runId = normalizeOptionalString(obj.runId) ?? "";
-      const command = sanitizeInboundSystemTags(normalizeOptionalString(obj.command) ?? "");
+      const runId = typeof obj.runId === "string" ? obj.runId.trim() : "";
+      const command = typeof obj.command === "string" ? obj.command.trim() : "";
       const exitCode =
         typeof obj.exitCode === "number" && Number.isFinite(obj.exitCode)
           ? obj.exitCode
           : undefined;
       const timedOut = obj.timedOut === true;
-      const output = sanitizeInboundSystemTags(normalizeOptionalString(obj.output) ?? "");
-      const reason = sanitizeInboundSystemTags(normalizeOptionalString(obj.reason) ?? "");
+      const output = typeof obj.output === "string" ? obj.output.trim() : "";
+      const reason = typeof obj.reason === "string" ? obj.reason.trim() : "";
 
       let text = "";
       if (evt.event === "exec.started") {
@@ -663,16 +620,6 @@ export const handleNodeEvent = async (ctx: NodeEventContext, nodeId: string, evt
         if (!shouldNotify) {
           return;
         }
-        if (
-          runId &&
-          shouldDropDuplicateExecFinished({
-            sessionKey,
-            runId,
-            now: Date.now(),
-          })
-        ) {
-          return;
-        }
         text = `Exec finished (node=${nodeId}${runId ? ` id=${runId}` : ""}, ${exitLabel})`;
         if (compactOutput) {
           text += `\n${compactOutput}`;
@@ -684,17 +631,11 @@ export const handleNodeEvent = async (ctx: NodeEventContext, nodeId: string, evt
         }
       }
 
-      const queued = enqueueSystemEvent(text, {
-        sessionKey,
-        contextKey: runId ? `exec:${runId}` : "exec",
-        trusted: false,
-      });
-      if (queued) {
-        // Scope wakes only for canonical agent sessions. Synthetic node-* fallback
-        // keys should keep legacy unscoped behavior so enabled non-main heartbeat
-        // agents still run when no explicit agent session is provided.
-        requestHeartbeatNow(scopedHeartbeatWakeOptions(sessionKey, { reason: "exec-event" }));
-      }
+      enqueueSystemEvent(text, { sessionKey, contextKey: runId ? `exec:${runId}` : "exec" });
+      // Scope wakes only for canonical agent sessions. Synthetic node-* fallback
+      // keys should keep legacy unscoped behavior so enabled non-main heartbeat
+      // agents still run when no explicit agent session is provided.
+      requestHeartbeatNow(scopedHeartbeatWakeOptions(sessionKey, { reason: "exec-event" }));
       return;
     }
     case "push.apns.register": {
@@ -702,12 +643,14 @@ export const handleNodeEvent = async (ctx: NodeEventContext, nodeId: string, evt
       if (!obj) {
         return;
       }
-      const transport = normalizeLowercaseStringOrEmpty(obj.transport) || "direct";
+      const transport =
+        typeof obj.transport === "string" ? obj.transport.trim().toLowerCase() : "direct";
       const topic = typeof obj.topic === "string" ? obj.topic : "";
       const environment = obj.environment;
       try {
         if (transport === "relay") {
-          const gatewayDeviceId = normalizeOptionalString(obj.gatewayDeviceId) ?? "";
+          const gatewayDeviceId =
+            typeof obj.gatewayDeviceId === "string" ? obj.gatewayDeviceId.trim() : "";
           const currentGatewayDeviceId = loadOrCreateDeviceIdentity().deviceId;
           if (!gatewayDeviceId || gatewayDeviceId !== currentGatewayDeviceId) {
             ctx.logGateway.warn(

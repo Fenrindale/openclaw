@@ -1,16 +1,10 @@
-import { getRuntimeConfigSnapshot } from "../../config/runtime-snapshot.js";
 import { tryLoadActivatedBundledPluginPublicSurfaceModuleSync } from "../../plugin-sdk/facade-runtime.js";
-import { getActivePluginChannelRegistryVersion } from "../../plugins/runtime.js";
 import {
   parseRawSessionConversationRef,
   parseThreadSessionSuffix,
   type ParsedThreadSessionSuffix,
   type RawSessionConversationRef,
 } from "../../sessions/session-key-utils.js";
-import {
-  normalizeOptionalLowercaseString,
-  normalizeOptionalString,
-} from "../../shared/string-coerce.js";
 import { normalizeChannelId as normalizeChatChannelId } from "../registry.js";
 import { getLoadedChannelPlugin, normalizeChannelId as normalizeAnyChannelId } from "./registry.js";
 
@@ -51,30 +45,16 @@ type BundledSessionKeyModule = {
 };
 
 const SESSION_KEY_API_ARTIFACT_BASENAME = "session-key-api.js";
-type SessionConversationResolutionOptions = {
-  bundledFallback?: boolean;
-};
 
 type NormalizedSessionConversationResolution = ResolvedSessionConversation & {
   hasExplicitParentConversationCandidates: boolean;
 };
 
-type BundledSessionConversationFallbackCacheEntry = {
-  version: number;
-  resolveSessionConversation: BundledSessionKeyModule["resolveSessionConversation"] | null;
-};
-
-const bundledSessionConversationFallbackCache = new Map<
-  string,
-  BundledSessionConversationFallbackCacheEntry
->();
-
 function normalizeResolvedChannel(channel: string): string {
   return (
     normalizeAnyChannelId(channel) ??
     normalizeChatChannelId(channel) ??
-    normalizeOptionalLowercaseString(channel) ??
-    ""
+    channel.trim().toLowerCase()
   );
 }
 
@@ -135,10 +115,10 @@ function normalizeSessionConversationResolution(
 
   return {
     id: resolved.id.trim(),
-    threadId: normalizeOptionalString(resolved.threadId),
+    threadId: resolved.threadId?.trim() || undefined,
     baseConversationId:
-      normalizeOptionalString(resolved.baseConversationId) ??
-      dedupeConversationIds(resolved.parentConversationCandidates ?? []).at(-1) ??
+      resolved.baseConversationId?.trim() ||
+      dedupeConversationIds(resolved.parentConversationCandidates ?? []).at(-1) ||
       resolved.id.trim(),
     parentConversationCandidates: dedupeConversationIds(
       resolved.parentConversationCandidates ?? [],
@@ -155,66 +135,33 @@ function resolveBundledSessionConversationFallback(params: {
   kind: "group" | "channel";
   rawId: string;
 }): NormalizedSessionConversationResolution | null {
-  if (isBundledSessionConversationFallbackDisabled(params.channel)) {
-    return null;
-  }
   const dirName = normalizeResolvedChannel(params.channel);
-  const version = getActivePluginChannelRegistryVersion();
-  let cached = bundledSessionConversationFallbackCache.get(dirName);
-  if (!cached || cached.version !== version) {
-    let resolveSessionConversation: BundledSessionKeyModule["resolveSessionConversation"] | null =
-      null;
-    try {
-      const loaded = tryLoadActivatedBundledPluginPublicSurfaceModuleSync<BundledSessionKeyModule>({
+  let resolveSessionConversation: BundledSessionKeyModule["resolveSessionConversation"];
+  try {
+    resolveSessionConversation =
+      tryLoadActivatedBundledPluginPublicSurfaceModuleSync<BundledSessionKeyModule>({
         dirName,
         artifactBasename: SESSION_KEY_API_ARTIFACT_BASENAME,
-      });
-      resolveSessionConversation =
-        typeof loaded?.resolveSessionConversation === "function"
-          ? loaded.resolveSessionConversation
-          : null;
-    } catch {
-      resolveSessionConversation = null;
-    }
-    cached = {
-      version,
-      resolveSessionConversation,
-    };
-    bundledSessionConversationFallbackCache.set(dirName, cached);
+      })?.resolveSessionConversation;
+  } catch {
+    return null;
   }
-  if (typeof cached.resolveSessionConversation !== "function") {
+  if (typeof resolveSessionConversation !== "function") {
     return null;
   }
 
   return normalizeSessionConversationResolution(
-    cached.resolveSessionConversation({
+    resolveSessionConversation({
       kind: params.kind,
       rawId: params.rawId,
     }),
   );
 }
 
-function isBundledSessionConversationFallbackDisabled(channel: string): boolean {
-  const snapshot = getRuntimeConfigSnapshot();
-  if (!snapshot?.plugins) {
-    return false;
-  }
-  if (snapshot.plugins.enabled === false) {
-    return true;
-  }
-  const entry = snapshot.plugins.entries?.[normalizeResolvedChannel(channel)];
-  return !!entry && typeof entry === "object" && entry.enabled === false;
-}
-
-function shouldProbeBundledSessionConversationFallback(rawId: string): boolean {
-  return rawId.includes(":");
-}
-
 function resolveSessionConversationResolution(params: {
   channel: string;
   kind: "group" | "channel";
   rawId: string;
-  bundledFallback?: boolean;
 }): ResolvedSessionConversation | null {
   const rawId = params.rawId.trim();
   if (!rawId) {
@@ -228,19 +175,13 @@ function resolveSessionConversationResolution(params: {
       rawId,
     }),
   );
-  const shouldTryBundledFallback =
-    params.bundledFallback !== false &&
-    !messaging &&
-    shouldProbeBundledSessionConversationFallback(rawId);
   const resolved =
     pluginResolved ??
-    (shouldTryBundledFallback
-      ? resolveBundledSessionConversationFallback({
-          channel: params.channel,
-          kind: params.kind,
-          rawId,
-        })
-      : null) ??
+    resolveBundledSessionConversationFallback({
+      channel: params.channel,
+      kind: params.kind,
+      rawId,
+    }) ??
     buildGenericConversationResolution(rawId);
   if (!resolved) {
     return null;
@@ -268,7 +209,6 @@ export function resolveSessionConversation(params: {
   channel: string;
   kind: "group" | "channel";
   rawId: string;
-  bundledFallback?: boolean;
 }): ResolvedSessionConversation | null {
   return resolveSessionConversationResolution(params);
 }
@@ -279,17 +219,13 @@ function buildBaseSessionKey(raw: RawSessionConversationRef, id: string): string
 
 export function resolveSessionConversationRef(
   sessionKey: string | undefined | null,
-  opts: SessionConversationResolutionOptions = {},
 ): ResolvedSessionConversationRef | null {
   const raw = parseRawSessionConversationRef(sessionKey);
   if (!raw) {
     return null;
   }
 
-  const resolved = resolveSessionConversation({
-    ...raw,
-    bundledFallback: opts.bundledFallback,
-  });
+  const resolved = resolveSessionConversation(raw);
   if (!resolved) {
     return null;
   }
@@ -308,17 +244,14 @@ export function resolveSessionConversationRef(
 
 export function resolveSessionThreadInfo(
   sessionKey: string | undefined | null,
-  opts: SessionConversationResolutionOptions = {},
 ): ParsedThreadSessionSuffix {
-  const resolved = resolveSessionConversationRef(sessionKey, opts);
+  const resolved = resolveSessionConversationRef(sessionKey);
   if (!resolved) {
     return parseThreadSessionSuffix(sessionKey);
   }
 
   return {
-    baseSessionKey: resolved.threadId
-      ? resolved.baseSessionKey
-      : normalizeOptionalString(sessionKey),
+    baseSessionKey: resolved.threadId ? resolved.baseSessionKey : sessionKey?.trim() || undefined,
     threadId: resolved.threadId,
   };
 }

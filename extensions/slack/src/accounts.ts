@@ -6,7 +6,6 @@ import {
   resolveMergedAccountConfig,
   type OpenClawConfig,
 } from "openclaw/plugin-sdk/account-resolution";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import type { SlackAccountSurfaceFields } from "./account-surface-fields.js";
 import type { SlackAccountConfig } from "./runtime-api.js";
 import { resolveSlackAppToken, resolveSlackBotToken, resolveSlackUserToken } from "./token.js";
@@ -80,7 +79,7 @@ export function resolveSlackAccount(params: {
   return {
     accountId,
     enabled,
-    name: normalizeOptionalString(merged.name),
+    name: merged.name?.trim() || undefined,
     botToken,
     appToken,
     userToken,

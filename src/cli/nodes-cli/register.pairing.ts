@@ -1,6 +1,5 @@
 import type { Command } from "commander";
 import { defaultRuntime } from "../../runtime.js";
-import { normalizeOptionalString } from "../../shared/string-coerce.js";
 import { getTerminalTableWidth } from "../../terminal/table.js";
 import { getNodesTheme, runNodesCommand } from "./cli-utils.js";
 import { parsePairingList } from "./format.js";
@@ -79,8 +78,8 @@ export function registerNodesPairingCommands(nodes: Command) {
       .requiredOption("--name <displayName>", "New display name")
       .action(async (opts: NodesRpcOpts) => {
         await runNodesCommand("rename", async () => {
-          const nodeId = await resolveNodeId(opts, normalizeOptionalString(opts.node) ?? "");
-          const name = normalizeOptionalString(opts.name) ?? "";
+          const nodeId = await resolveNodeId(opts, String(opts.node ?? ""));
+          const name = String(opts.name ?? "").trim();
           if (!nodeId || !name) {
             defaultRuntime.error("--node and --name required");
             defaultRuntime.exit(1);

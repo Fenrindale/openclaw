@@ -1,9 +1,8 @@
 import os from "node:os";
 import path from "node:path";
-import { normalizeOptionalString } from "../shared/string-coerce.js";
 
 function normalize(value: string | undefined): string | undefined {
-  const trimmed = normalizeOptionalString(value);
+  const trimmed = value?.trim();
   if (!trimmed) {
     return undefined;
   }

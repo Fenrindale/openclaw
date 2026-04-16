@@ -1,5 +1,5 @@
 import { resolveUserTimezone } from "../../agents/date-time.js";
-import type { OpenClawConfig } from "../../config/types.openclaw.js";
+import type { OpenClawConfig } from "../../config/config.js";
 import { buildChannelSummary } from "../../infra/channel-summary.js";
 import {
   formatUtcTimestamp,
@@ -7,10 +7,6 @@ import {
   resolveTimezone,
 } from "../../infra/format-time/format-datetime.ts";
 import { drainSystemEventEntries } from "../../infra/system-events.js";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-} from "../../shared/string-coerce.js";
 
 /** Drain queued system events, format as `System:` lines, return the block (or undefined). */
 export async function drainFormattedSystemEvents(params: {
@@ -24,7 +20,7 @@ export async function drainFormattedSystemEvents(params: {
     if (!trimmed) {
       return null;
     }
-    const lower = normalizeLowercaseStringOrEmpty(trimmed);
+    const lower = trimmed.toLowerCase();
     if (lower.includes("reason periodic")) {
       return null;
     }
@@ -43,11 +39,11 @@ export async function drainFormattedSystemEvents(params: {
   };
 
   const resolveSystemEventTimezone = (cfg: OpenClawConfig) => {
-    const raw = normalizeOptionalString(cfg.agents?.defaults?.envelopeTimezone);
+    const raw = cfg.agents?.defaults?.envelopeTimezone?.trim();
     if (!raw) {
       return { mode: "local" as const };
     }
-    const lowered = normalizeLowercaseStringOrEmpty(raw);
+    const lowered = raw.toLowerCase();
     if (lowered === "utc" || lowered === "gmt") {
       return { mode: "utc" as const };
     }

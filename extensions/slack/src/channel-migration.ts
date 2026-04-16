@@ -1,7 +1,6 @@
 import type { OpenClawConfig } from "openclaw/plugin-sdk/config-runtime";
 import type { SlackChannelConfig } from "openclaw/plugin-sdk/config-runtime";
 import { normalizeAccountId } from "openclaw/plugin-sdk/routing";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 
 type SlackChannels = Record<string, SlackChannelConfig>;
 
@@ -30,7 +29,7 @@ function resolveAccountChannels(
     return { channels: exact.channels };
   }
   const matchKey = Object.keys(accounts).find(
-    (key) => normalizeLowercaseStringOrEmpty(key) === normalizeLowercaseStringOrEmpty(normalized),
+    (key) => key.toLowerCase() === normalized.toLowerCase(),
   );
   return { channels: matchKey ? accounts[matchKey]?.channels : undefined };
 }

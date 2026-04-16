@@ -2,7 +2,6 @@ import { readFileSync } from "node:fs";
 import { homedir, platform } from "node:os";
 import { join } from "node:path";
 import { resolveProviderEndpoint } from "openclaw/plugin-sdk/provider-http";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 
 const ANTHROPIC_VERTEX_DEFAULT_REGION = "global";
 const ANTHROPIC_VERTEX_REGION_RE = /^[a-z0-9-]+$/;
@@ -65,10 +64,7 @@ export function resolveAnthropicVertexClientRegion(params?: {
 
 function hasAnthropicVertexMetadataServerAdc(env: NodeJS.ProcessEnv = process.env): boolean {
   const explicitMetadataOptIn = normalizeOptionalSecretInput(env.ANTHROPIC_VERTEX_USE_GCP_METADATA);
-  return (
-    explicitMetadataOptIn === "1" ||
-    normalizeLowercaseStringOrEmpty(explicitMetadataOptIn) === "true"
-  );
+  return explicitMetadataOptIn === "1" || explicitMetadataOptIn?.toLowerCase() === "true";
 }
 
 function resolveAnthropicVertexDefaultAdcPath(env: NodeJS.ProcessEnv = process.env): string {

@@ -9,12 +9,8 @@ import {
 } from "../agents/model-selection.js";
 import { resolveModelAsync } from "../agents/pi-embedded-runner/model.js";
 import { prepareModelForSimpleCompletion } from "../agents/simple-completion-transport.js";
-import type { OpenClawConfig } from "../config/types.js";
-import {
-  normalizeOptionalLowercaseString,
-  normalizeOptionalString,
-} from "../shared/string-coerce.js";
-import type { ResolvedTtsConfig } from "./tts-types.js";
+import type { OpenClawConfig } from "../config/config.js";
+import type { ResolvedTtsConfig } from "./tts.js";
 
 const TEMP_FILE_CLEANUP_DELAY_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -43,10 +39,11 @@ export function requireInRange(value: number, min: number, max: number, label: s
 }
 
 export function normalizeLanguageCode(code?: string): string | undefined {
-  const normalized = normalizeOptionalLowercaseString(code);
-  if (!normalized) {
+  const trimmed = code?.trim();
+  if (!trimmed) {
     return undefined;
   }
+  const normalized = trimmed.toLowerCase();
   if (!/^[a-z]{2}$/.test(normalized)) {
     throw new Error("languageCode must be a 2-letter ISO 639-1 code (e.g. en, de, fr)");
   }
@@ -54,10 +51,11 @@ export function normalizeLanguageCode(code?: string): string | undefined {
 }
 
 export function normalizeApplyTextNormalization(mode?: string): "auto" | "on" | "off" | undefined {
-  const normalized = normalizeOptionalLowercaseString(mode);
-  if (!normalized) {
+  const trimmed = mode?.trim();
+  if (!trimmed) {
     return undefined;
   }
+  const normalized = trimmed.toLowerCase();
   if (normalized === "auto" || normalized === "on" || normalized === "off") {
     return normalized;
   }
@@ -92,7 +90,7 @@ function resolveSummaryModelRef(
   config: ResolvedTtsConfig,
 ): SummaryModelSelection {
   const defaultRef = resolveDefaultModelForAgent({ cfg });
-  const override = normalizeOptionalString(config.summaryModel);
+  const override = config.summaryModel?.trim();
   if (!override) {
     return { ref: defaultRef, source: "default" };
   }

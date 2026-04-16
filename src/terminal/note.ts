@@ -1,5 +1,4 @@
 import { note as clackNote } from "@clack/prompts";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 import { visibleWidth } from "./ansi.js";
 import { stylePromptTitle } from "./prompt-style.js";
 
@@ -11,7 +10,7 @@ function isSuppressedByEnv(value: string | undefined): boolean {
   if (!value) {
     return false;
   }
-  const normalized = normalizeLowercaseStringOrEmpty(value);
+  const normalized = value.trim().toLowerCase();
   if (!normalized) {
     return false;
   }

@@ -1,14 +1,11 @@
-import { sanitizeUserFacingText } from "../../agents/pi-embedded-helpers/sanitize-user-facing-text.js";
+import { sanitizeUserFacingText } from "../../agents/pi-embedded-helpers.js";
 import { hasReplyPayloadContent } from "../../interactive/payload.js";
-import { normalizeOptionalString } from "../../shared/string-coerce.js";
 import { stripHeartbeatToken } from "../heartbeat.js";
 import {
   HEARTBEAT_TOKEN,
   isSilentReplyPayloadText,
   isSilentReplyText,
   SILENT_REPLY_TOKEN,
-  startsWithSilentToken,
-  stripLeadingSilentToken,
   stripSilentToken,
 } from "../tokens.js";
 import type { ReplyPayload } from "../types.js";
@@ -46,7 +43,7 @@ export function normalizeReplyPayload(
         trimText: true,
       },
     );
-  const trimmed = normalizeOptionalString(payload.text) ?? "";
+  const trimmed = payload.text?.trim() ?? "";
   if (!hasContent(trimmed)) {
     opts.onSkip?.("empty");
     return null;
@@ -64,17 +61,11 @@ export function normalizeReplyPayload(
   // Strip NO_REPLY from mixed-content messages (e.g. "😄 NO_REPLY") so the
   // token never leaks to end users.  If stripping leaves nothing, treat it as
   // silent just like the exact-match path above.  (#30916, #30955)
-  if (text && !isSilentReplyText(text, silentToken)) {
-    const hasLeadingSilentToken = startsWithSilentToken(text, silentToken);
-    if (hasLeadingSilentToken) {
-      text = stripLeadingSilentToken(text, silentToken);
-    }
-    if (hasLeadingSilentToken || text.includes(silentToken)) {
-      text = stripSilentToken(text, silentToken);
-      if (!hasContent(text)) {
-        opts.onSkip?.("silent");
-        return null;
-      }
+  if (text && text.includes(silentToken) && !isSilentReplyText(text, silentToken)) {
+    text = stripSilentToken(text, silentToken);
+    if (!hasContent(text)) {
+      opts.onSkip?.("silent");
+      return null;
     }
   }
   if (text && !trimmed) {

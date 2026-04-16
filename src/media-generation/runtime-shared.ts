@@ -3,29 +3,27 @@ import { ensureAuthProfileStore } from "../agents/auth-profiles.js";
 import { DEFAULT_PROVIDER } from "../agents/defaults.js";
 import { resolveEnvApiKey } from "../agents/model-auth-env.js";
 import type { FallbackAttempt } from "../agents/model-fallback.types.js";
+import type { OpenClawConfig } from "../config/config.js";
 import {
   resolveAgentModelFallbackValues,
   resolveAgentModelPrimaryValue,
 } from "../config/model-input.js";
 import type { AgentModelConfig } from "../config/types.agents-shared.js";
-import type { OpenClawConfig } from "../config/types.js";
 import { getProviderEnvVars } from "../secrets/provider-env-vars.js";
-import { normalizeOptionalString } from "../shared/string-coerce.js";
-import type {
-  MediaGenerationNormalizationMetadataInput,
-  MediaNormalizationEntry,
-  MediaNormalizationValue,
-} from "./normalization.types.js";
 
 export type ParsedProviderModelRef = {
   provider: string;
   model: string;
 };
-export type {
-  MediaGenerationNormalizationMetadataInput,
-  MediaNormalizationEntry,
-  MediaNormalizationValue,
-} from "./normalization.types.js";
+
+export type MediaNormalizationValue = string | number | boolean;
+
+export type MediaNormalizationEntry<TValue extends MediaNormalizationValue> = {
+  requested?: TValue;
+  applied?: TValue;
+  derivedFrom?: string;
+  supportedValues?: readonly TValue[];
+};
 
 export function hasMediaNormalizationEntry<TValue extends MediaNormalizationValue>(
   entry: MediaNormalizationEntry<TValue> | undefined,
@@ -62,7 +60,7 @@ type ParsedSize = {
 
 function resolveCurrentDefaultProviderId(cfg?: OpenClawConfig): string {
   const configured = resolveAgentModelPrimaryValue(cfg?.agents?.defaults?.model);
-  const trimmed = normalizeOptionalString(configured);
+  const trimmed = configured?.trim();
   if (!trimmed) {
     return DEFAULT_PROVIDER;
   }
@@ -70,7 +68,7 @@ function resolveCurrentDefaultProviderId(cfg?: OpenClawConfig): string {
   if (slash <= 0) {
     return DEFAULT_PROVIDER;
   }
-  const provider = normalizeOptionalString(trimmed.slice(0, slash));
+  const provider = trimmed.slice(0, slash).trim();
   return provider || DEFAULT_PROVIDER;
 }
 
@@ -88,7 +86,7 @@ function isCapabilityProviderConfigured(params: {
   if (resolveEnvApiKey(params.provider.id)?.apiKey) {
     return true;
   }
-  const agentDir = normalizeOptionalString(params.agentDir);
+  const agentDir = params.agentDir?.trim();
   if (!agentDir) {
     return false;
   }
@@ -105,8 +103,8 @@ function resolveAutoCapabilityFallbackRefs(params: {
 }): string[] {
   const providerDefaults = new Map<string, string>();
   for (const provider of params.listProviders(params.cfg)) {
-    const providerId = normalizeOptionalString(provider.id);
-    const modelId = normalizeOptionalString(provider.defaultModel);
+    const providerId = provider.id.trim();
+    const modelId = provider.defaultModel?.trim();
     if (
       !providerId ||
       !modelId ||
@@ -179,13 +177,6 @@ export function resolveCapabilityModelCandidates(params: {
   return candidates;
 }
 
-function normalizeSupportedValues<TValue extends string>(values?: readonly TValue[]): TValue[] {
-  return (values ?? []).flatMap((entry) => {
-    const normalized = normalizeOptionalString(entry);
-    return normalized ? [entry] : [];
-  });
-}
-
 function compareScores(
   next: { primary: number; secondary: number; tertiary: string },
   best: { primary: number; secondary: number; tertiary: string } | null,
@@ -203,7 +194,7 @@ function compareScores(
 }
 
 function parseAspectRatioValue(raw?: string | null): ParsedAspectRatio | null {
-  const trimmed = normalizeOptionalString(raw);
+  const trimmed = raw?.trim();
   if (!trimmed) {
     return null;
   }
@@ -224,7 +215,7 @@ function parseAspectRatioValue(raw?: string | null): ParsedAspectRatio | null {
 }
 
 function parseSizeValue(raw?: string | null): ParsedSize | null {
-  const trimmed = normalizeOptionalString(raw);
+  const trimmed = raw?.trim();
   if (!trimmed) {
     return null;
   }
@@ -270,7 +261,7 @@ export function resolveClosestAspectRatio(params: {
   requestedSize?: string;
   supportedAspectRatios?: readonly string[];
 }): string | undefined {
-  const supported = normalizeSupportedValues(params.supportedAspectRatios);
+  const supported = params.supportedAspectRatios?.filter((entry) => entry.trim().length > 0) ?? [];
   if (supported.length === 0) {
     return params.requestedAspectRatio ?? deriveAspectRatioFromSize(params.requestedSize);
   }
@@ -309,7 +300,7 @@ export function resolveClosestSize(params: {
   requestedAspectRatio?: string;
   supportedSizes?: readonly string[];
 }): string | undefined {
-  const supported = normalizeSupportedValues(params.supportedSizes);
+  const supported = params.supportedSizes?.filter((entry) => entry.trim().length > 0) ?? [];
   if (supported.length === 0) {
     return params.requestedSize;
   }
@@ -349,7 +340,7 @@ export function resolveClosestResolution<TResolution extends string>(params: {
   supportedResolutions?: readonly TResolution[];
   order?: readonly TResolution[];
 }): TResolution | undefined {
-  const supported = normalizeSupportedValues(params.supportedResolutions);
+  const supported = params.supportedResolutions?.filter((entry) => entry.trim().length > 0) ?? [];
   if (supported.length === 0) {
     return params.requestedResolution;
   }
@@ -402,55 +393,6 @@ export function normalizeDurationToClosestMax(
   return Math.min(rounded, Math.max(1, Math.round(maxDurationSeconds)));
 }
 
-export function buildMediaGenerationNormalizationMetadata(params: {
-  normalization?: MediaGenerationNormalizationMetadataInput;
-  requestedSizeForDerivedAspectRatio?: string;
-  includeSupportedDurationSeconds?: boolean;
-}): Record<string, unknown> {
-  const metadata: Record<string, unknown> = {};
-  const { normalization } = params;
-  if (normalization?.size?.requested !== undefined && normalization.size.applied !== undefined) {
-    metadata.requestedSize = normalization.size.requested;
-    metadata.normalizedSize = normalization.size.applied;
-  }
-  if (normalization?.aspectRatio?.applied !== undefined) {
-    if (normalization.aspectRatio.requested !== undefined) {
-      metadata.requestedAspectRatio = normalization.aspectRatio.requested;
-    }
-    metadata.normalizedAspectRatio = normalization.aspectRatio.applied;
-    if (
-      normalization.aspectRatio.derivedFrom === "size" &&
-      params.requestedSizeForDerivedAspectRatio
-    ) {
-      metadata.requestedSize = params.requestedSizeForDerivedAspectRatio;
-      metadata.aspectRatioDerivedFromSize = deriveAspectRatioFromSize(
-        params.requestedSizeForDerivedAspectRatio,
-      );
-    }
-  }
-  if (
-    normalization?.resolution?.requested !== undefined &&
-    normalization.resolution.applied !== undefined
-  ) {
-    metadata.requestedResolution = normalization.resolution.requested;
-    metadata.normalizedResolution = normalization.resolution.applied;
-  }
-  if (
-    normalization?.durationSeconds?.requested !== undefined &&
-    normalization.durationSeconds.applied !== undefined
-  ) {
-    metadata.requestedDurationSeconds = normalization.durationSeconds.requested;
-    metadata.normalizedDurationSeconds = normalization.durationSeconds.applied;
-    if (
-      params.includeSupportedDurationSeconds &&
-      normalization.durationSeconds.supportedValues?.length
-    ) {
-      metadata.supportedDurationSeconds = normalization.durationSeconds.supportedValues;
-    }
-  }
-  return metadata;
-}
-
 export function throwCapabilityGenerationFailure(params: {
   capabilityLabel: string;
   attempts: FallbackAttempt[];
@@ -480,8 +422,7 @@ export function buildNoCapabilityModelConfiguredMessage(params: {
   fallbackSampleRef?: string;
 }): string {
   const sampleModel = params.providers.find(
-    (provider) =>
-      normalizeOptionalString(provider.id) && normalizeOptionalString(provider.defaultModel),
+    (provider) => provider.id.trim().length > 0 && provider.defaultModel?.trim(),
   );
   const sampleRef = sampleModel
     ? `${sampleModel.id}/${sampleModel.defaultModel}`

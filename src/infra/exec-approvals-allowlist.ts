@@ -1,9 +1,4 @@
 import path from "node:path";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalLowercaseString,
-  normalizeOptionalString,
-} from "../shared/string-coerce.js";
 import { isDispatchWrapperExecutable } from "./dispatch-wrapper-resolution.js";
 import {
   analyzeShellCommand,
@@ -21,7 +16,7 @@ import {
   type ExecutableResolution,
   type ShellChainOperator,
 } from "./exec-approvals-analysis.js";
-import type { ExecAllowlistEntry } from "./exec-approvals.types.js";
+import type { ExecAllowlistEntry } from "./exec-approvals.js";
 import {
   detectInterpreterInlineEvalArgv,
   isInterpreterLikeAllowlistPattern,
@@ -52,7 +47,7 @@ export function normalizeSafeBins(entries?: readonly string[]): Set<string> {
     return new Set();
   }
   const normalized = entries
-    .map((entry) => normalizeLowercaseStringOrEmpty(entry))
+    .map((entry) => entry.trim().toLowerCase())
     .filter((entry) => entry.length > 0);
   return new Set(normalized);
 }
@@ -82,7 +77,7 @@ export function isSafeBinUsage(params: {
     return false;
   }
   const resolution = params.resolution;
-  const execName = normalizeOptionalLowercaseString(resolution?.executableName);
+  const execName = resolution?.executableName?.toLowerCase();
   if (!execName) {
     return false;
   }
@@ -154,18 +149,18 @@ function pickExecAllowlistContext(params: ExecAllowlistContext): ExecAllowlistCo
 }
 
 function normalizeSkillBinName(value: string | undefined): string | null {
-  const trimmed = normalizeOptionalLowercaseString(value);
+  const trimmed = value?.trim().toLowerCase();
   return trimmed && trimmed.length > 0 ? trimmed : null;
 }
 
 function normalizeSkillBinResolvedPath(value: string | undefined): string | null {
-  const trimmed = normalizeOptionalString(value);
+  const trimmed = value?.trim();
   if (!trimmed) {
     return null;
   }
   const resolved = path.resolve(trimmed);
   if (process.platform === "win32") {
-    return normalizeLowercaseStringOrEmpty(resolved.replace(/\\/g, "/"));
+    return resolved.replace(/\\/g, "/").toLowerCase();
   }
   return resolved;
 }
@@ -225,7 +220,7 @@ function resolveSkillPreludePath(rawPath: string, cwd?: string): string {
 
 function isSkillMarkdownPreludePath(filePath: string): boolean {
   const normalized = filePath.replace(/\\/g, "/");
-  const lowerNormalized = normalizeLowercaseStringOrEmpty(normalized);
+  const lowerNormalized = normalized.toLowerCase();
   if (!lowerNormalized.endsWith("/skill.md")) {
     return false;
   }
@@ -247,7 +242,7 @@ function isSkillMarkdownPreludePath(filePath: string): boolean {
 
 function resolveSkillMarkdownPreludeId(filePath: string): string | null {
   const normalized = filePath.replace(/\\/g, "/");
-  const lowerNormalized = normalizeLowercaseStringOrEmpty(normalized);
+  const lowerNormalized = normalized.toLowerCase();
   if (!lowerNormalized.endsWith("/skill.md")) {
     return null;
   }
@@ -270,7 +265,7 @@ function resolveSkillMarkdownPreludeId(filePath: string): string | null {
 
 function isSkillPreludeReadSegment(segment: ExecCommandSegment, cwd?: string): boolean {
   const execution = resolveExecutionTargetResolution(segment.resolution);
-  if (normalizeLowercaseStringOrEmpty(execution?.executableName) !== "cat") {
+  if (execution?.executableName?.toLowerCase() !== "cat") {
     return false;
   }
   // Keep the display-prelude exception narrow: only a plain `cat <...>/SKILL.md`
@@ -287,7 +282,7 @@ function isSkillPreludeReadSegment(segment: ExecCommandSegment, cwd?: string): b
 
 function isSkillPreludeMarkerSegment(segment: ExecCommandSegment): boolean {
   const execution = resolveExecutionTargetResolution(segment.resolution);
-  if (normalizeLowercaseStringOrEmpty(execution?.executableName) !== "printf") {
+  if (execution?.executableName?.toLowerCase() !== "printf") {
     return false;
   }
   if (segment.argv.length !== 2) {
@@ -390,18 +385,14 @@ function resolveShellWrapperScriptArgv(params: {
   effectiveArgv: string[];
   cwd?: string;
 }): string[] {
-  const scriptBase = normalizeLowercaseStringOrEmpty(
-    path.basename(params.shellScriptCandidatePath),
-  );
+  const scriptBase = path.basename(params.shellScriptCandidatePath).toLowerCase();
   const cwdBase = params.cwd && params.cwd.trim() ? params.cwd.trim() : process.cwd();
   const resolveArgPath = (a: string): string => (path.isAbsolute(a) ? a : path.resolve(cwdBase, a));
   let idx = params.effectiveArgv.findIndex(
     (a) => resolveArgPath(a) === params.shellScriptCandidatePath,
   );
   if (idx === -1) {
-    idx = params.effectiveArgv.findIndex(
-      (a) => normalizeLowercaseStringOrEmpty(path.basename(a)) === scriptBase,
-    );
+    idx = params.effectiveArgv.findIndex((a) => path.basename(a).toLowerCase() === scriptBase);
   }
   const scriptArgs = idx !== -1 ? params.effectiveArgv.slice(idx + 1) : [];
   return [params.shellScriptCandidatePath, ...scriptArgs];
@@ -888,15 +879,13 @@ function buildScriptArgPatternFromArgv(
   if (!isWindowsPlatform(platform ?? process.platform)) {
     return undefined;
   }
-  const scriptBase = normalizeLowercaseStringOrEmpty(path.basename(scriptPath));
+  const scriptBase = path.basename(scriptPath).toLowerCase();
   const base = cwd && cwd.trim() ? cwd.trim() : process.cwd();
   const resolveArgPath = (arg: string): string =>
     path.isAbsolute(arg) ? arg : path.resolve(base, arg);
   let scriptIdx = argv.findIndex((arg) => resolveArgPath(arg) === scriptPath);
   if (scriptIdx === -1) {
-    scriptIdx = argv.findIndex(
-      (arg) => normalizeLowercaseStringOrEmpty(path.basename(arg)) === scriptBase,
-    );
+    scriptIdx = argv.findIndex((arg) => path.basename(arg).toLowerCase() === scriptBase);
   }
   const scriptArgs = scriptIdx !== -1 ? argv.slice(scriptIdx + 1) : [];
   const normalized = scriptArgs.map((a) => a.replace(/\//g, "\\"));
@@ -988,11 +977,11 @@ function collectAllowAlwaysPatterns(params: {
   const isPowerShellFileInvocation =
     POWERSHELL_WRAPPERS.has(normalizeExecutableToken(segment.argv[0] ?? "")) &&
     segment.argv.some((t) => {
-      const lower = normalizeLowercaseStringOrEmpty(t);
+      const lower = t.trim().toLowerCase();
       return lower === "-file" || lower === "-f";
     }) &&
     !segment.argv.some((t) => {
-      const lower = normalizeLowercaseStringOrEmpty(t);
+      const lower = t.trim().toLowerCase();
       return lower === "-command" || lower === "-c" || lower === "--command";
     });
   const inlineCommand = isPowerShellFileInvocation

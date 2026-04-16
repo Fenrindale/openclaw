@@ -11,10 +11,8 @@ import {
   parseIdentityMarkdown as parseIdentityMarkdownFile,
 } from "../agents/identity-file.js";
 import { listRouteBindings } from "../config/bindings.js";
-import type { IdentityConfig } from "../config/types.base.js";
-import type { OpenClawConfig } from "../config/types.openclaw.js";
+import type { OpenClawConfig } from "../config/config.js";
 import { normalizeAgentId } from "../routing/session-key.js";
-import { normalizeOptionalString, resolvePrimaryStringValue } from "../shared/string-coerce.js";
 
 export type AgentSummary = {
   id: string;
@@ -42,15 +40,33 @@ export function findAgentEntryIndex(list: AgentEntry[], agentId: string): number
   return list.findIndex((entry) => normalizeAgentId(entry.id) === id);
 }
 
+function resolveAgentName(cfg: OpenClawConfig, agentId: string) {
+  const entry = listAgentEntries(cfg).find(
+    (agent) => normalizeAgentId(agent.id) === normalizeAgentId(agentId),
+  );
+  return entry?.name?.trim() || undefined;
+}
+
 function resolveAgentModel(cfg: OpenClawConfig, agentId: string) {
   const entry = listAgentEntries(cfg).find(
     (agent) => normalizeAgentId(agent.id) === normalizeAgentId(agentId),
   );
-  const entryPrimary = resolvePrimaryStringValue(entry?.model);
-  if (entryPrimary) {
-    return entryPrimary;
+  if (entry?.model) {
+    if (typeof entry.model === "string" && entry.model.trim()) {
+      return entry.model.trim();
+    }
+    if (typeof entry.model === "object") {
+      const primary = entry.model.primary?.trim();
+      if (primary) {
+        return primary;
+      }
+    }
   }
-  return resolvePrimaryStringValue(cfg.agents?.defaults?.model);
+  const raw = cfg.agents?.defaults?.model;
+  if (typeof raw === "string") {
+    return raw;
+  }
+  return raw?.primary?.trim() || undefined;
 }
 
 export function parseIdentityMarkdown(content: string): AgentIdentity {
@@ -95,9 +111,7 @@ export function buildAgentSummaries(cfg: OpenClawConfig): AgentSummary[] {
         : undefined;
     return {
       id,
-      name: normalizeOptionalString(
-        configuredAgents.find((agent) => normalizeAgentId(agent.id) === id)?.name,
-      ),
+      name: resolveAgentName(cfg, id),
       identityName,
       identityEmoji,
       identitySource,
@@ -118,7 +132,6 @@ export function applyAgentConfig(
     workspace?: string;
     agentDir?: string;
     model?: string;
-    identity?: IdentityConfig;
   },
 ): OpenClawConfig {
   const agentId = normalizeAgentId(params.agentId);
@@ -126,14 +139,12 @@ export function applyAgentConfig(
   const list = listAgentEntries(cfg);
   const index = findAgentEntryIndex(list, agentId);
   const base = index >= 0 ? list[index] : { id: agentId };
-  const mergedIdentity = params.identity ? { ...base.identity, ...params.identity } : undefined;
   const nextEntry: AgentEntry = {
     ...base,
     ...(name ? { name } : {}),
     ...(params.workspace ? { workspace: params.workspace } : {}),
     ...(params.agentDir ? { agentDir: params.agentDir } : {}),
     ...(params.model ? { model: params.model } : {}),
-    ...(mergedIdentity ? { identity: mergedIdentity } : {}),
   };
   const nextList = [...list];
   if (index >= 0) {

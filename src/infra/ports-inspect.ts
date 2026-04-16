@@ -1,5 +1,4 @@
 import { runCommandWithTimeout } from "../process/exec.js";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 import { isErrno } from "./errors.js";
 import { buildPortHints } from "./ports-format.js";
 import { resolveLsofCommand } from "./ports-lsof.js";
@@ -208,7 +207,7 @@ function parseNetstatListeners(output: string, port: number): PortListener[] {
     if (!line) {
       continue;
     }
-    if (!normalizeLowercaseStringOrEmpty(line).includes("listen")) {
+    if (!line.toLowerCase().includes("listen")) {
       continue;
     }
     if (!line.includes(portToken)) {
@@ -240,7 +239,7 @@ async function resolveWindowsImageName(pid: number): Promise<string | undefined>
   }
   for (const rawLine of res.stdout.split(/\r?\n/)) {
     const line = rawLine.trim();
-    if (!normalizeLowercaseStringOrEmpty(line).startsWith("image name:")) {
+    if (!line.toLowerCase().startsWith("image name:")) {
       continue;
     }
     const value = line.slice("image name:".length).trim();
@@ -264,7 +263,7 @@ async function resolveWindowsCommandLine(pid: number): Promise<string | undefine
   }
   for (const rawLine of res.stdout.split(/\r?\n/)) {
     const line = rawLine.trim();
-    if (!normalizeLowercaseStringOrEmpty(line).startsWith("commandline=")) {
+    if (!line.toLowerCase().startsWith("commandline=")) {
       continue;
     }
     const value = line.slice("commandline=".length).trim();

@@ -12,33 +12,11 @@ function relativeSymlinkTarget(sourcePath, targetPath) {
   return relativeTarget || ".";
 }
 
-function shouldFallbackToCopy(error) {
-  return (
-    process.platform === "win32" &&
-    (error?.code === "EPERM" || error?.code === "EINVAL" || error?.code === "UNKNOWN")
-  );
-}
-
-function copyPathFallback(sourcePath, targetPath) {
-  removePathIfExists(targetPath);
-  const stat = fs.statSync(sourcePath);
-  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-  if (stat.isDirectory()) {
-    fs.cpSync(sourcePath, targetPath, { recursive: true, dereference: true });
-    return;
-  }
-  fs.copyFileSync(sourcePath, targetPath);
-}
-
-function ensureSymlink(targetValue, targetPath, type, fallbackSourcePath) {
+function ensureSymlink(targetValue, targetPath, type) {
   try {
     fs.symlinkSync(targetValue, targetPath, type);
     return;
   } catch (error) {
-    if (fallbackSourcePath && shouldFallbackToCopy(error)) {
-      copyPathFallback(fallbackSourcePath, targetPath);
-      return;
-    }
     if (error?.code !== "EEXIST") {
       throw error;
     }
@@ -53,19 +31,11 @@ function ensureSymlink(targetValue, targetPath, type, fallbackSourcePath) {
   }
 
   removePathIfExists(targetPath);
-  try {
-    fs.symlinkSync(targetValue, targetPath, type);
-  } catch (error) {
-    if (fallbackSourcePath && shouldFallbackToCopy(error)) {
-      copyPathFallback(fallbackSourcePath, targetPath);
-      return;
-    }
-    throw error;
-  }
+  fs.symlinkSync(targetValue, targetPath, type);
 }
 
 function symlinkPath(sourcePath, targetPath, type) {
-  ensureSymlink(relativeSymlinkTarget(sourcePath, targetPath), targetPath, type, sourcePath);
+  ensureSymlink(relativeSymlinkTarget(sourcePath, targetPath), targetPath, type);
 }
 
 function shouldWrapRuntimeJsFile(sourcePath) {
@@ -79,8 +49,7 @@ function shouldCopyRuntimeFile(sourcePath) {
     relativePath.endsWith("/openclaw.plugin.json") ||
     relativePath.endsWith("/.codex-plugin/plugin.json") ||
     relativePath.endsWith("/.claude-plugin/plugin.json") ||
-    relativePath.endsWith("/.cursor-plugin/plugin.json") ||
-    relativePath.endsWith("/SKILL.md")
+    relativePath.endsWith("/.cursor-plugin/plugin.json")
   );
 }
 
@@ -116,7 +85,7 @@ function stagePluginRuntimeOverlay(sourceDir, targetDir) {
     }
 
     if (dirent.isSymbolicLink()) {
-      ensureSymlink(fs.readlinkSync(sourcePath), targetPath, undefined, sourcePath);
+      ensureSymlink(fs.readlinkSync(sourcePath), targetPath);
       continue;
     }
 
@@ -144,12 +113,7 @@ function linkPluginNodeModules(params) {
   if (!fs.existsSync(params.sourcePluginNodeModulesDir)) {
     return;
   }
-  ensureSymlink(
-    params.sourcePluginNodeModulesDir,
-    runtimeNodeModulesDir,
-    symlinkType(),
-    params.sourcePluginNodeModulesDir,
-  );
+  ensureSymlink(params.sourcePluginNodeModulesDir, runtimeNodeModulesDir, symlinkType());
 }
 
 export function stageBundledPluginRuntime(params = {}) {

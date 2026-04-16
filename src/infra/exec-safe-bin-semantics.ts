@@ -1,5 +1,3 @@
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
-
 export type SafeBinSemanticValidationParams = {
   binName?: string;
   positional: readonly string[];
@@ -55,7 +53,7 @@ const SAFE_BIN_SEMANTIC_RULES: Readonly<Record<string, SafeBinSemanticRule>> = {
 };
 
 export function normalizeSafeBinName(raw: string): string {
-  const trimmed = normalizeLowercaseStringOrEmpty(raw);
+  const trimmed = raw.trim().toLowerCase();
   if (!trimmed) {
     return "";
   }

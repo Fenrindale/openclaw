@@ -1,5 +1,4 @@
 import { logVerbose } from "openclaw/plugin-sdk/runtime-env";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import type { SlackFile, SlackMessageEvent } from "../../types.js";
 import {
   MAX_SLACK_MEDIA_FILES,
@@ -73,7 +72,7 @@ export async function resolveSlackMessageContent(params: {
     !mediaPlaceholder && fallbackFiles.length > 0
       ? fallbackFiles
           .slice(0, MAX_SLACK_MEDIA_FILES)
-          .map((file) => normalizeOptionalString(file.name) ?? "file")
+          .map((file) => file.name?.trim() || "file")
           .join(", ")
       : undefined;
   const fileOnlyPlaceholder = fileOnlyFallback ? `[Slack file: ${fileOnlyFallback}]` : undefined;
@@ -81,18 +80,14 @@ export async function resolveSlackMessageContent(params: {
   const botAttachmentText =
     params.isBotMessage && !attachmentContent?.text
       ? (params.message.attachments ?? [])
-          .map(
-            (attachment) =>
-              normalizeOptionalString(attachment.text) ??
-              normalizeOptionalString(attachment.fallback),
-          )
+          .map((attachment) => attachment.text?.trim() || attachment.fallback?.trim())
           .filter(Boolean)
           .join("\n")
       : undefined;
 
   const rawBody =
     [
-      normalizeOptionalString(params.message.text),
+      (params.message.text ?? "").trim(),
       attachmentContent?.text,
       botAttachmentText,
       mediaPlaceholder,

@@ -1,13 +1,9 @@
 import os from "node:os";
 import { formatErrorMessage } from "../infra/errors.js";
 import { runCommandWithTimeout, runExec } from "../process/exec.js";
-import {
-  normalizeOptionalLowercaseString,
-  normalizeOptionalString,
-} from "../shared/string-coerce.js";
 
 function resolveLoginctlUser(env: Record<string, string | undefined>): string | null {
-  const fromEnv = normalizeOptionalString(env.USER) || normalizeOptionalString(env.LOGNAME);
+  const fromEnv = env.USER?.trim() || env.LOGNAME?.trim();
   if (fromEnv) {
     return fromEnv;
   }
@@ -38,7 +34,7 @@ export async function readSystemdUserLingerStatus(
       .split("\n")
       .map((entry) => entry.trim())
       .find((entry) => entry.startsWith("Linger="));
-    const value = normalizeOptionalLowercaseString(line?.split("=")[1]);
+    const value = line?.split("=")[1]?.trim().toLowerCase();
     if (value === "yes" || value === "no") {
       return { user, linger: value };
     }

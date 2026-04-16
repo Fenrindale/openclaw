@@ -18,21 +18,6 @@ describe("applyMemoryWikiMutation", () => {
         title: "Alpha Synthesis",
         body: "Alpha summary body.",
         sourceIds: ["source.alpha", "source.beta"],
-        claims: [
-          {
-            id: "claim.alpha.postgres",
-            text: "Alpha uses PostgreSQL for production writes.",
-            status: "supported",
-            confidence: 0.86,
-            evidence: [
-              {
-                sourceId: "source.alpha",
-                lines: "12-18",
-                weight: 0.9,
-              },
-            ],
-          },
-        ],
         contradictions: ["Needs a better primary source"],
         questions: ["What changed after launch?"],
         confidence: 0.7,
@@ -52,21 +37,6 @@ describe("applyMemoryWikiMutation", () => {
       id: "synthesis.alpha-synthesis",
       title: "Alpha Synthesis",
       sourceIds: ["source.alpha", "source.beta"],
-      claims: [
-        {
-          id: "claim.alpha.postgres",
-          text: "Alpha uses PostgreSQL for production writes.",
-          status: "supported",
-          confidence: 0.86,
-          evidence: [
-            {
-              sourceId: "source.alpha",
-              lines: "12-18",
-              weight: 0.9,
-            },
-          ],
-        },
-      ],
       contradictions: ["Needs a better primary source"],
       questions: ["What changed after launch?"],
       confidence: 0.7,
@@ -85,10 +55,10 @@ describe("applyMemoryWikiMutation", () => {
   it("updates page metadata without overwriting existing human notes", async () => {
     const { rootDir, config } = await createVault({
       prefix: "memory-wiki-apply-",
+      initialize: true,
     });
 
     const targetPath = path.join(rootDir, "entities", "alpha.md");
-    await fs.mkdir(path.dirname(targetPath), { recursive: true });
     await fs.writeFile(
       targetPath,
       renderWikiMarkdown({
@@ -116,14 +86,6 @@ keep this note
         op: "update_metadata",
         lookup: "entity.alpha",
         sourceIds: ["source.new"],
-        claims: [
-          {
-            id: "claim.alpha.status",
-            text: "Alpha is still active for existing tenants.",
-            status: "contested",
-            evidence: [{ sourceId: "source.new", lines: "4-9" }],
-          },
-        ],
         contradictions: ["Conflicts with source.beta"],
         questions: ["Is Alpha still active?"],
         confidence: null,
@@ -143,14 +105,6 @@ keep this note
       id: "entity.alpha",
       title: "Alpha",
       sourceIds: ["source.new"],
-      claims: [
-        {
-          id: "claim.alpha.status",
-          text: "Alpha is still active for existing tenants.",
-          status: "contested",
-          evidence: [{ sourceId: "source.new", lines: "4-9" }],
-        },
-      ],
       contradictions: ["Conflicts with source.beta"],
       questions: ["Is Alpha still active?"],
       status: "review",

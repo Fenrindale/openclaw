@@ -1,6 +1,6 @@
 import { Type } from "@sinclair/typebox";
+import type { OpenClawConfig } from "../../config/config.js";
 import { loadConfig } from "../../config/config.js";
-import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { parseImageGenerationModelRef } from "../../image-generation/model-ref.js";
 import {
   generateImage,
@@ -12,25 +12,26 @@ import type {
   ImageGenerationResolution,
   ImageGenerationSourceImage,
 } from "../../image-generation/types.js";
-import { resolveConfiguredMediaMaxBytes } from "../../media/configured-max-bytes.js";
 import { getImageMetadata } from "../../media/image-ops.js";
 import { saveMediaBuffer } from "../../media/store.js";
 import { loadWebMedia } from "../../media/web-media.js";
 import { getProviderEnvVars } from "../../secrets/provider-env-vars.js";
 import { resolveUserPath } from "../../utils.js";
+import { normalizeProviderId } from "../provider-id.js";
 import { ToolInputError, readNumberParam, readStringParam } from "./common.js";
 import { decodeDataUrl } from "./image-tool.helpers.js";
 import {
   applyImageGenerationModelConfigDefaults,
-  buildMediaReferenceDetails,
-  isCapabilityProviderConfigured,
-  normalizeMediaReferenceInputs,
-  resolveCapabilityModelConfigForTool,
-  resolveGenerateAction,
   resolveMediaToolLocalRoots,
-  resolveSelectedCapabilityProvider,
 } from "./media-tool-shared.js";
-import { type ToolModelConfig } from "./model-config.helpers.js";
+import {
+  buildToolModelConfigFromCandidates,
+  coerceToolModelConfig,
+  hasAuthForProvider,
+  hasToolModelConfig,
+  resolveDefaultModelRef,
+  type ToolModelConfig,
+} from "./model-config.helpers.js";
 import {
   createSandboxBridgeReadFile,
   resolveSandboxedBridgeMediaPath,
@@ -114,24 +115,109 @@ function getImageGenerationProviderAuthEnvVars(providerId: string): string[] {
   return getProviderEnvVars(providerId);
 }
 
+function resolveImageGenerationModelCandidates(params: {
+  cfg?: OpenClawConfig;
+  agentDir?: string;
+}): Array<string | undefined> {
+  const providerDefaults = new Map<string, string>();
+  for (const provider of listRuntimeImageGenerationProviders({ config: params.cfg })) {
+    const providerId = provider.id.trim();
+    const modelId = provider.defaultModel?.trim();
+    if (
+      !providerId ||
+      !modelId ||
+      providerDefaults.has(providerId) ||
+      !isImageGenerationProviderConfigured({
+        provider,
+        cfg: params.cfg,
+        agentDir: params.agentDir,
+      })
+    ) {
+      continue;
+    }
+    providerDefaults.set(providerId, `${providerId}/${modelId}`);
+  }
+
+  const primaryProvider = resolveDefaultModelRef(params.cfg).provider;
+  const orderedProviders = [
+    primaryProvider,
+    ...[...providerDefaults.keys()]
+      .filter((providerId) => providerId !== primaryProvider)
+      .toSorted(),
+  ];
+  const orderedRefs: string[] = [];
+  const seen = new Set<string>();
+  for (const providerId of orderedProviders) {
+    const ref = providerDefaults.get(providerId);
+    if (!ref || seen.has(ref)) {
+      continue;
+    }
+    seen.add(ref);
+    orderedRefs.push(ref);
+  }
+  return orderedRefs;
+}
+
 export function resolveImageGenerationModelConfigForTool(params: {
   cfg?: OpenClawConfig;
   agentDir?: string;
 }): ToolModelConfig | null {
-  return resolveCapabilityModelConfigForTool({
-    cfg: params.cfg,
+  const explicit = coerceToolModelConfig(params.cfg?.agents?.defaults?.imageGenerationModel);
+  if (hasToolModelConfig(explicit)) {
+    return explicit;
+  }
+  return buildToolModelConfigFromCandidates({
+    explicit,
     agentDir: params.agentDir,
-    modelConfig: params.cfg?.agents?.defaults?.imageGenerationModel,
-    providers: listRuntimeImageGenerationProviders({ config: params.cfg }),
+    candidates: resolveImageGenerationModelCandidates(params),
+    isProviderConfigured: (providerId) =>
+      isImageGenerationProviderConfigured({
+        providerId,
+        cfg: params.cfg,
+        agentDir: params.agentDir,
+      }),
   });
 }
 
+function isImageGenerationProviderConfigured(params: {
+  provider?: ImageGenerationProvider;
+  providerId?: string;
+  cfg?: OpenClawConfig;
+  agentDir?: string;
+}): boolean {
+  const provider =
+    params.provider ??
+    listRuntimeImageGenerationProviders({ config: params.cfg }).find((candidate) => {
+      const normalizedId = normalizeProviderId(params.providerId ?? "");
+      return (
+        normalizeProviderId(candidate.id) === normalizedId ||
+        (candidate.aliases ?? []).some((alias) => normalizeProviderId(alias) === normalizedId)
+      );
+    });
+  if (!provider) {
+    return params.providerId
+      ? hasAuthForProvider({ provider: params.providerId, agentDir: params.agentDir })
+      : false;
+  }
+  if (provider.isConfigured) {
+    return provider.isConfigured({
+      cfg: params.cfg,
+      agentDir: params.agentDir,
+    });
+  }
+  return hasAuthForProvider({ provider: provider.id, agentDir: params.agentDir });
+}
+
 function resolveAction(args: Record<string, unknown>): "generate" | "list" {
-  return resolveGenerateAction({
-    args,
-    allowed: ["generate", "list"],
-    defaultAction: "generate",
-  });
+  const raw = readStringParam(args, "action");
+  if (!raw) {
+    return "generate";
+  }
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === "generate" || normalized === "list") {
+    return normalized;
+  }
+  throw new ToolInputError('action must be "generate" or "list"');
 }
 
 function resolveRequestedCount(args: Record<string, unknown>): number {
@@ -170,13 +256,33 @@ function normalizeAspectRatio(raw: string | undefined): string | undefined {
 }
 
 function normalizeReferenceImages(args: Record<string, unknown>): string[] {
-  return normalizeMediaReferenceInputs({
-    args,
-    singularKey: "image",
-    pluralKey: "images",
-    maxCount: MAX_INPUT_IMAGES,
-    label: "reference images",
-  });
+  const imageCandidates: string[] = [];
+  if (typeof args.image === "string") {
+    imageCandidates.push(args.image);
+  }
+  if (Array.isArray(args.images)) {
+    imageCandidates.push(
+      ...args.images.filter((value): value is string => typeof value === "string"),
+    );
+  }
+
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+  for (const candidate of imageCandidates) {
+    const trimmed = candidate.trim();
+    const dedupe = trimmed.startsWith("@") ? trimmed.slice(1).trim() : trimmed;
+    if (!dedupe || seen.has(dedupe)) {
+      continue;
+    }
+    seen.add(dedupe);
+    normalized.push(trimmed);
+  }
+  if (normalized.length > MAX_INPUT_IMAGES) {
+    throw new ToolInputError(
+      `Too many reference images: ${normalized.length} provided, maximum is ${MAX_INPUT_IMAGES}.`,
+    );
+  }
+  return normalized;
 }
 
 function resolveSelectedImageGenerationProvider(params: {
@@ -184,12 +290,18 @@ function resolveSelectedImageGenerationProvider(params: {
   imageGenerationModelConfig: ToolModelConfig;
   modelOverride?: string;
 }): ImageGenerationProvider | undefined {
-  return resolveSelectedCapabilityProvider({
-    providers: listRuntimeImageGenerationProviders({ config: params.config }),
-    modelConfig: params.imageGenerationModelConfig,
-    modelOverride: params.modelOverride,
-    parseModelRef: parseImageGenerationModelRef,
-  });
+  const selectedRef =
+    parseImageGenerationModelRef(params.modelOverride) ??
+    parseImageGenerationModelRef(params.imageGenerationModelConfig.primary);
+  if (!selectedRef) {
+    return undefined;
+  }
+  const selectedProvider = normalizeProviderId(selectedRef.provider);
+  return listRuntimeImageGenerationProviders({ config: params.config }).find(
+    (provider) =>
+      normalizeProviderId(provider.id) === selectedProvider ||
+      (provider.aliases ?? []).some((alias) => normalizeProviderId(alias) === selectedProvider),
+  );
 }
 
 function formatIgnoredImageGenerationOverride(override: ImageGenerationIgnoredOverride): string {
@@ -308,7 +420,7 @@ async function loadReferenceImages(params: {
     );
 
     const media = isDataUrl
-      ? decodeDataUrl(resolvedImage, { maxBytes: params.maxBytes })
+      ? decodeDataUrl(resolvedImage)
       : params.sandboxConfig
         ? await loadWebMedia(resolvedPath ?? resolvedImage, {
             maxBytes: params.maxBytes,
@@ -395,21 +507,21 @@ export function createImageGenerateTool(options?: {
       const params = args as Record<string, unknown>;
       const action = resolveAction(params);
       if (action === "list") {
-        const runtimeProviders = listRuntimeImageGenerationProviders({ config: effectiveCfg });
-        const providers = runtimeProviders.map((provider) => ({
-          id: provider.id,
-          ...(provider.label ? { label: provider.label } : {}),
-          ...(provider.defaultModel ? { defaultModel: provider.defaultModel } : {}),
-          models: provider.models ?? (provider.defaultModel ? [provider.defaultModel] : []),
-          configured: isCapabilityProviderConfigured({
-            providers: runtimeProviders,
-            provider,
-            cfg: effectiveCfg,
-            agentDir: options?.agentDir,
+        const providers = listRuntimeImageGenerationProviders({ config: effectiveCfg }).map(
+          (provider) => ({
+            id: provider.id,
+            ...(provider.label ? { label: provider.label } : {}),
+            ...(provider.defaultModel ? { defaultModel: provider.defaultModel } : {}),
+            models: provider.models ?? (provider.defaultModel ? [provider.defaultModel] : []),
+            configured: isImageGenerationProviderConfigured({
+              provider,
+              cfg: effectiveCfg,
+              agentDir: options?.agentDir,
+            }),
+            authEnvVars: getImageGenerationProviderAuthEnvVars(provider.id),
+            capabilities: provider.capabilities,
           }),
-          authEnvVars: getImageGenerationProviderAuthEnvVars(provider.id),
-          capabilities: provider.capabilities,
-        }));
+        );
         const lines = providers.flatMap((provider) => {
           const caps: string[] = [];
           if (provider.capabilities.edit.enabled) {
@@ -460,10 +572,8 @@ export function createImageGenerateTool(options?: {
         modelOverride: model,
       });
       const count = resolveRequestedCount(params);
-      const configuredMediaMaxBytes = resolveConfiguredMediaMaxBytes(effectiveCfg);
       const loadedReferenceImages = await loadReferenceImages({
         imageInputs,
-        maxBytes: configuredMediaMaxBytes,
         workspaceDir: options?.workspaceDir,
         sandboxConfig,
       });
@@ -536,7 +646,7 @@ export function createImageGenerateTool(options?: {
             image.buffer,
             image.mimeType,
             "tool-image-generation",
-            configuredMediaMaxBytes,
+            undefined,
             filename || image.fileName,
           ),
         ),
@@ -563,12 +673,21 @@ export function createImageGenerateTool(options?: {
             mediaUrls: savedImages.map((image) => image.path),
           },
           paths: savedImages.map((image) => image.path),
-          ...buildMediaReferenceDetails({
-            entries: loadedReferenceImages,
-            singleKey: "image",
-            pluralKey: "images",
-            getResolvedInput: (entry) => entry.resolvedImage,
-          }),
+          ...(imageInputs.length === 1
+            ? {
+                image: loadedReferenceImages[0]?.resolvedImage,
+                ...(loadedReferenceImages[0]?.rewrittenFrom
+                  ? { rewrittenFrom: loadedReferenceImages[0].rewrittenFrom }
+                  : {}),
+              }
+            : imageInputs.length > 1
+              ? {
+                  images: loadedReferenceImages.map((entry) => ({
+                    image: entry.resolvedImage,
+                    ...(entry.rewrittenFrom ? { rewrittenFrom: entry.rewrittenFrom } : {}),
+                  })),
+                }
+              : {}),
           ...(normalizedResolution || resolution
             ? { resolution: normalizedResolution ?? resolution }
             : {}),

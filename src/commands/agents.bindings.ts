@@ -1,32 +1,37 @@
 import { resolveChannelDefaultAccountId } from "../channels/plugins/helpers.js";
 import { getChannelPlugin, normalizeChannelId } from "../channels/plugins/index.js";
-import type { ChannelId } from "../channels/plugins/types.public.js";
+import type { ChannelId } from "../channels/plugins/types.js";
 import { isRouteBinding, listRouteBindings } from "../config/bindings.js";
+import type { OpenClawConfig } from "../config/config.js";
 import type { AgentRouteBinding } from "../config/types.js";
-import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { DEFAULT_ACCOUNT_ID, normalizeAgentId } from "../routing/session-key.js";
-import { normalizeOptionalString } from "../shared/string-coerce.js";
-import { normalizeStringEntries } from "../shared/string-normalization.js";
 import type { ChannelChoice } from "./onboard-types.js";
 
 function bindingMatchKey(match: AgentRouteBinding["match"]) {
-  const accountId = normalizeOptionalString(match.accountId) || DEFAULT_ACCOUNT_ID;
+  const accountId = match.accountId?.trim() || DEFAULT_ACCOUNT_ID;
   const identityKey = bindingMatchIdentityKey(match);
-  return JSON.stringify([identityKey, accountId]);
+  return [identityKey, accountId].join("|");
 }
 
 function bindingMatchIdentityKey(match: AgentRouteBinding["match"]) {
   const roles = Array.isArray(match.roles)
-    ? Array.from(new Set(normalizeStringEntries(match.roles).toSorted()))
+    ? Array.from(
+        new Set(
+          match.roles
+            .map((role) => role.trim())
+            .filter(Boolean)
+            .toSorted(),
+        ),
+      )
     : [];
-  return JSON.stringify([
+  return [
     match.channel,
     match.peer?.kind ?? "",
     match.peer?.id ?? "",
     match.guildId ?? "",
     match.teamId ?? "",
     roles.join(","),
-  ]);
+  ].join("|");
 }
 
 function canUpgradeBindingAccountScope(params: {
@@ -34,10 +39,10 @@ function canUpgradeBindingAccountScope(params: {
   incoming: AgentRouteBinding;
   normalizedIncomingAgentId: string;
 }): boolean {
-  if (!normalizeOptionalString(params.incoming.match.accountId)) {
+  if (!params.incoming.match.accountId?.trim()) {
     return false;
   }
-  if (normalizeOptionalString(params.existing.match.accountId)) {
+  if (params.existing.match.accountId?.trim()) {
     return false;
   }
   if (normalizeAgentId(params.existing.agentId) !== params.normalizedIncomingAgentId) {

@@ -1,11 +1,8 @@
 import { formatCliCommand } from "../cli/command-format.js";
-import type { OpenClawConfig } from "../config/types.openclaw.js";
+import type { OpenClawConfig } from "../config/config.js";
 import { resolveCronStorePath, loadCronStore, saveCronStore } from "../cron/store.js";
 import type { CronJob } from "../cron/types.js";
-import {
-  normalizeOptionalLowercaseString,
-  normalizeOptionalString,
-} from "../shared/string-coerce.js";
+import { normalizeOptionalString } from "../shared/string-coerce.js";
 import { note } from "../terminal/note.js";
 import { shortenHomePath } from "../utils.js";
 import { normalizeStoredCronJobs } from "./doctor-cron-store-migration.js";
@@ -84,7 +81,7 @@ function migrateLegacyNotifyFallback(params: {
       raw.delivery && typeof raw.delivery === "object" && !Array.isArray(raw.delivery)
         ? (raw.delivery as Record<string, unknown>)
         : null;
-    const mode = normalizeOptionalLowercaseString(delivery?.mode);
+    const mode = normalizeOptionalString(delivery?.mode)?.toLowerCase();
     const to = normalizeOptionalString(delivery?.to);
 
     if (mode === "webhook" && to) {

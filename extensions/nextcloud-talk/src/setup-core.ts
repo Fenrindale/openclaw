@@ -10,7 +10,6 @@ import {
   type WizardPrompter,
 } from "openclaw/plugin-sdk/setup-runtime";
 import { formatDocsLink } from "openclaw/plugin-sdk/setup-tools";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 import { applyAccountNameToChannelSection, patchScopedAccountConfig } from "../runtime-api.js";
 import { resolveDefaultNextcloudTalkAccountId, resolveNextcloudTalkAccount } from "./accounts.js";
 import type { CoreConfig } from "./types.js";
@@ -123,16 +122,16 @@ async function promptNextcloudTalkAllowFrom(params: {
     message: "Nextcloud Talk allowFrom (user id)",
     placeholder: "username",
     parseEntries: (raw) => ({
-      entries: raw
+      entries: String(raw)
         .split(/[\n,;]+/g)
-        .map(normalizeLowercaseStringOrEmpty)
+        .map((value) => value.trim().toLowerCase())
         .filter(Boolean),
     }),
     getExistingAllowFrom: ({ cfg, accountId }) =>
       resolveNextcloudTalkAccount({ cfg, accountId }).config.allowFrom ?? [],
     mergeEntries: ({ existing, parsed }) =>
       mergeAllowFromEntries(
-        existing.map((value) => normalizeLowercaseStringOrEmpty(String(value))),
+        existing.map((value) => String(value).trim().toLowerCase()),
         parsed,
       ),
     applyAllowFrom: ({ cfg, accountId, allowFrom }) =>

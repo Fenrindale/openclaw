@@ -1,19 +1,22 @@
-import { loadConfig } from "../config/config.js";
-import type { OpenClawConfig } from "../config/types.openclaw.js";
+import { type OpenClawConfig, loadConfig } from "../config/config.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { augmentModelCatalogWithProviderPlugins } from "../plugins/provider-runtime.runtime.js";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-} from "../shared/string-coerce.js";
 import { resolveOpenClawAgentDir } from "./agent-paths.js";
-import type { ModelCatalogEntry, ModelInputType } from "./model-catalog.types.js";
 import { ensureOpenClawModelsJson } from "./models-config.js";
 import { normalizeProviderId } from "./provider-id.js";
 
 const log = createSubsystemLogger("model-catalog");
 
-export type { ModelCatalogEntry, ModelInputType } from "./model-catalog.types.js";
+export type ModelInputType = "text" | "image" | "document";
+
+export type ModelCatalogEntry = {
+  id: string;
+  name: string;
+  provider: string;
+  contextWindow?: number;
+  reasoning?: boolean;
+  input?: ModelInputType[];
+};
 
 type DiscoveredModel = {
   id: string;
@@ -24,7 +27,7 @@ type DiscoveredModel = {
   input?: ModelInputType[];
 };
 
-type PiSdkModule = typeof import("./pi-model-discovery-runtime.js");
+type PiSdkModule = typeof import("./pi-model-discovery.js");
 type PiRegistryInstance =
   | Array<DiscoveredModel>
   | {
@@ -128,18 +131,18 @@ export async function loadModelCatalog(params?: {
       const entries = Array.isArray(registry) ? registry : registry.getAll();
       logStage("registry-read", `entries=${entries.length}`);
       for (const entry of entries) {
-        const id = normalizeOptionalString(entry?.id) ?? "";
+        const id = String(entry?.id ?? "").trim();
         if (!id) {
           continue;
         }
-        const provider = normalizeOptionalString(entry?.provider) ?? "";
+        const provider = String(entry?.provider ?? "").trim();
         if (!provider) {
           continue;
         }
-        if (shouldSuppressBuiltInModel({ provider, id, config: cfg })) {
+        if (shouldSuppressBuiltInModel({ provider, id })) {
           continue;
         }
-        const name = normalizeOptionalString(entry?.name ?? id) || id;
+        const name = String(entry?.name ?? id).trim() || id;
         const contextWindow =
           typeof entry?.contextWindow === "number" && entry.contextWindow > 0
             ? entry.contextWindow
@@ -161,12 +164,11 @@ export async function loadModelCatalog(params?: {
       if (supplemental.length > 0) {
         const seen = new Set(
           models.map(
-            (entry) =>
-              `${normalizeLowercaseStringOrEmpty(entry.provider)}::${normalizeLowercaseStringOrEmpty(entry.id)}`,
+            (entry) => `${entry.provider.toLowerCase().trim()}::${entry.id.toLowerCase().trim()}`,
           ),
         );
         for (const entry of supplemental) {
-          const key = `${normalizeLowercaseStringOrEmpty(entry.provider)}::${normalizeLowercaseStringOrEmpty(entry.id)}`;
+          const key = `${entry.provider.toLowerCase().trim()}::${entry.id.toLowerCase().trim()}`;
           if (seen.has(key)) {
             continue;
           }
@@ -224,10 +226,10 @@ export function findModelInCatalog(
   modelId: string,
 ): ModelCatalogEntry | undefined {
   const normalizedProvider = normalizeProviderId(provider);
-  const normalizedModelId = normalizeLowercaseStringOrEmpty(modelId);
+  const normalizedModelId = modelId.toLowerCase().trim();
   return catalog.find(
     (entry) =>
       normalizeProviderId(entry.provider) === normalizedProvider &&
-      normalizeLowercaseStringOrEmpty(entry.id) === normalizedModelId,
+      entry.id.toLowerCase() === normalizedModelId,
   );
 }

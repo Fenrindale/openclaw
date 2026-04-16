@@ -2,8 +2,7 @@ import crypto from "node:crypto";
 import { resolveSessionAuthProfileOverride } from "../../agents/auth-profiles/session-override.js";
 import type { ExecToolDefaults } from "../../agents/bash-tools.js";
 import { resolveFastModeState } from "../../agents/fast-mode.js";
-import { resolveEmbeddedFullAccessState } from "../../agents/pi-embedded-runner/sandbox-info.js";
-import type { EmbeddedFullAccessBlockedReason } from "../../agents/pi-embedded-runner/types.js";
+import type { OpenClawConfig } from "../../config/config.js";
 import { resolveGroupSessionKey } from "../../config/sessions/group.js";
 import {
   resolveSessionFilePath,
@@ -11,11 +10,9 @@ import {
 } from "../../config/sessions/paths.js";
 import { resolveSessionStoreEntry } from "../../config/sessions/store.js";
 import type { SessionEntry } from "../../config/sessions/types.js";
-import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { logVerbose } from "../../globals.js";
 import { clearCommandLane, getQueueSize } from "../../process/command-queue.js";
 import { normalizeMainKey } from "../../routing/session-key.js";
-import { normalizeOptionalString } from "../../shared/string-coerce.js";
 import { isReasoningTagProvider } from "../../utils/provider-utils.js";
 import { hasControlCommand } from "../command-detection.js";
 import { resolveEnvelopeFormatOptions } from "../envelope.js";
@@ -42,52 +39,15 @@ import type { createModelSelectionState } from "./model-selection.js";
 import { resolveOriginMessageProvider } from "./origin-routing.js";
 import { buildReplyPromptBodies } from "./prompt-prelude.js";
 import { resolveActiveRunQueueAction } from "./queue-policy.js";
-import { resolveQueueSettings } from "./queue/settings-runtime.js";
+import { resolveQueueSettings } from "./queue/settings.js";
 import { buildBareSessionResetPrompt } from "./session-reset-prompt.js";
 import { drainFormattedSystemEvents } from "./session-system-events.js";
-import { buildSessionStartupContextPrelude, shouldApplyStartupContext } from "./startup-context.js";
 import { resolveTypingMode } from "./typing-mode.js";
 import { resolveRunTypingPolicy } from "./typing-policy.js";
 import type { TypingController } from "./typing.js";
 
 type AgentDefaults = NonNullable<OpenClawConfig["agents"]>["defaults"];
 type ExecOverrides = Pick<ExecToolDefaults, "host" | "security" | "ask" | "node">;
-
-export function buildExecOverridePromptHint(params: {
-  execOverrides?: ExecOverrides;
-  elevatedLevel: ElevatedLevel;
-  fullAccessAvailable?: boolean;
-  fullAccessBlockedReason?: EmbeddedFullAccessBlockedReason;
-}): string | undefined {
-  const exec = params.execOverrides;
-  if (!exec && params.elevatedLevel === "off") {
-    return undefined;
-  }
-  const parts = [
-    exec?.host ? `host=${exec.host}` : undefined,
-    exec?.security ? `security=${exec.security}` : undefined,
-    exec?.ask ? `ask=${exec.ask}` : undefined,
-    exec?.node ? `node=${exec.node}` : undefined,
-  ].filter(Boolean);
-  const execLine =
-    parts.length > 0
-      ? `Current session exec defaults: ${parts.join(" ")}.`
-      : "Current session exec defaults: inherited from configured agent/global defaults.";
-  const elevatedLine = `Current elevated level: ${params.elevatedLevel}.`;
-  const fullAccessLine =
-    params.fullAccessAvailable === false
-      ? `Auto-approved /elevated full is unavailable here (${params.fullAccessBlockedReason ?? "runtime"}). Do not ask the user to switch to /elevated full.`
-      : undefined;
-  return [
-    "## Current Exec Session State",
-    execLine,
-    elevatedLine,
-    fullAccessLine,
-    "If the user asks to run a command, use the current exec state above. Do not assume a prior denial still applies after `/exec` or `/elevated` changed.",
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
 
 let piEmbeddedRuntimePromise: Promise<typeof import("../../agents/pi-embedded.runtime.js")> | null =
   null;
@@ -97,7 +57,6 @@ let sessionUpdatesRuntimePromise: Promise<typeof import("./session-updates.runti
 let sessionStoreRuntimePromise: Promise<
   typeof import("../../config/sessions/store.runtime.js")
 > | null = null;
-const UNTRUSTED_SYSTEM_EVENT_LINE_RE = /^System \(untrusted\):/m;
 
 function loadPiEmbeddedRuntime() {
   piEmbeddedRuntimePromise ??= import("../../agents/pi-embedded.runtime.js");
@@ -117,18 +76,6 @@ function loadSessionUpdatesRuntime() {
 function loadSessionStoreRuntime() {
   sessionStoreRuntimePromise ??= import("../../config/sessions/store.runtime.js");
   return sessionStoreRuntimePromise;
-}
-
-function stripPromptThinkingDirectives(body: string): string {
-  return body
-    .split("\n")
-    .map((line) =>
-      line
-        .replace(/(^|\s)\/(?:thinking|think|t)(?=$|\s|:)(?:\s*:\s*|\s+)?[A-Za-z-]*/gi, "$1")
-        .replace(/[ \t]{2,}/g, " ")
-        .trimEnd(),
-    )
-    .join("\n");
 }
 
 type RunPreparedReplyParams = {
@@ -238,13 +185,6 @@ export async function runPreparedReply(
     cfg,
     isFastTestEnv: process.env.OPENCLAW_TEST_FAST === "1",
   });
-  const fullAccessState = resolveEmbeddedFullAccessState({
-    execElevated: {
-      enabled: elevatedEnabled,
-      allowed: elevatedAllowed,
-      defaultLevel: resolvedElevatedLevel ?? "off",
-    },
-  });
   let currentSystemSent = systemSent;
 
   const isFirstTurnInSession = isNewSession || !currentSystemSent;
@@ -280,7 +220,7 @@ export async function runPreparedReply(
         silentToken: SILENT_REPLY_TOKEN,
       })
     : "";
-  const groupSystemPrompt = normalizeOptionalString(sessionCtx.GroupSystemPrompt) ?? "";
+  const groupSystemPrompt = sessionCtx.GroupSystemPrompt?.trim() ?? "";
   const inboundMetaPrompt = buildInboundMetaSystemPrompt(
     isNewSession ? sessionCtx : { ...sessionCtx, ThreadStarterBody: undefined },
     { includeFormattingHints: !useFastReplyRuntime },
@@ -290,22 +230,13 @@ export async function runPreparedReply(
     groupChatContext,
     groupIntro,
     groupSystemPrompt,
-    buildExecOverridePromptHint({
-      execOverrides,
-      elevatedLevel: resolvedElevatedLevel,
-      fullAccessAvailable: fullAccessState.available,
-      fullAccessBlockedReason: fullAccessState.blockedReason,
-    }),
   ].filter(Boolean);
   const baseBody = sessionCtx.BodyStripped ?? sessionCtx.Body ?? "";
   // Use CommandBody/RawBody for bare reset detection (clean message without structural context).
   const rawBodyTrimmed = (ctx.CommandBody ?? ctx.RawBody ?? ctx.Body ?? "").trim();
   const baseBodyTrimmedRaw = baseBody.trim();
-  const normalizedCommandBody = command.commandBodyNormalized.trim();
-  const isWholeMessageCommand =
-    normalizedCommandBody === rawBodyTrimmed ||
-    normalizedCommandBody === rawBodyTrimmed.toLowerCase();
-  const isResetOrNewCommand = /^\/(new|reset)(?:\s|$)/.test(normalizedCommandBody);
+  const isWholeMessageCommand = command.commandBodyNormalized.trim() === rawBodyTrimmed;
+  const isResetOrNewCommand = /^\/(new|reset)(?:\s|$)/.test(rawBodyTrimmed);
   if (
     allowTextCommands &&
     (!commandAuthorized || !command.isAuthorizedSender) &&
@@ -315,27 +246,17 @@ export async function runPreparedReply(
     typing.cleanup();
     return undefined;
   }
-  const isBareNewOrReset = /^\/(new|reset)$/.test(normalizedCommandBody);
+  const isBareNewOrReset = rawBodyTrimmed === "/new" || rawBodyTrimmed === "/reset";
   const isBareSessionReset =
     isNewSession &&
     ((baseBodyTrimmedRaw.length === 0 && rawBodyTrimmed.length > 0) || isBareNewOrReset);
-  const startupAction = /^\/reset(?:\s|$)/.test(normalizedCommandBody) ? "reset" : "new";
-  const startupContextPrelude =
-    isBareSessionReset && shouldApplyStartupContext({ cfg, action: startupAction })
-      ? await buildSessionStartupContextPrelude({
-          workspaceDir,
-          cfg,
-        })
-      : null;
-  const baseBodyFinal = isBareSessionReset
-    ? buildBareSessionResetPrompt(cfg)
-    : stripPromptThinkingDirectives(baseBody);
+  const baseBodyFinal = isBareSessionReset ? buildBareSessionResetPrompt(cfg) : baseBody;
   const envelopeOptions = resolveEnvelopeFormatOptions(cfg);
   const inboundUserContext = buildInboundUserContextPrefix(
     isNewSession
       ? {
           ...sessionCtx,
-          ...(normalizeOptionalString(sessionCtx.ThreadHistoryBody)
+          ...(sessionCtx.ThreadHistoryBody?.trim()
             ? { InboundHistory: undefined, ThreadStarterBody: undefined }
             : {}),
         }
@@ -343,19 +264,14 @@ export async function runPreparedReply(
     envelopeOptions,
   );
   const baseBodyForPrompt = isBareSessionReset
-    ? [startupContextPrelude, baseBodyFinal].filter(Boolean).join("\n\n")
+    ? baseBodyFinal
     : [inboundUserContext, baseBodyFinal].filter(Boolean).join("\n\n");
   const baseBodyTrimmed = baseBodyForPrompt.trim();
   const hasMediaAttachment = Boolean(
     sessionCtx.MediaPath || (sessionCtx.MediaPaths && sessionCtx.MediaPaths.length > 0),
   );
   if (!baseBodyTrimmed && !hasMediaAttachment) {
-    // Skip onReplyStart when typing is suppressed (e.g. sendPolicy deny) —
-    // otherwise channels that wire onReplyStart to typing indicators leak
-    // visible signals even though outbound delivery is suppressed.
-    if (!suppressTyping) {
-      await typing.onReplyStart();
-    }
+    await typing.onReplyStart();
     logVerbose("Inbound body empty after normalization; skipping agent run");
     typing.cleanup();
     return {
@@ -390,15 +306,14 @@ export async function runPreparedReply(
     }
   }
   const prefixedBodyCore = prefixedBodyBase;
-  const threadStarterBody = normalizeOptionalString(ctx.ThreadStarterBody);
-  const threadHistoryBody = normalizeOptionalString(ctx.ThreadHistoryBody);
+  const threadStarterBody = ctx.ThreadStarterBody?.trim();
+  const threadHistoryBody = ctx.ThreadHistoryBody?.trim();
   const threadContextNote = threadHistoryBody
     ? `[Thread history - for context]\n${threadHistoryBody}`
     : threadStarterBody
       ? `[Thread starter - for context]\n${threadStarterBody}`
       : undefined;
   const drainedSystemEventBlocks: string[] = [];
-  let forceSenderIsOwnerFalseFromSystemEvents = false;
   const rebuildPromptBodies = async (): Promise<{
     prefixedCommandBody: string;
     queuedBody: string;
@@ -412,9 +327,6 @@ export async function runPreparedReply(
       });
       if (eventsBlock) {
         drainedSystemEventBlocks.push(eventsBlock);
-        if (UNTRUSTED_SYSTEM_EVENT_LINE_RE.test(eventsBlock)) {
-          forceSenderIsOwnerFalseFromSystemEvents = true;
-        }
       }
     }
     return buildReplyPromptBodies({
@@ -630,18 +542,13 @@ export async function runPreparedReply(
       }),
       agentAccountId: sessionCtx.AccountId,
       groupId: resolveGroupSessionKey(sessionCtx)?.id ?? undefined,
-      groupChannel:
-        normalizeOptionalString(sessionCtx.GroupChannel) ??
-        normalizeOptionalString(sessionCtx.GroupSubject),
-      groupSpace: normalizeOptionalString(sessionCtx.GroupSpace),
-      senderId: normalizeOptionalString(sessionCtx.SenderId),
-      senderName: normalizeOptionalString(sessionCtx.SenderName),
-      senderUsername: normalizeOptionalString(sessionCtx.SenderUsername),
-      senderE164: normalizeOptionalString(sessionCtx.SenderE164),
-      senderIsOwner: forceSenderIsOwnerFalseFromSystemEvents ? false : command.senderIsOwner,
-      traceAuthorized:
-        (forceSenderIsOwnerFalseFromSystemEvents ? false : command.senderIsOwner) ||
-        (ctx.GatewayClientScopes ?? []).includes("operator.admin"),
+      groupChannel: sessionCtx.GroupChannel?.trim() ?? sessionCtx.GroupSubject?.trim(),
+      groupSpace: sessionCtx.GroupSpace?.trim() ?? undefined,
+      senderId: sessionCtx.SenderId?.trim() || undefined,
+      senderName: sessionCtx.SenderName?.trim() || undefined,
+      senderUsername: sessionCtx.SenderUsername?.trim() || undefined,
+      senderE164: sessionCtx.SenderE164?.trim() || undefined,
+      senderIsOwner: command.senderIsOwner,
       sessionFile: preparedSessionState.sessionFile,
       workspaceDir,
       config: cfg,
@@ -668,10 +575,6 @@ export async function runPreparedReply(
         enabled: elevatedEnabled,
         allowed: elevatedAllowed,
         defaultLevel: resolvedElevatedLevel ?? "off",
-        fullAccessAvailable: fullAccessState.available,
-        ...(fullAccessState.blockedReason
-          ? { fullAccessBlockedReason: fullAccessState.blockedReason }
-          : {}),
       },
       timeoutMs,
       blockReplyBreak: resolvedBlockStreamingBreak,

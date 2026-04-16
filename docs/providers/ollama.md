@@ -8,162 +8,127 @@ title: "Ollama"
 
 # Ollama
 
-OpenClaw integrates with Ollama's native API (`/api/chat`) for hosted cloud models and local/self-hosted Ollama servers. You can use Ollama in three modes: `Cloud + Local` through a reachable Ollama host, `Cloud only` against `https://ollama.com`, or `Local only` against a reachable Ollama host.
+Ollama is a local LLM runtime that makes it easy to run open-source models on your machine. OpenClaw integrates with Ollama's native API (`/api/chat`), supports streaming and tool calling, and can auto-discover local Ollama models when you opt in with `OLLAMA_API_KEY` (or an auth profile) and do not define an explicit `models.providers.ollama` entry.
 
 <Warning>
 **Remote Ollama users**: Do not use the `/v1` OpenAI-compatible URL (`http://host:11434/v1`) with OpenClaw. This breaks tool calling and models may output raw tool JSON as plain text. Use the native Ollama API URL instead: `baseUrl: "http://host:11434"` (no `/v1`).
 </Warning>
 
-## Getting started
+## Quick start
 
-Choose your preferred setup method and mode.
+### Onboarding (recommended)
 
-<Tabs>
-  <Tab title="Onboarding (recommended)">
-    **Best for:** fastest path to a working Ollama cloud or local setup.
+The fastest way to set up Ollama is through onboarding:
 
-    <Steps>
-      <Step title="Run onboarding">
-        ```bash
-        openclaw onboard
-        ```
+```bash
+openclaw onboard
+```
 
-        Select **Ollama** from the provider list.
-      </Step>
-      <Step title="Choose your mode">
-        - **Cloud + Local** — local Ollama host plus cloud models routed through that host
-        - **Cloud only** — hosted Ollama models via `https://ollama.com`
-        - **Local only** — local models only
-      </Step>
-      <Step title="Select a model">
-        `Cloud only` prompts for `OLLAMA_API_KEY` and suggests hosted cloud defaults. `Cloud + Local` and `Local only` ask for an Ollama base URL, discover available models, and auto-pull the selected local model if it is not available yet. `Cloud + Local` also checks whether that Ollama host is signed in for cloud access.
-      </Step>
-      <Step title="Verify the model is available">
-        ```bash
-        openclaw models list --provider ollama
-        ```
-      </Step>
-    </Steps>
+Select **Ollama** from the provider list. Onboarding will:
 
-    ### Non-interactive mode
+1. Ask for the Ollama base URL where your instance can be reached (default `http://127.0.0.1:11434`).
+2. Let you choose **Cloud + Local** (cloud models and local models) or **Local** (local models only).
+3. Open a browser sign-in flow if you choose **Cloud + Local** and are not signed in to ollama.com.
+4. Discover available models and suggest defaults.
+5. Auto-pull the selected model if it is not available locally.
 
-    ```bash
-    openclaw onboard --non-interactive \
-      --auth-choice ollama \
-      --accept-risk
-    ```
+Non-interactive mode is also supported:
 
-    Optionally specify a custom base URL or model:
+```bash
+openclaw onboard --non-interactive \
+  --auth-choice ollama \
+  --accept-risk
+```
 
-    ```bash
-    openclaw onboard --non-interactive \
-      --auth-choice ollama \
-      --custom-base-url "http://ollama-host:11434" \
-      --custom-model-id "qwen3.5:27b" \
-      --accept-risk
-    ```
+Optionally specify a custom base URL or model:
 
-  </Tab>
+```bash
+openclaw onboard --non-interactive \
+  --auth-choice ollama \
+  --custom-base-url "http://ollama-host:11434" \
+  --custom-model-id "qwen3.5:27b" \
+  --accept-risk
+```
 
-  <Tab title="Manual setup">
-    **Best for:** full control over cloud or local setup.
+### Manual setup
 
-    <Steps>
-      <Step title="Choose cloud or local">
-        - **Cloud + Local**: install Ollama, sign in with `ollama signin`, and route cloud requests through that host
-        - **Cloud only**: use `https://ollama.com` with an `OLLAMA_API_KEY`
-        - **Local only**: install Ollama from [ollama.com/download](https://ollama.com/download)
-      </Step>
-      <Step title="Pull a local model (local only)">
-        ```bash
-        ollama pull gemma4
-        # or
-        ollama pull gpt-oss:20b
-        # or
-        ollama pull llama3.3
-        ```
-      </Step>
-      <Step title="Enable Ollama for OpenClaw">
-        For `Cloud only`, use your real `OLLAMA_API_KEY`. For host-backed setups, any placeholder value works:
+1. Install Ollama: [https://ollama.com/download](https://ollama.com/download)
 
-        ```bash
-        # Cloud
-        export OLLAMA_API_KEY="your-ollama-api-key"
+2. Pull a local model if you want local inference:
 
-        # Local-only
-        export OLLAMA_API_KEY="ollama-local"
+```bash
+ollama pull glm-4.7-flash
+# or
+ollama pull gpt-oss:20b
+# or
+ollama pull llama3.3
+```
 
-        # Or configure in your config file
-        openclaw config set models.providers.ollama.apiKey "OLLAMA_API_KEY"
-        ```
-      </Step>
-      <Step title="Inspect and set your model">
-        ```bash
-        openclaw models list
-        openclaw models set ollama/gemma4
-        ```
+3. If you want cloud models too, sign in:
 
-        Or set the default in config:
+```bash
+ollama signin
+```
 
-        ```json5
-        {
-          agents: {
-            defaults: {
-              model: { primary: "ollama/gemma4" },
-            },
-          },
-        }
-        ```
-      </Step>
-    </Steps>
+4. Run onboarding and choose `Ollama`:
 
-  </Tab>
-</Tabs>
+```bash
+openclaw onboard
+```
 
-## Cloud models
+- `Local`: local models only
+- `Cloud + Local`: local models plus cloud models
+- Cloud models such as `kimi-k2.5:cloud`, `minimax-m2.5:cloud`, and `glm-5:cloud` do **not** require a local `ollama pull`
 
-<Tabs>
-  <Tab title="Cloud + Local">
-    `Cloud + Local` uses a reachable Ollama host as the control point for both local and cloud models. This is Ollama's preferred hybrid flow.
+OpenClaw currently suggests:
 
-    Use **Cloud + Local** during setup. OpenClaw prompts for the Ollama base URL, discovers local models from that host, and checks whether the host is signed in for cloud access with `ollama signin`. When the host is signed in, OpenClaw also suggests hosted cloud defaults such as `kimi-k2.5:cloud`, `minimax-m2.7:cloud`, and `glm-5.1:cloud`.
+- local default: `glm-4.7-flash`
+- cloud defaults: `kimi-k2.5:cloud`, `minimax-m2.5:cloud`, `glm-5:cloud`
 
-    If the host is not signed in yet, OpenClaw keeps the setup local-only until you run `ollama signin`.
+5. If you prefer manual setup, enable Ollama for OpenClaw directly (any value works; Ollama doesn't require a real key):
 
-  </Tab>
+```bash
+# Set environment variable
+export OLLAMA_API_KEY="ollama-local"
 
-  <Tab title="Cloud only">
-    `Cloud only` runs against Ollama's hosted API at `https://ollama.com`.
+# Or configure in your config file
+openclaw config set models.providers.ollama.apiKey "ollama-local"
+```
 
-    Use **Cloud only** during setup. OpenClaw prompts for `OLLAMA_API_KEY`, sets `baseUrl: "https://ollama.com"`, and seeds the hosted cloud model list. This path does **not** require a local Ollama server or `ollama signin`.
+6. Inspect or switch models:
 
-  </Tab>
+```bash
+openclaw models list
+openclaw models set ollama/glm-4.7-flash
+```
 
-  <Tab title="Local only">
-    In local-only mode, OpenClaw discovers models from the configured Ollama instance. This path is for local or self-hosted Ollama servers.
+7. Or set the default in config:
 
-    OpenClaw currently suggests `gemma4` as the local default.
-
-  </Tab>
-</Tabs>
+```json5
+{
+  agents: {
+    defaults: {
+      model: { primary: "ollama/glm-4.7-flash" },
+    },
+  },
+}
+```
 
 ## Model discovery (implicit provider)
 
-When you set `OLLAMA_API_KEY` (or an auth profile) and **do not** define `models.providers.ollama`, OpenClaw discovers models from the local Ollama instance at `http://127.0.0.1:11434`.
+When you set `OLLAMA_API_KEY` (or an auth profile) and **do not** define `models.providers.ollama`, OpenClaw discovers models from the local Ollama instance at `http://127.0.0.1:11434`:
 
-| Behavior             | Detail                                                                                                                                                              |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Catalog query        | Queries `/api/tags`                                                                                                                                                 |
-| Capability detection | Uses best-effort `/api/show` lookups to read `contextWindow` and detect capabilities (including vision)                                                             |
-| Vision models        | Models with a `vision` capability reported by `/api/show` are marked as image-capable (`input: ["text", "image"]`), so OpenClaw auto-injects images into the prompt |
-| Reasoning detection  | Marks `reasoning` with a model-name heuristic (`r1`, `reasoning`, `think`)                                                                                          |
-| Token limits         | Sets `maxTokens` to the default Ollama max-token cap used by OpenClaw                                                                                               |
-| Costs                | Sets all costs to `0`                                                                                                                                               |
+- Queries `/api/tags`
+- Uses best-effort `/api/show` lookups to read `contextWindow` when available
+- Marks `reasoning` with a model-name heuristic (`r1`, `reasoning`, `think`)
+- Sets `maxTokens` to the default Ollama max-token cap used by OpenClaw
+- Sets all costs to `0`
 
 This avoids manual model entries while keeping the catalog aligned with the local Ollama instance.
 
+To see what models are available:
+
 ```bash
-# See what models are available
 ollama list
 openclaw models list
 ```
@@ -176,79 +141,74 @@ ollama pull mistral
 
 The new model will be automatically discovered and available to use.
 
-<Note>
-If you set `models.providers.ollama` explicitly, auto-discovery is skipped and you must define models manually. See the explicit config section below.
-</Note>
+If you set `models.providers.ollama` explicitly, auto-discovery is skipped and you must define models manually (see below).
 
 ## Configuration
 
-<Tabs>
-  <Tab title="Basic (implicit discovery)">
-    The simplest local-only enablement path is via environment variable:
+### Basic setup (implicit discovery)
 
-    ```bash
-    export OLLAMA_API_KEY="ollama-local"
-    ```
+The simplest way to enable Ollama is via environment variable:
 
-    <Tip>
-    If `OLLAMA_API_KEY` is set, you can omit `apiKey` in the provider entry and OpenClaw will fill it for availability checks.
-    </Tip>
+```bash
+export OLLAMA_API_KEY="ollama-local"
+```
 
-  </Tab>
+### Explicit setup (manual models)
 
-  <Tab title="Explicit (manual models)">
-    Use explicit config when you want hosted cloud setup, Ollama runs on another host/port, you want to force specific context windows or model lists, or you want fully manual model definitions.
+Use explicit config when:
 
-    ```json5
-    {
-      models: {
-        providers: {
-          ollama: {
-            baseUrl: "https://ollama.com",
-            apiKey: "OLLAMA_API_KEY",
-            api: "ollama",
-            models: [
-              {
-                id: "kimi-k2.5:cloud",
-                name: "kimi-k2.5:cloud",
-                reasoning: false,
-                input: ["text", "image"],
-                cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-                contextWindow: 128000,
-                maxTokens: 8192
-              }
-            ]
+- Ollama runs on another host/port.
+- You want to force specific context windows or model lists.
+- You want fully manual model definitions.
+
+```json5
+{
+  models: {
+    providers: {
+      ollama: {
+        baseUrl: "http://ollama-host:11434",
+        apiKey: "ollama-local",
+        api: "ollama",
+        models: [
+          {
+            id: "gpt-oss:20b",
+            name: "GPT-OSS 20B",
+            reasoning: false,
+            input: ["text"],
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+            contextWindow: 8192,
+            maxTokens: 8192 * 10
           }
-        }
+        ]
       }
     }
-    ```
+  }
+}
+```
 
-  </Tab>
+If `OLLAMA_API_KEY` is set, you can omit `apiKey` in the provider entry and OpenClaw will fill it for availability checks.
 
-  <Tab title="Custom base URL">
-    If Ollama is running on a different host or port (explicit config disables auto-discovery, so define models manually):
+### Custom base URL (explicit config)
 
-    ```json5
-    {
-      models: {
-        providers: {
-          ollama: {
-            apiKey: "ollama-local",
-            baseUrl: "http://ollama-host:11434", // No /v1 - use native Ollama API URL
-            api: "ollama", // Set explicitly to guarantee native tool-calling behavior
-          },
-        },
+If Ollama is running on a different host or port (explicit config disables auto-discovery, so define models manually):
+
+```json5
+{
+  models: {
+    providers: {
+      ollama: {
+        apiKey: "ollama-local",
+        baseUrl: "http://ollama-host:11434", // No /v1 - use native Ollama API URL
+        api: "ollama", // Set explicitly to guarantee native tool-calling behavior
       },
-    }
-    ```
+    },
+  },
+}
+```
 
-    <Warning>
-    Do not add `/v1` to the URL. The `/v1` path uses OpenAI-compatible mode, where tool calling is not reliable. Use the base Ollama URL without a path suffix.
-    </Warning>
-
-  </Tab>
-</Tabs>
+<Warning>
+Do not add `/v1` to the URL. The `/v1` path uses OpenAI-compatible mode, where tool calling is not reliable. Use the base Ollama URL without a path suffix.
+</Warning>
 
 ### Model selection
 
@@ -267,17 +227,26 @@ Once configured, all your Ollama models are available:
 }
 ```
 
+## Cloud models
+
+Cloud models let you run cloud-hosted models (for example `kimi-k2.5:cloud`, `minimax-m2.5:cloud`, `glm-5:cloud`) alongside your local models.
+
+To use cloud models, select **Cloud + Local** mode during setup. The wizard checks whether you are signed in and opens a browser sign-in flow when needed. If authentication cannot be verified, the wizard falls back to local model defaults.
+
+You can also sign in directly at [ollama.com/signin](https://ollama.com/signin).
+
 ## Ollama Web Search
 
-OpenClaw supports **Ollama Web Search** as a bundled `web_search` provider.
+OpenClaw also supports **Ollama Web Search** as a bundled `web_search`
+provider.
 
-| Property    | Detail                                                                                                            |
-| ----------- | ----------------------------------------------------------------------------------------------------------------- |
-| Host        | Uses your configured Ollama host (`models.providers.ollama.baseUrl` when set, otherwise `http://127.0.0.1:11434`) |
-| Auth        | Key-free                                                                                                          |
-| Requirement | Ollama must be running and signed in with `ollama signin`                                                         |
+- It uses your configured Ollama host (`models.providers.ollama.baseUrl` when
+  set, otherwise `http://127.0.0.1:11434`).
+- It is key-free.
+- It requires Ollama to be running and signed in with `ollama signin`.
 
-Choose **Ollama Web Search** during `openclaw onboard` or `openclaw configure --section web`, or set:
+Choose **Ollama Web Search** during `openclaw onboard` or
+`openclaw configure --section web`, or set:
 
 ```json5
 {
@@ -291,193 +260,120 @@ Choose **Ollama Web Search** during `openclaw onboard` or `openclaw configure --
 }
 ```
 
-<Note>
 For the full setup and behavior details, see [Ollama Web Search](/tools/ollama-search).
-</Note>
 
-## Advanced configuration
+## Advanced
 
-<AccordionGroup>
-  <Accordion title="Legacy OpenAI-compatible mode">
-    <Warning>
-    **Tool calling is not reliable in OpenAI-compatible mode.** Use this mode only if you need OpenAI format for a proxy and do not depend on native tool calling behavior.
-    </Warning>
+### Reasoning models
 
-    If you need to use the OpenAI-compatible endpoint instead (for example, behind a proxy that only supports OpenAI format), set `api: "openai-completions"` explicitly:
+OpenClaw treats models with names such as `deepseek-r1`, `reasoning`, or `think` as reasoning-capable by default:
 
-    ```json5
-    {
-      models: {
-        providers: {
-          ollama: {
-            baseUrl: "http://ollama-host:11434/v1",
-            api: "openai-completions",
-            injectNumCtxForOpenAICompat: true, // default: true
-            apiKey: "ollama-local",
-            models: [...]
-          }
-        }
+```bash
+ollama pull deepseek-r1:32b
+```
+
+### Model Costs
+
+Ollama is free and runs locally, so all model costs are set to $0.
+
+### Streaming Configuration
+
+OpenClaw's Ollama integration uses the **native Ollama API** (`/api/chat`) by default, which fully supports streaming and tool calling simultaneously. No special configuration is needed.
+
+#### Legacy OpenAI-Compatible Mode
+
+<Warning>
+**Tool calling is not reliable in OpenAI-compatible mode.** Use this mode only if you need OpenAI format for a proxy and do not depend on native tool calling behavior.
+</Warning>
+
+If you need to use the OpenAI-compatible endpoint instead (e.g., behind a proxy that only supports OpenAI format), set `api: "openai-completions"` explicitly:
+
+```json5
+{
+  models: {
+    providers: {
+      ollama: {
+        baseUrl: "http://ollama-host:11434/v1",
+        api: "openai-completions",
+        injectNumCtxForOpenAICompat: true, // default: true
+        apiKey: "ollama-local",
+        models: [...]
       }
     }
-    ```
+  }
+}
+```
 
-    This mode may not support streaming and tool calling simultaneously. You may need to disable streaming with `params: { streaming: false }` in model config.
+This mode may not support streaming + tool calling simultaneously. You may need to disable streaming with `params: { streaming: false }` in model config.
 
-    When `api: "openai-completions"` is used with Ollama, OpenClaw injects `options.num_ctx` by default so Ollama does not silently fall back to a 4096 context window. If your proxy/upstream rejects unknown `options` fields, disable this behavior:
+When `api: "openai-completions"` is used with Ollama, OpenClaw injects `options.num_ctx` by default so Ollama does not silently fall back to a 4096 context window. If your proxy/upstream rejects unknown `options` fields, disable this behavior:
 
-    ```json5
-    {
-      models: {
-        providers: {
-          ollama: {
-            baseUrl: "http://ollama-host:11434/v1",
-            api: "openai-completions",
-            injectNumCtxForOpenAICompat: false,
-            apiKey: "ollama-local",
-            models: [...]
-          }
-        }
+```json5
+{
+  models: {
+    providers: {
+      ollama: {
+        baseUrl: "http://ollama-host:11434/v1",
+        api: "openai-completions",
+        injectNumCtxForOpenAICompat: false,
+        apiKey: "ollama-local",
+        models: [...]
       }
     }
-    ```
+  }
+}
+```
 
-  </Accordion>
+### Context windows
 
-  <Accordion title="Context windows">
-    For auto-discovered models, OpenClaw uses the context window reported by Ollama when available, otherwise it falls back to the default Ollama context window used by OpenClaw.
-
-    You can override `contextWindow` and `maxTokens` in explicit provider config:
-
-    ```json5
-    {
-      models: {
-        providers: {
-          ollama: {
-            models: [
-              {
-                id: "llama3.3",
-                contextWindow: 131072,
-                maxTokens: 65536,
-              }
-            ]
-          }
-        }
-      }
-    }
-    ```
-
-  </Accordion>
-
-  <Accordion title="Reasoning models">
-    OpenClaw treats models with names such as `deepseek-r1`, `reasoning`, or `think` as reasoning-capable by default.
-
-    ```bash
-    ollama pull deepseek-r1:32b
-    ```
-
-    No additional configuration is needed -- OpenClaw marks them automatically.
-
-  </Accordion>
-
-  <Accordion title="Model costs">
-    Ollama is free and runs locally, so all model costs are set to $0. This applies to both auto-discovered and manually defined models.
-  </Accordion>
-
-  <Accordion title="Memory embeddings">
-    The bundled Ollama plugin registers a memory embedding provider for
-    [memory search](/concepts/memory). It uses the configured Ollama base URL
-    and API key.
-
-    | Property      | Value               |
-    | ------------- | ------------------- |
-    | Default model | `nomic-embed-text`  |
-    | Auto-pull     | Yes — the embedding model is pulled automatically if not present locally |
-
-    To select Ollama as the memory search embedding provider:
-
-    ```json5
-    {
-      agents: {
-        defaults: {
-          memorySearch: { provider: "ollama" },
-        },
-      },
-    }
-    ```
-
-  </Accordion>
-
-  <Accordion title="Streaming configuration">
-    OpenClaw's Ollama integration uses the **native Ollama API** (`/api/chat`) by default, which fully supports streaming and tool calling simultaneously. No special configuration is needed.
-
-    <Tip>
-    If you need to use the OpenAI-compatible endpoint, see the "Legacy OpenAI-compatible mode" section above. Streaming and tool calling may not work simultaneously in that mode.
-    </Tip>
-
-  </Accordion>
-</AccordionGroup>
+For auto-discovered models, OpenClaw uses the context window reported by Ollama when available, otherwise it falls back to the default Ollama context window used by OpenClaw. You can override `contextWindow` and `maxTokens` in explicit provider config.
 
 ## Troubleshooting
 
-<AccordionGroup>
-  <Accordion title="Ollama not detected">
-    Make sure Ollama is running and that you set `OLLAMA_API_KEY` (or an auth profile), and that you did **not** define an explicit `models.providers.ollama` entry:
+### Ollama not detected
 
-    ```bash
-    ollama serve
-    ```
+Make sure Ollama is running and that you set `OLLAMA_API_KEY` (or an auth profile), and that you did **not** define an explicit `models.providers.ollama` entry:
 
-    Verify that the API is accessible:
+```bash
+ollama serve
+```
 
-    ```bash
-    curl http://localhost:11434/api/tags
-    ```
+And that the API is accessible:
 
-  </Accordion>
+```bash
+curl http://localhost:11434/api/tags
+```
 
-  <Accordion title="No models available">
-    If your model is not listed, either pull the model locally or define it explicitly in `models.providers.ollama`.
+### No models available
 
-    ```bash
-    ollama list  # See what's installed
-    ollama pull gemma4
-    ollama pull gpt-oss:20b
-    ollama pull llama3.3     # Or another model
-    ```
+If your model is not listed, either:
 
-  </Accordion>
+- Pull the model locally, or
+- Define the model explicitly in `models.providers.ollama`.
 
-  <Accordion title="Connection refused">
-    Check that Ollama is running on the correct port:
+To add models:
 
-    ```bash
-    # Check if Ollama is running
-    ps aux | grep ollama
+```bash
+ollama list  # See what's installed
+ollama pull glm-4.7-flash
+ollama pull gpt-oss:20b
+ollama pull llama3.3     # Or another model
+```
 
-    # Or restart Ollama
-    ollama serve
-    ```
+### Connection refused
 
-  </Accordion>
-</AccordionGroup>
+Check that Ollama is running on the correct port:
 
-<Note>
-More help: [Troubleshooting](/help/troubleshooting) and [FAQ](/help/faq).
-</Note>
+```bash
+# Check if Ollama is running
+ps aux | grep ollama
 
-## Related
+# Or restart Ollama
+ollama serve
+```
 
-<CardGroup cols={2}>
-  <Card title="Model providers" href="/concepts/model-providers" icon="layers">
-    Overview of all providers, model refs, and failover behavior.
-  </Card>
-  <Card title="Model selection" href="/concepts/models" icon="brain">
-    How to choose and configure models.
-  </Card>
-  <Card title="Ollama Web Search" href="/tools/ollama-search" icon="magnifying-glass">
-    Full setup and behavior details for Ollama-powered web search.
-  </Card>
-  <Card title="Configuration" href="/gateway/configuration" icon="gear">
-    Full config reference.
-  </Card>
-</CardGroup>
+## See Also
+
+- [Model Providers](/concepts/model-providers) - Overview of all providers
+- [Model Selection](/concepts/models) - How to choose models
+- [Configuration](/gateway/configuration) - Full config reference

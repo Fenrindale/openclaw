@@ -11,12 +11,7 @@ export {
   readReactionParams,
   readStringParam,
 } from "../agents/tools/common.js";
-export {
-  resolveMentionGating,
-  resolveMentionGatingWithBypass,
-  resolveInboundMentionDecision,
-} from "../channels/mention-gating.js";
-export { getChatChannelMeta } from "../channels/chat-meta.js";
+export { resolveMentionGatingWithBypass } from "../channels/mention-gating.js";
 export {
   deleteAccountFromConfigSection,
   setAccountEnabledInConfigSection,
@@ -52,8 +47,9 @@ export type {
   ChannelMessageActionAdapter,
   ChannelMessageActionName,
   ChannelStatusIssue,
-} from "../channels/plugins/types.public.js";
+} from "../channels/plugins/types.js";
 export type { ChannelPlugin } from "../channels/plugins/types.plugin.js";
+export { getChatChannelMeta } from "../channels/registry.js";
 export { createChannelReplyPipeline } from "./channel-reply-pipeline.js";
 export type { OpenClawConfig } from "../config/config.js";
 export { isDangerousNameMatchingEnabled } from "../config/dangerous-name-matching.js";

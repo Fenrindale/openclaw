@@ -10,7 +10,6 @@ export {
   isTtsProviderConfigured,
   listSpeechVoices,
   maybeApplyTtsToPayload,
-  resolveExplicitTtsOverrides,
   resolveTtsAutoMode,
   resolveTtsConfig,
   resolveTtsPrefsPath,

@@ -1,5 +1,3 @@
-import { normalizeOptionalString } from "../shared/string-coerce.js";
-
 export type SessionTranscriptUpdate = {
   sessionFile: string;
   sessionKey?: string;
@@ -28,18 +26,18 @@ export function emitSessionTranscriptUpdate(update: string | SessionTranscriptUp
           message: update.message,
           messageId: update.messageId,
         };
-  const trimmed = normalizeOptionalString(normalized.sessionFile);
+  const trimmed = normalized.sessionFile.trim();
   if (!trimmed) {
     return;
   }
   const nextUpdate: SessionTranscriptUpdate = {
     sessionFile: trimmed,
-    ...(normalizeOptionalString(normalized.sessionKey)
-      ? { sessionKey: normalizeOptionalString(normalized.sessionKey) }
+    ...(typeof normalized.sessionKey === "string" && normalized.sessionKey.trim()
+      ? { sessionKey: normalized.sessionKey.trim() }
       : {}),
     ...(normalized.message !== undefined ? { message: normalized.message } : {}),
-    ...(normalizeOptionalString(normalized.messageId)
-      ? { messageId: normalizeOptionalString(normalized.messageId) }
+    ...(typeof normalized.messageId === "string" && normalized.messageId.trim()
+      ? { messageId: normalized.messageId.trim() }
       : {}),
   };
   for (const listener of SESSION_TRANSCRIPT_LISTENERS) {

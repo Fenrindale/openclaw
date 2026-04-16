@@ -3,10 +3,7 @@
  * Calls gateway RPC methods and returns formatted results.
  */
 
-import {
-  createChatModelOverride,
-  resolvePreferredServerChatModelValue,
-} from "../chat-model-ref.ts";
+import { createChatModelOverride, resolvePreferredServerChatModel } from "../chat-model-ref.ts";
 import type { GatewayBrowserClient } from "../gateway.ts";
 import {
   DEFAULT_AGENT_ID,
@@ -14,10 +11,6 @@ import {
   isSubagentSessionKey,
   parseAgentSessionKey,
 } from "../session-key.ts";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalLowercaseString,
-} from "../string-coerce.ts";
 import {
   formatThinkingLevels,
   normalizeThinkLevel,
@@ -67,7 +60,7 @@ function normalizeVerboseLevel(raw?: string | null): "off" | "on" | "full" | und
   if (!raw) {
     return undefined;
   }
-  const key = normalizeLowercaseStringOrEmpty(raw);
+  const key = raw.toLowerCase();
   if (["off", "false", "no", "0"].includes(key)) {
     return "off";
   }
@@ -208,35 +201,22 @@ async function executeModel(
   }
 
   try {
-    const requestedModel = args.trim();
     const [patched, resolvedModelCatalog] = await Promise.all([
       client.request<SessionsPatchResult>("sessions.patch", {
         key: sessionKey,
-        model: requestedModel,
+        model: args.trim(),
       }),
       modelCatalog
         ? Promise.resolve(modelCatalog)
         : loadModelCatalog(client, { allowFailure: true }),
     ]);
-    const resolvedModel = patched.resolved?.model ?? requestedModel;
-    let resolvedValue = resolvePreferredServerChatModelValue(
-      resolvedModel,
+    const resolvedValue = resolvePreferredServerChatModel(
+      patched.resolved?.model ?? args.trim(),
       patched.resolved?.modelProvider,
       resolvedModelCatalog,
-    );
-    const requestedOverride = createChatModelOverride(requestedModel);
-    const resolvedProvider = patched.resolved?.modelProvider?.trim();
-    if (
-      requestedOverride?.kind === "qualified" &&
-      resolvedProvider &&
-      resolvedValue &&
-      !resolvedValue.toLowerCase().startsWith(`${resolvedProvider.toLowerCase()}/`) &&
-      requestedOverride.value.toLowerCase().endsWith(`/${resolvedModel.trim().toLowerCase()}`)
-    ) {
-      resolvedValue = requestedOverride.value;
-    }
+    ).value;
     return {
-      content: `Model set to \`${requestedModel}\`.`,
+      content: `Model set to \`${args.trim()}\`.`,
       action: "refresh",
       sessionPatch: { modelOverride: createChatModelOverride(resolvedValue) },
     };
@@ -333,7 +313,7 @@ async function executeFast(
   sessionKey: string,
   args: string,
 ): Promise<SlashCommandResult> {
-  const rawMode = normalizeLowercaseStringOrEmpty(args);
+  const rawMode = args.trim().toLowerCase();
 
   if (!rawMode || rawMode === "status") {
     try {
@@ -426,7 +406,6 @@ async function executeKill(
   args: string,
 ): Promise<SlashCommandResult> {
   const target = args.trim();
-  const normalizedTarget = normalizeLowercaseStringOrEmpty(target);
   if (!target) {
     return { content: "Usage: `/kill <id|all>`" };
   }
@@ -436,7 +415,7 @@ async function executeKill(
     if (matched.length === 0) {
       return {
         content:
-          normalizedTarget === "all"
+          target.toLowerCase() === "all"
             ? "No active sub-agent sessions found."
             : `No matching sub-agent sessions found for \`${target}\`.`,
       };
@@ -456,7 +435,7 @@ async function executeKill(
       if (rejected.length === 0) {
         return {
           content:
-            normalizedTarget === "all"
+            target.toLowerCase() === "all"
               ? "No active sub-agent runs to abort."
               : `No active runs matched \`${target}\`.`,
         };
@@ -464,7 +443,7 @@ async function executeKill(
       throw rejected[0]?.reason ?? new Error("abort failed");
     }
 
-    if (normalizedTarget === "all") {
+    if (target.toLowerCase() === "all") {
       return {
         content:
           successCount === matched.length
@@ -489,13 +468,13 @@ function resolveKillTargets(
   currentSessionKey: string,
   target: string,
 ): string[] {
-  const normalizedTarget = normalizeLowercaseStringOrEmpty(target);
+  const normalizedTarget = target.trim().toLowerCase();
   if (!normalizedTarget) {
     return [];
   }
 
   const keys = new Set<string>();
-  const normalizedCurrentSessionKey = normalizeLowercaseStringOrEmpty(currentSessionKey);
+  const normalizedCurrentSessionKey = currentSessionKey.trim().toLowerCase();
   const currentParsed = parseAgentSessionKey(normalizedCurrentSessionKey);
   const currentAgentId =
     currentParsed?.agentId ??
@@ -506,7 +485,7 @@ function resolveKillTargets(
     if (!key || !isSubagentSessionKey(key)) {
       continue;
     }
-    const normalizedKey = normalizeLowercaseStringOrEmpty(key);
+    const normalizedKey = key.toLowerCase();
     const parsed = parseAgentSessionKey(normalizedKey);
     const belongsToCurrentSession = isWithinCurrentSessionSubtree(
       normalizedKey,
@@ -571,7 +550,8 @@ function buildSessionIndex(sessions: GatewaySessionRow[]): Map<string, GatewaySe
 }
 
 function normalizeSessionKey(key?: string | null): string | undefined {
-  return normalizeOptionalLowercaseString(key);
+  const normalized = key?.trim().toLowerCase();
+  return normalized || undefined;
 }
 
 function resolveEquivalentSessionKeys(
@@ -678,11 +658,11 @@ function resolveSteerSubagent(
   currentSessionKey: string,
   target: string,
 ): string[] {
-  const normalizedTarget = normalizeLowercaseStringOrEmpty(target);
+  const normalizedTarget = target.trim().toLowerCase();
   if (!normalizedTarget) {
     return [];
   }
-  const normalizedCurrentSessionKey = normalizeLowercaseStringOrEmpty(currentSessionKey);
+  const normalizedCurrentSessionKey = currentSessionKey.trim().toLowerCase();
   const currentParsed = parseAgentSessionKey(normalizedCurrentSessionKey);
   const currentAgentId =
     currentParsed?.agentId ??
@@ -695,7 +675,7 @@ function resolveSteerSubagent(
     if (!key || !isSubagentSessionKey(key)) {
       continue;
     }
-    const normalizedKey = normalizeLowercaseStringOrEmpty(key);
+    const normalizedKey = key.toLowerCase();
     const parsed = parseAgentSessionKey(normalizedKey);
     const belongsToCurrentSession = isWithinCurrentSessionSubtree(
       normalizedKey,
@@ -712,7 +692,7 @@ function resolveSteerSubagent(
       normalizedKey === normalizedTarget ||
       normalizedKey.endsWith(`:subagent:${normalizedTarget}`) ||
       normalizedKey === `subagent:${normalizedTarget}` ||
-      normalizeLowercaseStringOrEmpty(session.label) === normalizedTarget;
+      (session.label ?? "").toLowerCase() === normalizedTarget;
     if (isMatch) {
       keys.add(key);
     }
@@ -748,7 +728,7 @@ async function resolveSteerTarget(
     const rest = trimmed.slice(spaceIdx + 1).trim();
     // Skip "all" — resolveKillTargets treats it as a wildcard, but steer/redirect
     // target a single session, so "all good now" should not match subagents.
-    if (rest && normalizeLowercaseStringOrEmpty(maybeTarget) !== "all") {
+    if (rest && maybeTarget.toLowerCase() !== "all") {
       const sessions =
         context.sessionsResult ?? (await client.request<SessionsListResult>("sessions.list", {}));
       const matched = resolveSteerSubagent(sessions?.sessions ?? [], sessionKey, maybeTarget);

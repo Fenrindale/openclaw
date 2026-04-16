@@ -3,7 +3,6 @@ import { type OpenClawConfig } from "openclaw/plugin-sdk/config-runtime";
 import { makeProxyFetch } from "openclaw/plugin-sdk/infra-runtime";
 import { danger } from "openclaw/plugin-sdk/runtime-env";
 import type { RuntimeEnv } from "openclaw/plugin-sdk/runtime-env";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 import type { ResolvedDiscordAccount } from "./accounts.js";
 
 export function resolveDiscordProxyUrl(
@@ -72,7 +71,7 @@ export function validateDiscordProxyUrl(proxyUrl: string): string {
 }
 
 function isLoopbackProxyHostname(hostname: string): boolean {
-  const normalized = normalizeLowercaseStringOrEmpty(hostname);
+  const normalized = hostname.trim().toLowerCase();
   if (!normalized) {
     return false;
   }

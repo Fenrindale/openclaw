@@ -1,7 +1,6 @@
-import type { ChannelOutboundTargetMode } from "../../channels/plugins/types.public.js";
+import type { ChannelOutboundTargetMode } from "../../channels/plugins/types.js";
+import type { OpenClawConfig } from "../../config/config.js";
 import type { SessionEntry } from "../../config/sessions.js";
-import type { OpenClawConfig } from "../../config/types.openclaw.js";
-import { normalizeOptionalString } from "../../shared/string-coerce.js";
 import { normalizeAccountId } from "../../utils/account-id.js";
 import {
   INTERNAL_MESSAGE_CHANNEL,
@@ -48,11 +47,15 @@ export function resolveAgentDeliveryPlan(params: {
   /** Turn-source `threadId` — paired with `turnSourceChannel`. */
   turnSourceThreadId?: string | number;
 }): AgentDeliveryPlan {
-  const requestedRaw = normalizeOptionalString(params.requestedChannel) ?? "";
+  const requestedRaw =
+    typeof params.requestedChannel === "string" ? params.requestedChannel.trim() : "";
   const normalizedRequested = requestedRaw ? normalizeMessageChannel(requestedRaw) : undefined;
   const requestedChannel = normalizedRequested || "last";
 
-  const explicitTo = normalizeOptionalString(params.explicitTo) ?? undefined;
+  const explicitTo =
+    typeof params.explicitTo === "string" && params.explicitTo.trim()
+      ? params.explicitTo.trim()
+      : undefined;
 
   // Resolve turn-source channel for cross-channel safety.
   const normalizedTurnSource = params.turnSourceChannel
@@ -62,7 +65,10 @@ export function resolveAgentDeliveryPlan(params: {
     normalizedTurnSource && isDeliverableMessageChannel(normalizedTurnSource)
       ? normalizedTurnSource
       : undefined;
-  const turnSourceTo = normalizeOptionalString(params.turnSourceTo) ?? undefined;
+  const turnSourceTo =
+    typeof params.turnSourceTo === "string" && params.turnSourceTo.trim()
+      ? params.turnSourceTo.trim()
+      : undefined;
   const turnSourceAccountId = normalizeAccountId(params.turnSourceAccountId);
   const turnSourceThreadId =
     params.turnSourceThreadId != null && params.turnSourceThreadId !== ""

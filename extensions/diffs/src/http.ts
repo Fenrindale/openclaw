@@ -1,5 +1,4 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 import type { PluginLogger } from "../api.js";
 import { resolveRequestClientIp } from "../runtime-api.js";
 import type { DiffArtifactStore } from "./store.js";
@@ -171,7 +170,7 @@ function setSharedHeaders(res: ServerResponse, contentType: string): void {
 }
 
 function normalizeRemoteClientKey(remoteAddress: string | undefined): string {
-  const normalized = normalizeLowercaseStringOrEmpty(remoteAddress);
+  const normalized = remoteAddress?.trim().toLowerCase();
   if (!normalized) {
     return "unknown";
   }

@@ -1,9 +1,8 @@
 import crypto from "node:crypto";
 import type { AgentToolResult } from "@mariozechner/pi-agent-core";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import type { OpenClawConfig } from "../config/types.openclaw.js";
+import type { OpenClawConfig } from "../config/config.js";
 import { logWarn } from "../logger.js";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 import {
   buildSafeToolName,
   normalizeReservedToolNames,
@@ -96,7 +95,7 @@ export async function materializeBundleMcpToolsForRun(params: {
         `bundle-mcp: tool "${tool.toolName}" from server "${tool.serverName}" registered as "${safeToolName}" to keep the tool name provider-safe.`,
       );
     }
-    reservedNames.add(normalizeLowercaseStringOrEmpty(safeToolName));
+    reservedNames.add(safeToolName.toLowerCase());
     tools.push({
       name: safeToolName,
       label: tool.title ?? tool.toolName,

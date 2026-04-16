@@ -2,14 +2,9 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { seedQaAgentWorkspace } from "./qa-agent-workspace.js";
-import {
-  createQaChannelGatewayConfig,
-  QA_CHANNEL_REQUIRED_PLUGIN_IDS,
-} from "./qa-channel-transport.js";
 import { buildQaGatewayConfig } from "./qa-gateway-config.js";
 
 const QA_LAB_INTERNAL_PORT = 43123;
-const QA_LAB_UI_OVERLAY_DIR = "/opt/openclaw-qa-lab-ui";
 
 function toPosixRelative(fromDir: string, toPath: string): string {
   return path.relative(fromDir, toPath).split(path.sep).join("/");
@@ -33,7 +28,6 @@ function renderCompose(params: {
   repoRoot: string;
   imageName: string;
   usePrebuiltImage: boolean;
-  bindUiDist: boolean;
   gatewayPort: number;
   qaLabPort: number;
   gatewayToken: string;
@@ -41,10 +35,6 @@ function renderCompose(params: {
 }) {
   const imageBlock = renderImageBlock(params);
   const repoMount = toPosixRelative(params.outputDir, params.repoRoot) || ".";
-  const qaLabUiMount = toPosixRelative(
-    params.outputDir,
-    path.join(params.repoRoot, "extensions", "qa-lab", "web", "dist"),
-  );
 
   return `services:
   qa-mock-openai:
@@ -74,7 +64,7 @@ ${
 ${imageBlock}    pull_policy: never
     ports:
       - "${params.qaLabPort}:${QA_LAB_INTERNAL_PORT}"
-${params.bindUiDist ? `    volumes:\n      - ${qaLabUiMount}:${QA_LAB_UI_OVERLAY_DIR}:ro\n` : ""}    healthcheck:
+    healthcheck:
       test:
         - CMD
         - node
@@ -108,7 +98,7 @@ ${params.bindUiDist ? `    volumes:\n      - ${qaLabUiMount}:${QA_LAB_UI_OVERLAY
       - "http://openclaw-qa-gateway:18789/"
       - --control-ui-token
       - "${params.gatewayToken}"
-${params.bindUiDist ? `      - --ui-dist-dir\n      - "${QA_LAB_UI_OVERLAY_DIR}"\n` : ""}      - --auto-kickoff-target
+      - --auto-kickoff-target
       - direct
       - --send-kickoff-on-start
       - --embedded-gateway
@@ -181,7 +171,6 @@ function renderReadme(params: {
   gatewayPort: number;
   qaLabPort: number;
   usePrebuiltImage: boolean;
-  bindUiDist: boolean;
   includeQaLabUi: boolean;
 }) {
   return `# QA Docker Harness
@@ -207,14 +196,6 @@ Suggested flow:
    - right: Slack-ish QA lab
 5. The repo-backed kickoff task auto-injects on startup.
 
-Fast UI refresh:
-
-- Start once with a prebuilt image + bind-mounted QA Lab assets:
-  - \`pnpm qa:lab:up --use-prebuilt-image --bind-ui-dist --skip-ui-build\`
-- In another shell, rebuild the QA Lab bundle on change:
-  - \`pnpm qa:lab:watch\`
-- The browser auto-reloads when the QA Lab asset hash changes.
-
 Gateway:
 
 - health: \`http://127.0.0.1:${params.gatewayPort}/healthz\`
@@ -237,7 +218,6 @@ export async function writeQaDockerHarnessFiles(params: {
   qaBusBaseUrl?: string;
   imageName?: string;
   usePrebuiltImage?: boolean;
-  bindUiDist?: boolean;
   includeQaLabUi?: boolean;
 }) {
   const gatewayPort = params.gatewayPort ?? 18789;
@@ -247,7 +227,6 @@ export async function writeQaDockerHarnessFiles(params: {
   const qaBusBaseUrl = params.qaBusBaseUrl ?? "http://qa-lab:43123";
   const imageName = params.imageName ?? "openclaw:qa-local-prebaked";
   const usePrebuiltImage = params.usePrebuiltImage ?? false;
-  const bindUiDist = params.bindUiDist ?? false;
   const includeQaLabUi = params.includeQaLabUi ?? true;
 
   await fs.mkdir(path.join(params.outputDir, "state", "seed-workspace"), { recursive: true });
@@ -261,12 +240,9 @@ export async function writeQaDockerHarnessFiles(params: {
     gatewayPort: 18789,
     gatewayToken,
     providerBaseUrl,
+    qaBusBaseUrl,
     workspaceDir: "/tmp/openclaw/workspace",
     controlUiRoot: "/app/dist/control-ui",
-    transportPluginIds: QA_CHANNEL_REQUIRED_PLUGIN_IDS,
-    transportConfig: createQaChannelGatewayConfig({
-      baseUrl: qaBusBaseUrl,
-    }),
   });
 
   const files = [
@@ -284,7 +260,6 @@ export async function writeQaDockerHarnessFiles(params: {
         repoRoot: params.repoRoot,
         imageName,
         usePrebuiltImage,
-        bindUiDist,
         gatewayPort,
         qaLabPort,
         gatewayToken,
@@ -310,7 +285,6 @@ export async function writeQaDockerHarnessFiles(params: {
         gatewayPort,
         qaLabPort,
         usePrebuiltImage,
-        bindUiDist,
         includeQaLabUi,
       }),
       "utf8",
@@ -330,7 +304,6 @@ export async function writeQaDockerHarnessFiles(params: {
       path.join(params.outputDir, "state", "seed-workspace", "IDENTITY.md"),
       path.join(params.outputDir, "state", "seed-workspace", "QA_KICKOFF_TASK.md"),
       path.join(params.outputDir, "state", "seed-workspace", "QA_SCENARIO_PLAN.md"),
-      path.join(params.outputDir, "state", "seed-workspace", "QA_SCENARIOS.md"),
     ],
   };
 }

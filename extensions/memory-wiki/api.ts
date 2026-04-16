@@ -5,5 +5,5 @@ export {
   type OpenClawConfig,
   type OpenClawPluginApi,
   type OpenClawPluginConfigSchema,
-} from "openclaw/plugin-sdk/plugin-entry";
+} from "openclaw/plugin-sdk/core";
 export { z } from "openclaw/plugin-sdk/zod";

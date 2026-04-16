@@ -5,74 +5,6 @@ import {
   emitAssistantTextDelta,
   emitAssistantTextEnd,
 } from "./pi-embedded-subscribe.e2e-harness.js";
-import {
-  createOpenAiResponsesTextBlock,
-  createOpenAiResponsesTextEvent,
-  type OpenAiResponsesTextEventPhase,
-} from "./pi-embedded-subscribe.openai-responses.test-helpers.js";
-
-type TextEndBlockReplyHarness = ReturnType<typeof createTextEndBlockReplyHarness>;
-
-function emitOpenAiResponsesTextEvent(params: {
-  emit: TextEndBlockReplyHarness["emit"];
-  type: "text_delta" | "text_end";
-  text: string;
-  delta?: string;
-  id: string;
-  signaturePhase?: OpenAiResponsesTextEventPhase;
-  partialPhase?: OpenAiResponsesTextEventPhase;
-}) {
-  const { emit, ...eventParams } = params;
-  emit(createOpenAiResponsesTextEvent(eventParams));
-}
-
-function emitOpenAiResponsesTextDeltaAndEnd(params: {
-  emit: TextEndBlockReplyHarness["emit"];
-  text: string;
-  delta?: string;
-  id: string;
-  phase?: OpenAiResponsesTextEventPhase;
-}) {
-  const { phase, ...eventParams } = params;
-  emitOpenAiResponsesTextEvent({
-    ...eventParams,
-    type: "text_delta",
-    signaturePhase: phase,
-    partialPhase: phase,
-  });
-  emitOpenAiResponsesTextEvent({
-    ...eventParams,
-    type: "text_end",
-    delta: undefined,
-    signaturePhase: phase,
-    partialPhase: phase,
-  });
-}
-
-function emitOpenAiResponsesFinalMessageEnd(params: {
-  emit: TextEndBlockReplyHarness["emit"];
-  commentaryText: string;
-  finalText: string;
-}) {
-  params.emit({
-    type: "message_end",
-    message: {
-      role: "assistant",
-      content: [
-        createOpenAiResponsesTextBlock({
-          text: params.commentaryText,
-          id: "item_commentary",
-          phase: "commentary",
-        }),
-        createOpenAiResponsesTextBlock({
-          text: params.finalText,
-          id: "item_final",
-          phase: "final_answer",
-        }),
-      ],
-    } as AssistantMessage,
-  });
-}
 
 describe("subscribeEmbeddedPiSession", () => {
   it("emits block replies on text_end and does not duplicate on message_end", async () => {
@@ -133,17 +65,53 @@ describe("subscribeEmbeddedPiSession", () => {
     const { emit, subscription } = createTextEndBlockReplyHarness({ onBlockReply });
 
     emit({ type: "message_start", message: { role: "assistant" } });
-    emitOpenAiResponsesTextEvent({
-      emit,
-      type: "text_delta",
-      text: "Legacy answer",
-      id: "item_legacy",
+    emit({
+      type: "message_update",
+      message: { role: "assistant", content: [] },
+      assistantMessageEvent: {
+        type: "text_delta",
+        delta: "Legacy answer",
+        partial: {
+          role: "assistant",
+          content: [
+            {
+              type: "text",
+              text: "Legacy answer",
+              textSignature: JSON.stringify({ v: 1, id: "item_legacy" }),
+            },
+          ],
+          stopReason: "stop",
+          api: "openai-responses",
+          provider: "openai",
+          model: "gpt-5.2",
+          usage: {},
+          timestamp: 0,
+        },
+      },
     });
-    emitOpenAiResponsesTextEvent({
-      emit,
-      type: "text_end",
-      text: "Legacy answer",
-      id: "item_legacy",
+    emit({
+      type: "message_update",
+      message: { role: "assistant", content: [] },
+      assistantMessageEvent: {
+        type: "text_end",
+        content: "Legacy answer",
+        partial: {
+          role: "assistant",
+          content: [
+            {
+              type: "text",
+              text: "Legacy answer",
+              textSignature: JSON.stringify({ v: 1, id: "item_legacy" }),
+            },
+          ],
+          stopReason: "stop",
+          api: "openai-responses",
+          provider: "openai",
+          model: "gpt-5.2",
+          usage: {},
+          timestamp: 0,
+        },
+      },
     });
     await Promise.resolve();
 
@@ -168,26 +136,131 @@ describe("subscribeEmbeddedPiSession", () => {
     const { emit, subscription } = createTextEndBlockReplyHarness({ onBlockReply });
 
     emit({ type: "message_start", message: { role: "assistant" } });
-    emitOpenAiResponsesTextDeltaAndEnd({
-      emit,
-      text: "Working...",
-      id: "item_commentary",
-      phase: "commentary",
+    emit({
+      type: "message_update",
+      message: { role: "assistant", content: [] },
+      assistantMessageEvent: {
+        type: "text_delta",
+        delta: "Working...",
+        partial: {
+          role: "assistant",
+          content: [
+            {
+              type: "text",
+              text: "Working...",
+              textSignature: JSON.stringify({ v: 1, id: "item_commentary", phase: "commentary" }),
+            },
+          ],
+          phase: "commentary",
+          stopReason: "stop",
+          api: "openai-responses",
+          provider: "openai",
+          model: "gpt-5.2",
+          usage: {},
+          timestamp: 0,
+        },
+      },
+    });
+    emit({
+      type: "message_update",
+      message: { role: "assistant", content: [] },
+      assistantMessageEvent: {
+        type: "text_end",
+        content: "Working...",
+        partial: {
+          role: "assistant",
+          content: [
+            {
+              type: "text",
+              text: "Working...",
+              textSignature: JSON.stringify({ v: 1, id: "item_commentary", phase: "commentary" }),
+            },
+          ],
+          phase: "commentary",
+          stopReason: "stop",
+          api: "openai-responses",
+          provider: "openai",
+          model: "gpt-5.2",
+          usage: {},
+          timestamp: 0,
+        },
+      },
     });
     await Promise.resolve();
 
     expect(onBlockReply).not.toHaveBeenCalled();
     expect(subscription.assistantTexts).toEqual([]);
 
-    emitOpenAiResponsesTextDeltaAndEnd({
-      emit,
-      text: "Done.",
-      id: "item_final",
-      phase: "final_answer",
+    emit({
+      type: "message_update",
+      message: { role: "assistant", content: [] },
+      assistantMessageEvent: {
+        type: "text_delta",
+        delta: "Done.",
+        partial: {
+          role: "assistant",
+          content: [
+            {
+              type: "text",
+              text: "Done.",
+              textSignature: JSON.stringify({ v: 1, id: "item_final", phase: "final_answer" }),
+            },
+          ],
+          phase: "final_answer",
+          stopReason: "stop",
+          api: "openai-responses",
+          provider: "openai",
+          model: "gpt-5.2",
+          usage: {},
+          timestamp: 0,
+        },
+      },
+    });
+    emit({
+      type: "message_update",
+      message: { role: "assistant", content: [] },
+      assistantMessageEvent: {
+        type: "text_end",
+        content: "Done.",
+        partial: {
+          role: "assistant",
+          content: [
+            {
+              type: "text",
+              text: "Done.",
+              textSignature: JSON.stringify({ v: 1, id: "item_final", phase: "final_answer" }),
+            },
+          ],
+          phase: "final_answer",
+          stopReason: "stop",
+          api: "openai-responses",
+          provider: "openai",
+          model: "gpt-5.2",
+          usage: {},
+          timestamp: 0,
+        },
+      },
     });
     await Promise.resolve();
 
-    emitOpenAiResponsesFinalMessageEnd({ emit, commentaryText: "Working...", finalText: "Done." });
+    emit({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        content: [
+          {
+            type: "text",
+            text: "Working...",
+            textSignature: JSON.stringify({ v: 1, id: "item_commentary", phase: "commentary" }),
+          },
+          {
+            type: "text",
+            text: "Done.",
+            textSignature: JSON.stringify({ v: 1, id: "item_final", phase: "final_answer" }),
+          },
+        ],
+      } as AssistantMessage,
+    });
 
     expect(onBlockReply).toHaveBeenCalledTimes(1);
     expect(onBlockReply.mock.calls[0]?.[0]?.text).toBe("Done.");
@@ -199,22 +272,109 @@ describe("subscribeEmbeddedPiSession", () => {
     const { emit, subscription } = createTextEndBlockReplyHarness({ onBlockReply });
 
     emit({ type: "message_start", message: { role: "assistant" } });
-    emitOpenAiResponsesTextDeltaAndEnd({
-      emit,
-      text: "Hello",
-      id: "item_commentary",
-      phase: "commentary",
+    emit({
+      type: "message_update",
+      message: { role: "assistant", content: [] },
+      assistantMessageEvent: {
+        type: "text_delta",
+        delta: "Hello",
+        partial: {
+          role: "assistant",
+          content: [
+            {
+              type: "text",
+              text: "Hello",
+              textSignature: JSON.stringify({ v: 1, id: "item_commentary", phase: "commentary" }),
+            },
+          ],
+          phase: "commentary",
+          stopReason: "stop",
+          api: "openai-responses",
+          provider: "openai",
+          model: "gpt-5.2",
+          usage: {},
+          timestamp: 0,
+        },
+      },
+    });
+    emit({
+      type: "message_update",
+      message: { role: "assistant", content: [] },
+      assistantMessageEvent: {
+        type: "text_end",
+        content: "Hello",
+        partial: {
+          role: "assistant",
+          content: [
+            {
+              type: "text",
+              text: "Hello",
+              textSignature: JSON.stringify({ v: 1, id: "item_commentary", phase: "commentary" }),
+            },
+          ],
+          phase: "commentary",
+          stopReason: "stop",
+          api: "openai-responses",
+          provider: "openai",
+          model: "gpt-5.2",
+          usage: {},
+          timestamp: 0,
+        },
+      },
     });
     await Promise.resolve();
 
     expect(onBlockReply).not.toHaveBeenCalled();
 
-    emitOpenAiResponsesTextDeltaAndEnd({
-      emit,
-      text: "Hello world",
-      delta: " world",
-      id: "item_final",
-      phase: "final_answer",
+    emit({
+      type: "message_update",
+      message: { role: "assistant", content: [] },
+      assistantMessageEvent: {
+        type: "text_delta",
+        delta: " world",
+        partial: {
+          role: "assistant",
+          content: [
+            {
+              type: "text",
+              text: "Hello world",
+              textSignature: JSON.stringify({ v: 1, id: "item_final", phase: "final_answer" }),
+            },
+          ],
+          phase: "final_answer",
+          stopReason: "stop",
+          api: "openai-responses",
+          provider: "openai",
+          model: "gpt-5.2",
+          usage: {},
+          timestamp: 0,
+        },
+      },
+    });
+    emit({
+      type: "message_update",
+      message: { role: "assistant", content: [] },
+      assistantMessageEvent: {
+        type: "text_end",
+        content: "Hello world",
+        partial: {
+          role: "assistant",
+          content: [
+            {
+              type: "text",
+              text: "Hello world",
+              textSignature: JSON.stringify({ v: 1, id: "item_final", phase: "final_answer" }),
+            },
+          ],
+          phase: "final_answer",
+          stopReason: "stop",
+          api: "openai-responses",
+          provider: "openai",
+          model: "gpt-5.2",
+          usage: {},
+          timestamp: 0,
+        },
+      },
     });
     await Promise.resolve();
 
@@ -228,19 +388,53 @@ describe("subscribeEmbeddedPiSession", () => {
     const { emit, subscription } = createTextEndBlockReplyHarness({ onBlockReply });
 
     emit({ type: "message_start", message: { role: "assistant" } });
-    emitOpenAiResponsesTextEvent({
-      emit,
-      type: "text_delta",
-      text: "Done.",
-      id: "item_final",
-      signaturePhase: "final_answer",
+    emit({
+      type: "message_update",
+      message: { role: "assistant", content: [] },
+      assistantMessageEvent: {
+        type: "text_delta",
+        delta: "Done.",
+        partial: {
+          role: "assistant",
+          content: [
+            {
+              type: "text",
+              text: "Done.",
+              textSignature: JSON.stringify({ v: 1, id: "item_final", phase: "final_answer" }),
+            },
+          ],
+          stopReason: "stop",
+          api: "openai-responses",
+          provider: "openai",
+          model: "gpt-5.2",
+          usage: {},
+          timestamp: 0,
+        },
+      },
     });
-    emitOpenAiResponsesTextEvent({
-      emit,
-      type: "text_end",
-      text: "Done.",
-      id: "item_final",
-      signaturePhase: "final_answer",
+    emit({
+      type: "message_update",
+      message: { role: "assistant", content: [] },
+      assistantMessageEvent: {
+        type: "text_end",
+        content: "Done.",
+        partial: {
+          role: "assistant",
+          content: [
+            {
+              type: "text",
+              text: "Done.",
+              textSignature: JSON.stringify({ v: 1, id: "item_final", phase: "final_answer" }),
+            },
+          ],
+          stopReason: "stop",
+          api: "openai-responses",
+          provider: "openai",
+          model: "gpt-5.2",
+          usage: {},
+          timestamp: 0,
+        },
+      },
     });
     await Promise.resolve();
 
@@ -254,15 +448,76 @@ describe("subscribeEmbeddedPiSession", () => {
     const { emit, subscription } = createTextEndBlockReplyHarness({ onBlockReply });
 
     emit({ type: "message_start", message: { role: "assistant" } });
-    emitOpenAiResponsesTextDeltaAndEnd({
-      emit,
-      text: "Working...",
-      id: "item_commentary",
-      phase: "commentary",
+    emit({
+      type: "message_update",
+      message: { role: "assistant", content: [] },
+      assistantMessageEvent: {
+        type: "text_delta",
+        delta: "Working...",
+        partial: {
+          role: "assistant",
+          content: [
+            {
+              type: "text",
+              text: "Working...",
+              textSignature: JSON.stringify({ v: 1, id: "item_commentary", phase: "commentary" }),
+            },
+          ],
+          phase: "commentary",
+          stopReason: "stop",
+          api: "openai-responses",
+          provider: "openai",
+          model: "gpt-5.2",
+          usage: {},
+          timestamp: 0,
+        },
+      },
+    });
+    emit({
+      type: "message_update",
+      message: { role: "assistant", content: [] },
+      assistantMessageEvent: {
+        type: "text_end",
+        content: "Working...",
+        partial: {
+          role: "assistant",
+          content: [
+            {
+              type: "text",
+              text: "Working...",
+              textSignature: JSON.stringify({ v: 1, id: "item_commentary", phase: "commentary" }),
+            },
+          ],
+          phase: "commentary",
+          stopReason: "stop",
+          api: "openai-responses",
+          provider: "openai",
+          model: "gpt-5.2",
+          usage: {},
+          timestamp: 0,
+        },
+      },
     });
     await Promise.resolve();
 
-    emitOpenAiResponsesFinalMessageEnd({ emit, commentaryText: "Working...", finalText: "Done." });
+    emit({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        content: [
+          {
+            type: "text",
+            text: "Working...",
+            textSignature: JSON.stringify({ v: 1, id: "item_commentary", phase: "commentary" }),
+          },
+          {
+            type: "text",
+            text: "Done.",
+            textSignature: JSON.stringify({ v: 1, id: "item_final", phase: "final_answer" }),
+          },
+        ],
+      } as AssistantMessage,
+    });
 
     expect(onBlockReply).toHaveBeenCalledTimes(1);
     expect(onBlockReply.mock.calls[0]?.[0]?.text).toBe("Done.");

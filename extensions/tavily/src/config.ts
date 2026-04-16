@@ -3,7 +3,6 @@ import {
   normalizeResolvedSecretInputString,
   normalizeSecretInput,
 } from "openclaw/plugin-sdk/secret-input";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 
 export const DEFAULT_TAVILY_BASE_URL = "https://api.tavily.com";
 export const DEFAULT_TAVILY_SEARCH_TIMEOUT_SECONDS = 30;
@@ -53,7 +52,7 @@ export function resolveTavilyApiKey(cfg?: OpenClawConfig): string | undefined {
 export function resolveTavilyBaseUrl(cfg?: OpenClawConfig): string {
   const search = resolveTavilySearchConfig(cfg);
   const configured =
-    (normalizeOptionalString(search?.baseUrl) ?? "") ||
+    (typeof search?.baseUrl === "string" ? search.baseUrl.trim() : "") ||
     normalizeSecretInput(process.env.TAVILY_BASE_URL) ||
     "";
   return configured || DEFAULT_TAVILY_BASE_URL;

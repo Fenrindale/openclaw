@@ -12,25 +12,17 @@ import {
   type SessionBindingAdapter,
   type SessionBindingRecord,
 } from "openclaw/plugin-sdk/conversation-runtime";
-import { formatErrorMessage } from "openclaw/plugin-sdk/error-runtime";
 import { writeJsonFileAtomically } from "openclaw/plugin-sdk/json-store";
 import { normalizeAccountId } from "openclaw/plugin-sdk/routing";
 import { logVerbose } from "openclaw/plugin-sdk/runtime-env";
 import { resolveStateDir } from "openclaw/plugin-sdk/state-paths";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
+import { createForumTopicTelegram } from "./send.js";
 import { resolveTelegramToken } from "./token.js";
 
 const DEFAULT_THREAD_BINDING_IDLE_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_THREAD_BINDING_MAX_AGE_MS = 0;
 const THREAD_BINDINGS_SWEEP_INTERVAL_MS = 60_000;
 const STORE_VERSION = 1;
-
-let telegramSendModulePromise: Promise<typeof import("./send.js")> | undefined;
-
-async function loadTelegramSendModule() {
-  telegramSendModulePromise ??= import("./send.js");
-  return await telegramSendModulePromise;
-}
 
 type TelegramBindingTargetKind = "subagent" | "acp";
 
@@ -109,6 +101,14 @@ function normalizeDurationMs(raw: unknown, fallback: number): number {
     return fallback;
   }
   return Math.max(0, Math.floor(raw));
+}
+
+function normalizeConversationId(raw: unknown): string | undefined {
+  if (typeof raw !== "string") {
+    return undefined;
+  }
+  const trimmed = raw.trim();
+  return trimmed || undefined;
 }
 
 function resolveBindingKey(params: { accountId: string; conversationId: string }): string {
@@ -252,8 +252,9 @@ function loadBindingsFromDisk(accountId: string): TelegramThreadBindingRecord[] 
     }
     const bindings: TelegramThreadBindingRecord[] = [];
     for (const entry of parsed.bindings) {
-      const conversationId = normalizeOptionalString(entry?.conversationId);
-      const targetSessionKey = normalizeOptionalString(entry?.targetSessionKey) ?? "";
+      const conversationId = normalizeConversationId(entry?.conversationId);
+      const targetSessionKey =
+        typeof entry?.targetSessionKey === "string" ? entry.targetSessionKey.trim() : "";
       const targetKind = entry?.targetKind === "subagent" ? "subagent" : "acp";
       if (!conversationId || !targetSessionKey) {
         continue;
@@ -345,12 +346,11 @@ function enqueuePersistBindings(params: {
       await persistBindingsToDisk(params);
     });
   getThreadBindingsState().persistQueueByAccountId.set(params.accountId, next);
-  const cleanup = () => {
+  void next.finally(() => {
     if (getThreadBindingsState().persistQueueByAccountId.get(params.accountId) === next) {
       getThreadBindingsState().persistQueueByAccountId.delete(params.accountId);
     }
-  };
-  next.then(cleanup, cleanup);
+  });
   return next;
 }
 
@@ -448,7 +448,7 @@ export function createTelegramThreadBindingManager(
     getIdleTimeoutMs: () => idleTimeoutMs,
     getMaxAgeMs: () => maxAgeMs,
     getByConversationId: (conversationIdRaw) => {
-      const conversationId = normalizeOptionalString(conversationIdRaw);
+      const conversationId = normalizeConversationId(conversationIdRaw);
       if (!conversationId) {
         return undefined;
       }
@@ -470,7 +470,7 @@ export function createTelegramThreadBindingManager(
     },
     listBindings: () => listBindingsForAccount(accountId),
     touchConversation: (conversationIdRaw, at) => {
-      const conversationId = normalizeOptionalString(conversationIdRaw);
+      const conversationId = normalizeConversationId(conversationIdRaw);
       if (!conversationId) {
         return null;
       }
@@ -493,7 +493,7 @@ export function createTelegramThreadBindingManager(
       return nextRecord;
     },
     unbindConversation: (unbindParams) => {
-      const conversationId = normalizeOptionalString(unbindParams.conversationId);
+      const conversationId = normalizeConversationId(unbindParams.conversationId);
       if (!conversationId) {
         return null;
       }
@@ -591,15 +591,14 @@ export function createTelegramThreadBindingManager(
           return null;
         }
         const threadName =
-          (normalizeOptionalString(metadata.threadName) ?? "") ||
-          (normalizeOptionalString(metadata.label) ?? "") ||
+          (typeof metadata.threadName === "string" ? metadata.threadName.trim() : "") ||
+          (typeof metadata.label === "string" ? metadata.label.trim() : "") ||
           `Agent: ${targetSessionKey.split(":").pop()}`;
         try {
           const tokenResolution = resolveTelegramToken(cfg, { accountId });
           if (!tokenResolution.token) {
             return null;
           }
-          const { createForumTopicTelegram } = await loadTelegramSendModule();
           const result = await createForumTopicTelegram(chatId, threadName, {
             cfg,
             token: tokenResolution.token,
@@ -608,12 +607,12 @@ export function createTelegramThreadBindingManager(
           conversationId = `${result.chatId}:topic:${result.topicId}`;
         } catch (err) {
           logVerbose(
-            `telegram: child thread-binding failed for ${chatId}: ${formatErrorMessage(err)}`,
+            `telegram: child thread-binding failed for ${chatId}: ${err instanceof Error ? err.message : String(err)}`,
           );
           return null;
         }
       } else {
-        conversationId = normalizeOptionalString(input.conversation.conversationId);
+        conversationId = normalizeConversationId(input.conversation.conversationId);
       }
 
       if (!conversationId) {
@@ -667,7 +666,7 @@ export function createTelegramThreadBindingManager(
       if (ref.channel !== "telegram") {
         return null;
       }
-      const conversationId = normalizeOptionalString(ref.conversationId);
+      const conversationId = normalizeConversationId(ref.conversationId);
       if (!conversationId) {
         return null;
       }

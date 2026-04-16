@@ -1,4 +1,3 @@
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import {
   GROUP_POLICY_BLOCKED_LABEL,
   createChannelPairingController,
@@ -254,7 +253,7 @@ export async function handleNextcloudTalkInbound(params: {
     body: rawBody,
   });
 
-  const groupSystemPrompt = normalizeOptionalString(roomConfig?.systemPrompt);
+  const groupSystemPrompt = roomConfig?.systemPrompt?.trim() || undefined;
 
   const ctxPayload = core.channel.reply.finalizeInboundContext({
     Body: body,

@@ -1,22 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { collectEmptyAllowlistPolicyWarningsForAccount } from "./empty-allowlist-policy.js";
-
-vi.mock("../channel-capabilities.js", () => ({
-  getDoctorChannelCapabilities: (channelName?: string) => ({
-    dmAllowFromMode: "topOnly",
-    groupModel: channelName === "discord" ? "route" : "sender",
-    groupAllowFromFallbackToAllowFrom: channelName !== "imessage",
-    warnOnEmptyGroupSenderAllowlist: channelName !== "discord",
-  }),
-}));
-
-vi.mock("./channel-doctor.js", () => ({
-  shouldSkipChannelDoctorDefaultEmptyGroupAllowlistWarning: ({
-    channelName,
-  }: {
-    channelName?: string;
-  }) => channelName === "zalouser",
-}));
 
 describe("doctor empty allowlist policy warnings", () => {
   it("warns when dm allowlist mode has no allowFrom entries", () => {
@@ -53,7 +36,9 @@ describe("doctor empty allowlist policy warnings", () => {
       prefix: "channels.zalouser",
     });
 
-    expect(warnings).toEqual([]);
+    expect(warnings).toEqual([
+      expect.stringContaining('channels.zalouser.groupPolicy is "allowlist"'),
+    ]);
   });
 
   it("stays quiet for channels that do not use sender-based group allowlists", () => {
@@ -64,6 +49,8 @@ describe("doctor empty allowlist policy warnings", () => {
       prefix: "channels.discord",
     });
 
-    expect(warnings).toEqual([]);
+    expect(warnings).toEqual([
+      expect.stringContaining('channels.discord.groupPolicy is "allowlist"'),
+    ]);
   });
 });

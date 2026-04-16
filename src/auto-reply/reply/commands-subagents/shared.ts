@@ -20,10 +20,6 @@ import { parseAgentSessionKey } from "../../../routing/session-key.js";
 import { isSubagentSessionKey } from "../../../routing/session-key.js";
 import { looksLikeSessionId } from "../../../sessions/session-id.js";
 import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-} from "../../../shared/string-coerce.js";
-import {
   formatDurationCompact,
   formatTokenUsageDisplay,
   truncateLine,
@@ -117,11 +113,7 @@ export function formatSubagentListLine(params: {
         ? params.sessionEntry.modelOverride
         : null,
     fallbackModel: params.entry.model,
-  })}, ${runtime}${usageText ? `, ${usageText}` : ""}) ${status}${
-    normalizeLowercaseStringOrEmpty(task) !== normalizeLowercaseStringOrEmpty(label)
-      ? ` - ${task}`
-      : ""
-  }`;
+  })}, ${runtime}${usageText ? `, ${usageText}` : ""}) ${status}${task.toLowerCase() !== label.toLowerCase() ? ` - ${task}` : ""}`;
 }
 
 function formatTimestamp(valueMs?: number) {
@@ -214,8 +206,8 @@ export function resolveRequesterSessionKey(
   params: SubagentsCommandParams,
   opts?: { preferCommandTarget?: boolean },
 ): string | undefined {
-  const commandTarget = normalizeOptionalString(params.ctx.CommandTargetSessionKey);
-  const commandSession = normalizeOptionalString(params.sessionKey);
+  const commandTarget = params.ctx.CommandTargetSessionKey?.trim();
+  const commandSession = params.sessionKey?.trim();
   const shouldPreferCommandTarget =
     opts?.preferCommandTarget ?? params.ctx.CommandSource === "native";
   const raw = shouldPreferCommandTarget
@@ -275,7 +267,7 @@ export function resolveSubagentsAction(params: {
 }): SubagentsAction | null {
   if (params.handledPrefix === COMMAND) {
     const [actionRaw] = params.restTokens;
-    const action = (normalizeLowercaseStringOrEmpty(actionRaw) || "list") as SubagentsAction;
+    const action = (actionRaw?.toLowerCase() || "list") as SubagentsAction;
     if (!ACTIONS.has(action)) {
       return null;
     }
@@ -334,11 +326,11 @@ export async function resolveFocusTargetSession(params: {
 
   for (const attempt of attempts) {
     try {
-      const resolved = await callGateway({
+      const resolved = await callGateway<{ key?: string }>({
         method: "sessions.resolve",
         params: attempt,
       });
-      const key = normalizeOptionalString(resolved?.key) ?? "";
+      const key = typeof resolved?.key === "string" ? resolved.key.trim() : "";
       if (!key) {
         continue;
       }

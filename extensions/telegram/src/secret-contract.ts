@@ -6,15 +6,7 @@ import {
   type ResolverContext,
   type SecretDefaults,
   type SecretTargetRegistryEntry,
-} from "openclaw/plugin-sdk/channel-secret-basic-runtime";
-
-function normalizeOptionalString(value: unknown): string | undefined {
-  if (typeof value !== "string") {
-    return undefined;
-  }
-  const trimmed = value.trim();
-  return trimmed ? trimmed : undefined;
-}
+} from "openclaw/plugin-sdk/channel-secret-runtime";
 
 export const secretTargetRegistryEntries = [
   {
@@ -65,7 +57,7 @@ export const secretTargetRegistryEntries = [
 
 export function collectRuntimeConfigAssignments(params: {
   config: { channels?: Record<string, unknown> };
-  defaults?: SecretDefaults;
+  defaults: SecretDefaults | undefined;
   context: ResolverContext;
 }): void {
   const resolved = getChannelSurface(params.config, "telegram");
@@ -73,9 +65,9 @@ export function collectRuntimeConfigAssignments(params: {
     return;
   }
   const { channel: telegram, surface } = resolved;
-  const baseTokenFile = normalizeOptionalString(telegram.tokenFile) ?? "";
+  const baseTokenFile = typeof telegram.tokenFile === "string" ? telegram.tokenFile.trim() : "";
   const accountTokenFile = (account: Record<string, unknown>) =>
-    normalizeOptionalString(account.tokenFile) ?? "";
+    typeof account.tokenFile === "string" ? account.tokenFile.trim() : "";
   collectConditionalChannelFieldAssignments({
     channelKey: "telegram",
     field: "botToken",
@@ -99,10 +91,12 @@ export function collectRuntimeConfigAssignments(params: {
       "no enabled Telegram surface inherits this top-level botToken (tokenFile is configured).",
     accountInactiveReason: "Telegram account is disabled or tokenFile is configured.",
   });
-  const baseWebhookUrl = normalizeOptionalString(telegram.webhookUrl) ?? "";
+  const baseWebhookUrl = typeof telegram.webhookUrl === "string" ? telegram.webhookUrl.trim() : "";
   const accountWebhookUrl = (account: Record<string, unknown>) =>
     hasOwnProperty(account, "webhookUrl")
-      ? (normalizeOptionalString(account.webhookUrl) ?? "")
+      ? typeof account.webhookUrl === "string"
+        ? account.webhookUrl.trim()
+        : ""
       : baseWebhookUrl;
   collectConditionalChannelFieldAssignments({
     channelKey: "telegram",

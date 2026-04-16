@@ -1,8 +1,11 @@
 import { createHash } from "node:crypto";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import type { Bot } from "grammy";
 import { logVerbose } from "openclaw/plugin-sdk/runtime-env";
 import type { RuntimeEnv } from "openclaw/plugin-sdk/runtime-env";
-import { normalizeOptionalString, readStringValue } from "openclaw/plugin-sdk/text-runtime";
+import { resolveStateDir } from "openclaw/plugin-sdk/state-paths";
 import { withTelegramApiErrorLogging } from "./api-logging.js";
 import { normalizeTelegramCommandName, TELEGRAM_COMMAND_NAME_PATTERN } from "./command-config.js";
 
@@ -92,7 +95,8 @@ function readErrorTextField(value: unknown, key: "description" | "message"): str
   if (!value || typeof value !== "object" || !(key in value)) {
     return undefined;
   }
-  return readStringValue((value as Record<"description" | "message", unknown>)[key]);
+  const text = (value as Record<"description" | "message", unknown>)[key];
+  return typeof text === "string" ? text : undefined;
 }
 
 function isBotCommandsTooMuchError(err: unknown): boolean {
@@ -150,7 +154,7 @@ export function buildPluginTelegramMenuCommands(params: {
       );
       continue;
     }
-    const description = normalizeOptionalString(spec.description) ?? "";
+    const description = typeof spec.description === "string" ? spec.description.trim() : "";
     if (!description) {
       issues.push(`Plugin command "/${normalized}" is missing a description.`);
       continue;
@@ -211,25 +215,45 @@ export function hashCommandList(commands: TelegramMenuCommand[]): string {
   return createHash("sha256").update(JSON.stringify(sorted)).digest("hex").slice(0, 16);
 }
 
-// Keep the sync cache process-local so restarts always re-register commands.
-const syncedCommandHashes = new Map<string, string>();
-
-function getCommandHashKey(accountId?: string, botIdentity?: string): string {
-  return `${accountId ?? "default"}:${botIdentity ?? ""}`;
+function hashBotIdentity(botIdentity?: string): string {
+  const normalized = botIdentity?.trim();
+  if (!normalized) {
+    return "no-bot";
+  }
+  return createHash("sha256").update(normalized).digest("hex").slice(0, 16);
 }
 
-function readCachedCommandHash(accountId?: string, botIdentity?: string): string | null {
-  const key = getCommandHashKey(accountId, botIdentity);
-  return syncedCommandHashes.get(key) ?? null;
+function resolveCommandHashPath(accountId?: string, botIdentity?: string): string {
+  const stateDir = resolveStateDir(process.env, os.homedir);
+  const normalizedAccount = accountId?.trim().replace(/[^a-z0-9._-]+/gi, "_") || "default";
+  const botHash = hashBotIdentity(botIdentity);
+  return path.join(stateDir, "telegram", `command-hash-${normalizedAccount}-${botHash}.txt`);
 }
 
-function writeCachedCommandHash(
+async function readCachedCommandHash(
+  accountId?: string,
+  botIdentity?: string,
+): Promise<string | null> {
+  try {
+    return (await fs.readFile(resolveCommandHashPath(accountId, botIdentity), "utf-8")).trim();
+  } catch {
+    return null;
+  }
+}
+
+async function writeCachedCommandHash(
   accountId: string | undefined,
   botIdentity: string | undefined,
   hash: string,
-): void {
-  const key = getCommandHashKey(accountId, botIdentity);
-  syncedCommandHashes.set(key, hash);
+): Promise<void> {
+  const filePath = resolveCommandHashPath(accountId, botIdentity);
+  try {
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.writeFile(filePath, hash, "utf-8");
+  } catch {
+    // Best-effort: failing to cache the hash just means the next restart
+    // will sync commands again, which is the pre-fix behaviour.
+  }
 }
 
 export function syncTelegramMenuCommands(params: {
@@ -246,7 +270,7 @@ export function syncTelegramMenuCommands(params: {
     // is restarted several times in quick succession.
     // See: openclaw/openclaw#32017
     const currentHash = hashCommandList(commandsToRegister);
-    const cachedHash = readCachedCommandHash(accountId, botIdentity);
+    const cachedHash = await readCachedCommandHash(accountId, botIdentity);
     if (cachedHash === currentHash) {
       logVerbose("telegram: command menu unchanged; skipping sync");
       return;
@@ -269,7 +293,7 @@ export function syncTelegramMenuCommands(params: {
         runtime.log?.("telegram: deleteMyCommands failed; skipping empty-menu hash cache write");
         return;
       }
-      writeCachedCommandHash(accountId, botIdentity, currentHash);
+      await writeCachedCommandHash(accountId, botIdentity, currentHash);
       return;
     }
 
@@ -291,7 +315,7 @@ export function syncTelegramMenuCommands(params: {
             }),
           );
         }
-        writeCachedCommandHash(accountId, botIdentity, currentHash);
+        await writeCachedCommandHash(accountId, botIdentity, currentHash);
         return;
       } catch (err) {
         if (!isBotCommandsTooMuchError(err)) {

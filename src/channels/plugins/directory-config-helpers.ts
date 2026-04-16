@@ -1,13 +1,9 @@
 import type { OpenClawConfig } from "../../config/types.js";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-} from "../../shared/string-coerce.js";
 import type { DirectoryConfigParams } from "./directory-types.js";
-import type { ChannelDirectoryEntry } from "./types.public.js";
+import type { ChannelDirectoryEntry } from "./types.js";
 
 function resolveDirectoryQuery(query?: string | null): string {
-  return normalizeLowercaseStringOrEmpty(query);
+  return query?.trim().toLowerCase() || "";
 }
 
 function resolveDirectoryLimit(limit?: number | null): number | undefined {
@@ -20,7 +16,7 @@ export function applyDirectoryQueryAndLimit(
 ): string[] {
   const q = resolveDirectoryQuery(params.query);
   const limit = resolveDirectoryLimit(params.limit);
-  const filtered = ids.filter((id) => (q ? normalizeLowercaseStringOrEmpty(id).includes(q) : true));
+  const filtered = ids.filter((id) => (q ? id.toLowerCase().includes(q) : true));
   return typeof limit === "number" ? filtered.slice(0, limit) : filtered;
 }
 
@@ -33,11 +29,11 @@ function normalizeDirectoryIds(params: {
   normalizeId?: (entry: string) => string | null | undefined;
 }): string[] {
   return params.rawIds
-    .map((entry) => normalizeOptionalString(entry) ?? "")
+    .map((entry) => entry.trim())
     .filter((entry) => Boolean(entry) && entry !== "*")
     .map((entry) => {
       const normalized = params.normalizeId ? params.normalizeId(entry) : entry;
-      return normalizeOptionalString(normalized) ?? "";
+      return typeof normalized === "string" ? normalized.trim() : "";
     })
     .filter(Boolean);
 }
@@ -73,12 +69,12 @@ export function collectNormalizedDirectoryIds(params: {
   const ids = new Set<string>();
   for (const source of params.sources) {
     for (const value of source) {
-      const raw = normalizeOptionalString(value) ?? "";
+      const raw = String(value).trim();
       if (!raw || raw === "*") {
         continue;
       }
       const normalized = params.normalizeId(raw);
-      const trimmed = normalizeOptionalString(normalized) ?? "";
+      const trimmed = typeof normalized === "string" ? normalized.trim() : "";
       if (trimmed) {
         ids.add(trimmed);
       }

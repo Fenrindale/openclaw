@@ -1,12 +1,9 @@
-import {
-  normalizeOptionalLowercaseString,
-  readStringValue as readString,
-} from "../shared/string-coerce.js";
+import { readStringValue as readString } from "../shared/string-coerce.js";
 
 type UnknownRecord = Record<string, unknown>;
 
 function normalizeChannel(value: string): string {
-  return normalizeOptionalLowercaseString(value) ?? "";
+  return value.trim().toLowerCase();
 }
 
 export function migrateLegacyCronPayload(payload: UnknownRecord): boolean {

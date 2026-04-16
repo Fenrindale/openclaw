@@ -7,10 +7,6 @@ import {
   type ChannelMatchSource,
 } from "openclaw/plugin-sdk/channel-targets";
 import { evaluateGroupRouteAccessForPolicy } from "openclaw/plugin-sdk/group-access";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-} from "openclaw/plugin-sdk/text-runtime";
 import { formatDiscordUserTag } from "./format.js";
 
 export type DiscordAllowList = {
@@ -60,9 +56,9 @@ export function normalizeDiscordAllowList(raw: string[] | undefined, prefixes: s
   }
   const ids = new Set<string>();
   const names = new Set<string>();
-  const allowAll = raw.some((entry) => (normalizeOptionalString(entry) ?? "") === "*");
+  const allowAll = raw.some((entry) => String(entry).trim() === "*");
   for (const entry of raw) {
-    const text = normalizeOptionalString(entry) ?? "";
+    const text = String(entry).trim();
     if (!text || text === "*") {
       continue;
     }
@@ -88,7 +84,9 @@ export function normalizeDiscordAllowList(raw: string[] | undefined, prefixes: s
 }
 
 export function normalizeDiscordSlug(value: string) {
-  return normalizeLowercaseStringOrEmpty(value)
+  return value
+    .trim()
+    .toLowerCase()
     .replace(/^#/, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
@@ -564,7 +562,7 @@ export function resolveGroupDmAllow(params: {
   if (!channels || channels.length === 0) {
     return true;
   }
-  const allowList = new Set(channels.map((entry) => normalizeDiscordSlug(entry)));
+  const allowList = new Set(channels.map((entry) => normalizeDiscordSlug(String(entry))));
   const candidates = [
     normalizeDiscordSlug(channelId),
     channelSlug,

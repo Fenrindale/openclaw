@@ -1,7 +1,3 @@
-import {
-  normalizeOptionalLowercaseString,
-  normalizeOptionalString,
-} from "openclaw/plugin-sdk/text-runtime";
 import type { OpenClawPluginApi } from "../runtime-api.js";
 import { buildFeishuConversationId, parseFeishuConversationId } from "./conversation-id.js";
 import { normalizeFeishuTarget } from "./targets.js";
@@ -225,8 +221,8 @@ function resolveMatchingChildBinding(params: {
       (entry) =>
         entry.accountId === requesterConversation.accountId &&
         entry.conversationId === requesterConversation.conversationId &&
-        normalizeOptionalString(entry.parentConversationId) ===
-          normalizeOptionalString(requesterConversation.parentConversationId),
+        (entry.parentConversationId?.trim() || undefined) ===
+          (requesterConversation.parentConversationId?.trim() || undefined),
     );
     if (matched) {
       return matched;
@@ -270,32 +266,16 @@ type FeishuSubagentEndedEvent = {
   targetSessionKey: string;
 };
 
-type FeishuSubagentSpawningResult =
-  | { status: "ok"; threadBindingReady?: boolean }
-  | { status: "error"; error: string }
-  | undefined;
-
-type FeishuSubagentDeliveryTargetResult =
-  | {
-      origin: {
-        channel: "feishu";
-        accountId?: string;
-        to?: string;
-        threadId?: string | number;
-      };
-    }
-  | undefined;
-
 export async function handleFeishuSubagentSpawning(
   event: FeishuSubagentSpawningEvent,
   ctx: FeishuSubagentContext,
-): Promise<FeishuSubagentSpawningResult> {
+) {
   if (!event.threadRequested) {
-    return undefined;
+    return;
   }
-  const requesterChannel = normalizeOptionalLowercaseString(event.requester?.channel);
+  const requesterChannel = event.requester?.channel?.trim().toLowerCase();
   if (requesterChannel !== "feishu") {
-    return undefined;
+    return;
   }
 
   const manager = getFeishuThreadBindingManager(event.requester?.accountId);
@@ -357,15 +337,13 @@ export async function handleFeishuSubagentSpawning(
   }
 }
 
-export function handleFeishuSubagentDeliveryTarget(
-  event: FeishuSubagentDeliveryTargetEvent,
-): FeishuSubagentDeliveryTargetResult {
+export function handleFeishuSubagentDeliveryTarget(event: FeishuSubagentDeliveryTargetEvent) {
   if (!event.expectsCompletionMessage) {
-    return undefined;
+    return;
   }
-  const requesterChannel = normalizeOptionalLowercaseString(event.requesterOrigin?.channel);
+  const requesterChannel = event.requesterOrigin?.channel?.trim().toLowerCase();
   if (requesterChannel !== "feishu") {
-    return undefined;
+    return;
   }
 
   const binding = resolveMatchingChildBinding({
@@ -378,7 +356,7 @@ export function handleFeishuSubagentDeliveryTarget(
     },
   });
   if (!binding) {
-    return undefined;
+    return;
   }
 
   return {

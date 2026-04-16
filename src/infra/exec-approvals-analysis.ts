@@ -1,4 +1,3 @@
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 import { splitShellArgs } from "../utils/shell-argv.js";
 import {
   resolveCommandResolutionFromArgv,
@@ -586,7 +585,9 @@ function analyzeWindowsShellCommand(params: {
 }
 
 export function isWindowsPlatform(platform?: string | null): boolean {
-  const normalized = normalizeLowercaseStringOrEmpty(platform);
+  const normalized = String(platform ?? "")
+    .trim()
+    .toLowerCase();
   return normalized.startsWith("win");
 }
 

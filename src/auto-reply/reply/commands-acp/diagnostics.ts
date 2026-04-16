@@ -6,18 +6,15 @@ import { resolveSessionStorePathForAcp } from "../../../acp/runtime/session-meta
 import { loadSessionStore } from "../../../config/sessions.js";
 import type { SessionEntry } from "../../../config/sessions/types.js";
 import { getSessionBindingService } from "../../../infra/outbound/session-binding-service.js";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-} from "../../../shared/string-coerce.js";
 import type { CommandHandlerResult, HandleCommandsParams } from "../commands-types.js";
 import { resolveAcpCommandBindingContext } from "./context.js";
-import { resolveAcpInstallCommandHint } from "./install-hints.js";
 import {
   ACP_DOCTOR_USAGE,
   ACP_INSTALL_USAGE,
   ACP_SESSIONS_USAGE,
   formatAcpCapabilitiesText,
+  resolveAcpInstallCommandHint,
+  resolveConfiguredAcpBackendId,
   stopWithText,
 } from "./shared.js";
 import { resolveBoundAcpThreadSessionKey } from "./targets.js";
@@ -30,7 +27,7 @@ export async function handleAcpDoctorAction(
     return stopWithText(`⚠️ ${ACP_DOCTOR_USAGE}`);
   }
 
-  const backendId = normalizeOptionalString(params.cfg.acp?.backend) ?? "acpx";
+  const backendId = resolveConfiguredAcpBackendId(params.cfg);
   const installHint = resolveAcpInstallCommandHint(params.cfg);
   const registeredBackend = getAcpRuntimeBackend(backendId);
   const managerSnapshot = getAcpSessionManager().getObservabilitySnapshot(params.cfg);
@@ -104,7 +101,7 @@ export async function handleAcpDoctorAction(
     lines.push(formatAcpRuntimeErrorText(acpError));
     lines.push(`next: ${installHint}`);
     lines.push(`next: openclaw config set plugins.entries.${backendId}.enabled true`);
-    if (normalizeLowercaseStringOrEmpty(backendId) === "acpx") {
+    if (backendId.toLowerCase() === "acpx") {
       lines.push("next: verify acpx is installed (`acpx --help`).");
     }
     return stopWithText(lines.join("\n"));
@@ -118,7 +115,7 @@ export function handleAcpInstallAction(
   if (restTokens.length > 0) {
     return stopWithText(`⚠️ ${ACP_INSTALL_USAGE}`);
   }
-  const backendId = normalizeOptionalString(params.cfg.acp?.backend) ?? "acpx";
+  const backendId = resolveConfiguredAcpBackendId(params.cfg);
   const installHint = resolveAcpInstallCommandHint(params.cfg);
   const lines = [
     "ACP install:",
@@ -142,7 +139,7 @@ function formatAcpSessionLine(params: {
     return "";
   }
   const marker = params.currentSessionKey === params.key ? "*" : " ";
-  const label = normalizeOptionalString(params.entry.label) || acp.agent;
+  const label = params.entry.label?.trim() || acp.agent;
   const threadText = params.threadId ? `, thread:${params.threadId}` : "";
   return `${marker} ${label} (${acp.mode}, ${acp.state}, backend:${acp.backend}${threadText}) -> ${params.key}`;
 }

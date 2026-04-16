@@ -1,6 +1,5 @@
 import crypto from "node:crypto";
 import path from "node:path";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import type { BrowserRouteContext } from "../server-context.js";
 import {
   readBody,
@@ -31,7 +30,7 @@ export function registerBrowserAgentDebugRoutes(
         const messages = await pw.getConsoleMessagesViaPlaywright({
           cdpUrl,
           targetId: tab.targetId,
-          level: normalizeOptionalString(level),
+          level: level.trim() || undefined,
         });
         res.json({ ok: true, messages, targetId: tab.targetId });
       },
@@ -74,7 +73,7 @@ export function registerBrowserAgentDebugRoutes(
         const result = await pw.getNetworkRequestsViaPlaywright({
           cdpUrl,
           targetId: tab.targetId,
-          filter: normalizeOptionalString(filter),
+          filter: filter.trim() || undefined,
           clear,
         });
         res.json({ ok: true, targetId: tab.targetId, ...result });

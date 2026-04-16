@@ -6,10 +6,6 @@ import {
   type SecretRefCredentialMatrixDocument,
 } from "./credential-matrix.js";
 
-function buildSecretRefCredentialMatrixJson(): string {
-  return `${JSON.stringify(buildSecretRefCredentialMatrix(), null, 2)}\n`;
-}
-
 describe("secret target registry docs", () => {
   it("stays in sync with docs/reference/secretref-user-supplied-credentials-matrix.json", () => {
     const pathname = path.join(
@@ -19,9 +15,9 @@ describe("secret target registry docs", () => {
       "secretref-user-supplied-credentials-matrix.json",
     );
     const raw = fs.readFileSync(pathname, "utf8");
-    const expected = buildSecretRefCredentialMatrixJson();
+    const parsed = JSON.parse(raw) as unknown;
 
-    expect(raw).toBe(expected);
+    expect(parsed).toEqual(buildSecretRefCredentialMatrix());
   });
 
   it("stays in sync with docs/reference/secretref-credential-surface.md", () => {

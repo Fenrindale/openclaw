@@ -21,10 +21,6 @@ import {
   listKnownProviderAuthEnvVarNames,
   omitEnvKeysCaseInsensitive,
 } from "../secrets/provider-env-vars.js";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-} from "../shared/string-coerce.js";
 import { sanitizeTerminalText } from "../terminal/safe-text.js";
 import { classifyAcpToolApproval, type AcpApprovalClass } from "./approval-classifier.js";
 
@@ -106,7 +102,7 @@ function promptUserPermission(toolName: string | undefined, toolTitle?: string):
         : toolTitle
       : (toolName ?? "unknown tool");
     rl.question(`\n[permission] Allow "${label}"? (y/N) `, (answer) => {
-      const approved = normalizeLowercaseStringOrEmpty(answer) === "y";
+      const approved = answer.trim().toLowerCase() === "y";
       console.error(`[permission ${approved ? "approved" : "denied"}] ${toolName ?? "unknown"}`);
       finish(approved);
     });
@@ -213,11 +209,11 @@ export function shouldStripProviderAuthEnvVarsForAcpServer(
     defaultServerArgs?: string[];
   } = {},
 ): boolean {
-  const serverCommand = normalizeOptionalString(params.serverCommand);
+  const serverCommand = params.serverCommand?.trim();
   if (!serverCommand) {
     return true;
   }
-  const defaultServerCommand = normalizeOptionalString(params.defaultServerCommand);
+  const defaultServerCommand = params.defaultServerCommand?.trim();
   if (!defaultServerCommand || serverCommand !== defaultServerCommand) {
     return false;
   }
@@ -286,7 +282,7 @@ function resolveSelfEntryPath(): string | null {
     // ignore
   }
 
-  const argv1 = normalizeOptionalString(process.argv[1]);
+  const argv1 = process.argv[1]?.trim();
   if (argv1) {
     return path.isAbsolute(argv1) ? argv1 : path.resolve(process.cwd(), argv1);
   }

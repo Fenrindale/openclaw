@@ -11,9 +11,7 @@ import {
 } from "../../agents/tool-catalog.js";
 import { summarizeToolDescriptionText } from "../../agents/tool-description-summary.js";
 import { loadConfig } from "../../config/config.js";
-import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { getPluginToolMeta, resolvePluginTools } from "../../plugins/tools.js";
-import { normalizeOptionalString } from "../../shared/string-coerce.js";
 import {
   ErrorCodes,
   errorShape,
@@ -44,7 +42,7 @@ type ToolCatalogGroup = {
 function resolveAgentIdOrRespondError(rawAgentId: unknown, respond: RespondFn) {
   const cfg = loadConfig();
   const knownAgents = listAgentIds(cfg);
-  const requestedAgentId = normalizeOptionalString(rawAgentId) ?? "";
+  const requestedAgentId = typeof rawAgentId === "string" ? rawAgentId.trim() : "";
   const agentId = requestedAgentId || resolveDefaultAgentId(cfg);
   if (requestedAgentId && !knownAgents.includes(agentId)) {
     respond(
@@ -73,7 +71,7 @@ function buildCoreGroups(): ToolCatalogGroup[] {
 }
 
 function buildPluginGroups(params: {
-  cfg: OpenClawConfig;
+  cfg: ReturnType<typeof loadConfig>;
   agentId: string;
   existingToolNames: Set<string>;
 }): ToolCatalogGroup[] {
@@ -107,7 +105,7 @@ function buildPluginGroups(params: {
       } as ToolCatalogGroup);
     existing.tools.push({
       id: tool.name,
-      label: normalizeOptionalString(tool.label) ?? tool.name,
+      label: typeof tool.label === "string" && tool.label.trim() ? tool.label.trim() : tool.name,
       description: summarizeToolDescriptionText({
         rawDescription: typeof tool.description === "string" ? tool.description : undefined,
         displaySummary: tool.displaySummary,
@@ -128,11 +126,11 @@ function buildPluginGroups(params: {
 }
 
 export function buildToolsCatalogResult(params: {
-  cfg: OpenClawConfig;
+  cfg: ReturnType<typeof loadConfig>;
   agentId?: string;
   includePlugins?: boolean;
 }): ToolsCatalogResult {
-  const agentId = normalizeOptionalString(params.agentId) || resolveDefaultAgentId(params.cfg);
+  const agentId = params.agentId?.trim() || resolveDefaultAgentId(params.cfg);
   const includePlugins = params.includePlugins !== false;
   const groups = buildCoreGroups();
   if (includePlugins) {

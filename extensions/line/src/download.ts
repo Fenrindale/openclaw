@@ -2,7 +2,6 @@ import fs from "node:fs";
 import { messagingApi } from "@line/bot-sdk";
 import { logVerbose } from "openclaw/plugin-sdk/runtime-env";
 import { buildRandomTempFilePath } from "openclaw/plugin-sdk/temp-path";
-import { lowercasePreservingWhitespace } from "openclaw/plugin-sdk/text-runtime";
 
 interface DownloadResult {
   path: string;
@@ -79,7 +78,7 @@ function detectContentType(buffer: Buffer): string {
       return "image/webp";
     }
     if (hasFtypBox) {
-      const majorBrand = lowercasePreservingWhitespace(buffer.toString("ascii", 8, 12));
+      const majorBrand = buffer.toString("ascii", 8, 12).toLowerCase();
       if (AUDIO_BRANDS.has(majorBrand)) {
         return "audio/mp4";
       }

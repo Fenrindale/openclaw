@@ -1,5 +1,4 @@
 import { GoogleAuth, OAuth2Client } from "google-auth-library";
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
 import type { ResolvedGoogleChatAccount } from "./accounts.js";
 
 const CHAT_SCOPE = "https://www.googleapis.com/auth/chat.bot";
@@ -114,7 +113,9 @@ export async function verifyGoogleChatRequest(params: {
         audience,
       });
       const payload = ticket.getPayload();
-      const email = normalizeLowercaseStringOrEmpty(payload?.email ?? "");
+      const email = String(payload?.email ?? "")
+        .trim()
+        .toLowerCase();
       if (!payload?.email_verified) {
         return { ok: false, reason: "email not verified" };
       }
@@ -124,13 +125,13 @@ export async function verifyGoogleChatRequest(params: {
       if (!ADDON_ISSUER_PATTERN.test(email)) {
         return { ok: false, reason: `invalid issuer: ${email}` };
       }
-      const expectedAddOnPrincipal = normalizeLowercaseStringOrEmpty(
-        params.expectedAddOnPrincipal ?? "",
-      );
+      const expectedAddOnPrincipal = params.expectedAddOnPrincipal?.trim().toLowerCase();
       if (!expectedAddOnPrincipal) {
         return { ok: false, reason: "missing add-on principal binding" };
       }
-      const tokenPrincipal = normalizeLowercaseStringOrEmpty(payload?.sub ?? "");
+      const tokenPrincipal = String(payload?.sub ?? "")
+        .trim()
+        .toLowerCase();
       if (!tokenPrincipal || tokenPrincipal !== expectedAddOnPrincipal) {
         return {
           ok: false,

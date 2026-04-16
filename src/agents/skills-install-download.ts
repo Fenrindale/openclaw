@@ -10,11 +10,10 @@ import { writeFileFromPathWithinRoot } from "../infra/fs-safe.js";
 import { assertCanonicalPathWithinBase } from "../infra/install-safe-path.js";
 import { fetchWithSsrFGuard } from "../infra/net/fetch-guard.js";
 import { isWithinDir } from "../infra/path-safety.js";
-import { normalizeOptionalLowercaseString } from "../shared/string-coerce.js";
 import { ensureDir, resolveUserPath } from "../utils.js";
 import { extractArchive } from "./skills-install-extract.js";
 import { formatInstallFailureMessage } from "./skills-install-output.js";
-import type { SkillInstallResult } from "./skills-install.types.js";
+import type { SkillInstallResult } from "./skills-install.js";
 import type { SkillEntry, SkillInstallSpec } from "./skills.js";
 import { resolveSkillToolsRootDir } from "./skills/tools-dir.js";
 
@@ -44,14 +43,11 @@ function resolveDownloadTargetDir(entry: SkillEntry, spec: SkillInstallSpec): st
 }
 
 function resolveArchiveType(spec: SkillInstallSpec, filename: string): string | undefined {
-  const explicit = normalizeOptionalLowercaseString(spec.archive);
+  const explicit = spec.archive?.trim().toLowerCase();
   if (explicit) {
     return explicit;
   }
-  const lower = normalizeOptionalLowercaseString(filename);
-  if (!lower) {
-    return undefined;
-  }
+  const lower = filename.toLowerCase();
   if (lower.endsWith(".tar.gz") || lower.endsWith(".tgz")) {
     return "tar.gz";
   }

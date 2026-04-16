@@ -1,4 +1,3 @@
-import { normalizeStringifiedOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import { getMatrixRuntime } from "../../runtime.js";
 import type { MatrixConfig } from "../../types.js";
 import type { MatrixClient } from "../sdk.js";
@@ -19,8 +18,8 @@ export function registerMatrixAutoJoin(params: {
   };
   const autoJoin = accountConfig.autoJoin ?? "off";
   const rawAllowlist = (accountConfig.autoJoinAllowlist ?? [])
-    .map((entry) => normalizeStringifiedOptionalString(entry))
-    .filter((entry): entry is string => Boolean(entry));
+    .map((entry) => String(entry).trim())
+    .filter(Boolean);
   const autoJoinAllowlist = new Set(rawAllowlist);
   const allowedRoomIds = new Set(rawAllowlist.filter((entry) => entry.startsWith("!")));
   const allowedAliases = rawAllowlist.filter((entry) => entry.startsWith("#"));

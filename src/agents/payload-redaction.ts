@@ -1,6 +1,5 @@
 import crypto from "node:crypto";
 import { estimateBase64DecodedBytes } from "../media/base64.js";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 
 export const REDACTED_IMAGE_DATA = "<redacted>";
 
@@ -13,8 +12,12 @@ const NON_CREDENTIAL_FIELD_NAMES = new Set([
   "tokens",
 ]);
 
+function toLowerTrimmed(value: unknown): string {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
 function normalizeFieldName(value: string): string {
-  return normalizeLowercaseStringOrEmpty(value.replaceAll(/[^a-z0-9]/gi, ""));
+  return value.replaceAll(/[^a-z0-9]/gi, "").toLowerCase();
 }
 
 function isCredentialFieldName(key: string): boolean {
@@ -38,9 +41,9 @@ function isCredentialFieldName(key: string): boolean {
 
 function hasImageMime(record: Record<string, unknown>): boolean {
   const candidates = [
-    normalizeLowercaseStringOrEmpty(record.mimeType),
-    normalizeLowercaseStringOrEmpty(record.media_type),
-    normalizeLowercaseStringOrEmpty(record.mime_type),
+    toLowerTrimmed(record.mimeType),
+    toLowerTrimmed(record.media_type),
+    toLowerTrimmed(record.mime_type),
   ];
   return candidates.some((value) => value.startsWith("image/"));
 }
@@ -49,7 +52,7 @@ function shouldRedactImageData(record: Record<string, unknown>): record is Recor
   if (typeof record.data !== "string") {
     return false;
   }
-  const type = normalizeLowercaseStringOrEmpty(record.type);
+  const type = toLowerTrimmed(record.type);
   return type === "image" || hasImageMime(record);
 }
 

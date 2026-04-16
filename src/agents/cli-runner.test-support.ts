@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import type { Mock } from "vitest";
 import { beforeEach, vi } from "vitest";
-import type { OpenClawConfig } from "../config/types.openclaw.js";
+import type { OpenClawConfig } from "../config/config.js";
 import type { requestHeartbeatNow } from "../infra/heartbeat-wake.js";
 import type { enqueueSystemEvent } from "../infra/system-events.js";
 import type { CliBackendPlugin } from "../plugin-sdk/cli-backend.js";
@@ -12,7 +12,6 @@ import {
 import { createEmptyPluginRegistry } from "../plugins/registry.js";
 import { setActivePluginRegistry } from "../plugins/runtime.js";
 import type { getProcessSupervisor } from "../process/supervisor/index.js";
-import { setCliAuthEpochTestDeps } from "./cli-auth-epoch.js";
 import { setCliRunnerExecuteTestDeps } from "./cli-runner/execute.js";
 import { setCliRunnerPrepareTestDeps } from "./cli-runner/prepare.js";
 import type { EmbeddedContextFile } from "./pi-embedded-helpers.js";
@@ -69,6 +68,7 @@ setCliRunnerExecuteTestDeps({
 setCliRunnerPrepareTestDeps({
   makeBootstrapWarn: () => () => {},
   resolveBootstrapContextForRun: hoisted.resolveBootstrapContextForRunMock,
+  resolveHeartbeatPrompt: async () => "",
   resolveOpenClawDocsPath: async () => null,
 });
 
@@ -107,8 +107,6 @@ type ManagedRunMock = {
 function buildOpenAICodexCliBackendFixture(): CliBackendPlugin {
   return {
     id: "codex-cli",
-    bundleMcp: true,
-    bundleMcpMode: "codex-config-overrides",
     config: {
       command: "codex",
       args: [
@@ -136,9 +134,6 @@ function buildOpenAICodexCliBackendFixture(): CliBackendPlugin {
       modelArg: "--model",
       sessionIdFields: ["thread_id"],
       sessionMode: "existing",
-      systemPromptFileConfigArg: "-c",
-      systemPromptFileConfigKey: "model_instructions_file",
-      systemPromptWhen: "first",
       imageArg: "--image",
       imageMode: "repeat",
       reliability: {
@@ -156,11 +151,8 @@ function buildAnthropicCliBackendFixture(): CliBackendPlugin {
   const clearEnv = [
     "ANTHROPIC_API_KEY",
     "ANTHROPIC_API_KEY_OLD",
-    "ANTHROPIC_API_TOKEN",
     "ANTHROPIC_AUTH_TOKEN",
     "ANTHROPIC_BASE_URL",
-    "ANTHROPIC_CUSTOM_HEADERS",
-    "ANTHROPIC_OAUTH_TOKEN",
     "ANTHROPIC_UNIX_SOCKET",
     "CLAUDE_CONFIG_DIR",
     "CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR",
@@ -196,7 +188,6 @@ function buildAnthropicCliBackendFixture(): CliBackendPlugin {
   return {
     id: "claude-cli",
     bundleMcp: true,
-    bundleMcpMode: "claude-config-file",
     config: {
       command: "claude",
       args: [
@@ -240,6 +231,9 @@ function buildAnthropicCliBackendFixture(): CliBackendPlugin {
       systemPromptArg: "--append-system-prompt",
       systemPromptMode: "append",
       systemPromptWhen: "first",
+      env: {
+        CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST: "1",
+      },
       clearEnv: [...clearEnv],
       reliability: {
         watchdog: {
@@ -255,16 +249,12 @@ function buildAnthropicCliBackendFixture(): CliBackendPlugin {
 function buildGoogleGeminiCliBackendFixture(): CliBackendPlugin {
   return {
     id: "google-gemini-cli",
-    bundleMcp: true,
-    bundleMcpMode: "gemini-system-settings",
     config: {
       command: "gemini",
-      args: ["--output-format", "json", "--prompt", "{prompt}"],
-      resumeArgs: ["--resume", "{sessionId}", "--output-format", "json", "--prompt", "{prompt}"],
+      args: ["--prompt", "--output-format", "json"],
+      resumeArgs: ["--resume", "{sessionId}", "--prompt", "--output-format", "json"],
       output: "json",
       input: "arg",
-      imageArg: "@",
-      imagePathScope: "workspace",
       modelArg: "--model",
       modelAliases: {
         pro: "gemini-3.1-pro-preview",
@@ -331,17 +321,6 @@ export const EXISTING_CODEX_CONFIG = {
 } satisfies OpenClawConfig;
 
 export async function setupCliRunnerTestModule() {
-  setupCliRunnerTestRegistry();
-  cliRunnerModulePromise ??= import("./cli-runner.js");
-  return (await cliRunnerModulePromise).runCliAgent;
-}
-
-export function setupCliRunnerTestRegistry() {
-  setCliAuthEpochTestDeps({
-    readClaudeCliCredentialsCached: () => null,
-    readCodexCliCredentialsCached: () => null,
-    loadAuthProfileStoreForRuntime: () => ({ version: 1, profiles: {} }),
-  });
   const registry = createEmptyPluginRegistry();
   registry.cliBackends = [
     {
@@ -368,6 +347,17 @@ export function setupCliRunnerTestRegistry() {
     bootstrapFiles: [],
     contextFiles: [],
   });
+  cliRunnerModulePromise ??= import("./cli-runner.js");
+  return (await cliRunnerModulePromise).runCliAgent;
+}
+
+export async function setupClaudeCliRunnerTestModule() {
+  const runCliAgent = await setupCliRunnerTestModule();
+  return (params: Parameters<typeof import("./claude-cli-runner.js").runClaudeCliAgent>[0]) =>
+    runCliAgent({
+      ...params,
+      provider: params.provider ?? "claude-cli",
+    });
 }
 
 export function stubBootstrapContext(params: {
@@ -381,6 +371,7 @@ export function restoreCliRunnerPrepareTestDeps() {
   setCliRunnerPrepareTestDeps({
     makeBootstrapWarn: () => () => {},
     resolveBootstrapContextForRun: hoisted.resolveBootstrapContextForRunMock,
+    resolveHeartbeatPrompt: async () => "",
     resolveOpenClawDocsPath: async () => null,
   });
 }

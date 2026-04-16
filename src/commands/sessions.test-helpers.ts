@@ -5,26 +5,23 @@ import path from "node:path";
 import { vi } from "vitest";
 import type { RuntimeEnv } from "../runtime.js";
 
-const sessionsConfigState = vi.hoisted(() => ({
-  loadConfig: () => ({
-    agents: {
-      defaults: {
-        model: { primary: "pi:opus" },
-        models: { "pi:opus": {} },
-        contextTokens: 32000,
-      },
-    },
-  }),
-}));
-
-vi.mock("../config/config.js", () => ({
-  loadConfig: () => sessionsConfigState.loadConfig(),
-}));
-
 export function mockSessionsConfig() {
-  // The shared config mock is hoisted above so tests can keep their
-  // existing setup call without paying `importActual` cost or nested-mock
-  // warnings before importing `sessions.ts`.
+  vi.mock("../config/config.js", async () => {
+    const actual =
+      await vi.importActual<typeof import("../config/config.js")>("../config/config.js");
+    return {
+      ...actual,
+      loadConfig: () => ({
+        agents: {
+          defaults: {
+            model: { primary: "pi:opus" },
+            models: { "pi:opus": {} },
+            contextTokens: 32000,
+          },
+        },
+      }),
+    };
+  });
 }
 
 export function makeRuntime(params?: { throwOnError?: boolean }): {

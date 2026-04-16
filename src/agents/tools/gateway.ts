@@ -1,17 +1,12 @@
 import { loadConfig, resolveGatewayPort } from "../../config/config.js";
-import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { callGateway } from "../../gateway/call.js";
 import { resolveGatewayCredentialsFromConfig, trimToUndefined } from "../../gateway/credentials.js";
 import {
   resolveLeastPrivilegeOperatorScopesForMethod,
   type OperatorScope,
 } from "../../gateway/method-scopes.js";
-import { GATEWAY_CLIENT_MODES, GATEWAY_CLIENT_NAMES } from "../../gateway/protocol/client-info.js";
 import { formatErrorMessage } from "../../infra/errors.js";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-} from "../../shared/string-coerce.js";
+import { GATEWAY_CLIENT_MODES, GATEWAY_CLIENT_NAMES } from "../../utils/message-channel.js";
 import { readStringParam } from "./common.js";
 
 export const DEFAULT_GATEWAY_URL = "ws://127.0.0.1:18789";
@@ -58,12 +53,12 @@ function canonicalizeToolGatewayWsUrl(raw: string): { origin: string; key: strin
 
   const origin = url.origin;
   // Key: protocol + host only, lowercased. (host includes IPv6 brackets + port when present)
-  const key = `${url.protocol}//${normalizeLowercaseStringOrEmpty(url.host)}`;
+  const key = `${url.protocol}//${url.host.toLowerCase()}`;
   return { origin, key };
 }
 
 function validateGatewayUrlOverrideForAgentTools(params: {
-  cfg: OpenClawConfig;
+  cfg: ReturnType<typeof loadConfig>;
   urlOverride: string;
 }): { url: string; target: GatewayOverrideTarget } {
   const { cfg } = params;
@@ -78,7 +73,8 @@ function validateGatewayUrlOverrideForAgentTools(params: {
   ]);
 
   let remoteKey: string | undefined;
-  const remoteUrl = normalizeOptionalString(cfg.gateway?.remote?.url) ?? "";
+  const remoteUrl =
+    typeof cfg.gateway?.remote?.url === "string" ? cfg.gateway.remote.url.trim() : "";
   if (remoteUrl) {
     try {
       const remote = canonicalizeToolGatewayWsUrl(remoteUrl);
@@ -105,7 +101,7 @@ function validateGatewayUrlOverrideForAgentTools(params: {
 }
 
 function resolveGatewayOverrideToken(params: {
-  cfg: OpenClawConfig;
+  cfg: ReturnType<typeof loadConfig>;
   target: GatewayOverrideTarget;
   explicitToken?: string;
 }): string | undefined {

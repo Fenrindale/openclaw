@@ -3,7 +3,6 @@ import { countPendingDescendantRunsFromRuns } from "../../../agents/subagent-reg
 import { getSubagentRunsSnapshotForRead } from "../../../agents/subagent-registry-state.js";
 import { getChannelPlugin, normalizeChannelId } from "../../../channels/plugins/index.js";
 import { getSessionBindingService } from "../../../infra/outbound/session-binding-service.js";
-import { normalizeOptionalString } from "../../../shared/string-coerce.js";
 import type { CommandHandlerResult } from "../commands-types.js";
 import { formatRunLabel, sortSubagentRuns } from "../subagents-utils.js";
 import {
@@ -119,7 +118,10 @@ export function handleSubagentsAgentsAction(ctx: SubagentsCommandContext): Comma
   if (requesterBindings.length > 0) {
     lines.push("", "acp/session bindings:", "-----");
     for (const binding of requesterBindings) {
-      const label = normalizeOptionalString(binding.metadata?.label) ?? binding.targetSessionKey;
+      const label =
+        typeof binding.metadata?.label === "string" && binding.metadata.label.trim()
+          ? binding.metadata.label.trim()
+          : binding.targetSessionKey;
       lines.push(
         `- ${label} (${formatConversationBindingText({
           conversationId: binding.conversation.conversationId,

@@ -51,76 +51,50 @@ function makeGoogleModel(id = "gemini-3.1-pro-preview") {
   } satisfies Model<"google-generative-ai">;
 }
 
-function createCacheFetchMock(params: { name: string; expireTime: string }) {
-  return vi.fn().mockResolvedValue(
-    new Response(JSON.stringify(params), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    }),
-  );
-}
-
-function createCapturingStreamFn(result = "stream") {
-  let capturedPayload: Record<string, unknown> | undefined;
-  const streamFn = vi.fn(
-    (
-      model: Parameters<StreamFn>[0],
-      _context: Parameters<StreamFn>[1],
-      options: Parameters<StreamFn>[2],
-    ) => {
-      const payload: Record<string, unknown> = {};
-      void options?.onPayload?.(payload, model);
-      capturedPayload = payload;
-      return result as never;
-    },
-  );
-  return {
-    streamFn,
-    getCapturedPayload: () => capturedPayload,
-  };
-}
-
-function preparePromptCacheStream(params: {
-  fetchMock: ReturnType<typeof vi.fn>;
-  now: number;
-  sessionManager: ReturnType<typeof makeSessionManager>;
-  streamFn: StreamFn;
-}) {
-  return prepareGooglePromptCacheStreamFn(
-    {
-      apiKey: "gemini-api-key",
-      extraParams: { cacheRetention: "long" },
-      model: makeGoogleModel(),
-      modelId: "gemini-3.1-pro-preview",
-      provider: "google",
-      sessionManager: params.sessionManager,
-      streamFn: params.streamFn,
-      systemPrompt: "Follow policy.",
-    },
-    {
-      buildGuardedFetch: () => params.fetchMock as typeof fetch,
-      now: () => params.now,
-    },
-  );
-}
-
 describe("google prompt cache", () => {
   it("creates cached content from the system prompt and strips that prompt from live requests", async () => {
     const now = 1_000_000;
     const entries: SessionCustomEntry[] = [];
     const sessionManager = makeSessionManager(entries);
-    const fetchMock = createCacheFetchMock({
-      name: "cachedContents/system-cache-1",
-      expireTime: new Date(now + 3_600_000).toISOString(),
-    });
-    const { streamFn: innerStreamFn, getCapturedPayload } = createCapturingStreamFn();
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          name: "cachedContents/system-cache-1",
+          expireTime: new Date(now + 3_600_000).toISOString(),
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    let capturedPayload: Record<string, unknown> | undefined;
+    const innerStreamFn = vi.fn(
+      (
+        model: Parameters<StreamFn>[0],
+        _context: Parameters<StreamFn>[1],
+        options: Parameters<StreamFn>[2],
+      ) => {
+        const payload: Record<string, unknown> = {};
+        void options?.onPayload?.(payload, model);
+        capturedPayload = payload;
+        return "stream" as never;
+      },
+    );
 
-    const wrapped = await preparePromptCacheStream({
-      fetchMock,
-      now,
-      sessionManager,
-      streamFn: innerStreamFn,
-    });
+    const wrapped = await prepareGooglePromptCacheStreamFn(
+      {
+        apiKey: "gemini-api-key",
+        extraParams: { cacheRetention: "long" },
+        model: makeGoogleModel(),
+        modelId: "gemini-3.1-pro-preview",
+        provider: "google",
+        sessionManager,
+        streamFn: innerStreamFn,
+        systemPrompt: "Follow policy.",
+      },
+      {
+        buildGuardedFetch: () => fetchMock as typeof fetch,
+        now: () => now,
+      },
+    );
 
     expect(wrapped).toBeTypeOf("function");
     void wrapped?.(
@@ -169,7 +143,7 @@ describe("google prompt cache", () => {
       }),
       expect.objectContaining({ temperature: 0.2 }),
     );
-    expect(getCapturedPayload()).toMatchObject({
+    expect(capturedPayload).toMatchObject({
       cachedContent: "cachedContents/system-cache-1",
     });
     expect(entries).toHaveLength(1);
@@ -181,26 +155,63 @@ describe("google prompt cache", () => {
     const now = 2_000_000;
     const entries: SessionCustomEntry[] = [];
     const sessionManager = makeSessionManager(entries);
-    const fetchMock = createCacheFetchMock({
-      name: "cachedContents/system-cache-2",
-      expireTime: new Date(now + 3_600_000).toISOString(),
-    });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          name: "cachedContents/system-cache-2",
+          expireTime: new Date(now + 3_600_000).toISOString(),
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
 
-    await preparePromptCacheStream({
-      fetchMock,
-      now,
-      sessionManager,
-      streamFn: vi.fn(() => "first" as never),
-    });
+    await prepareGooglePromptCacheStreamFn(
+      {
+        apiKey: "gemini-api-key",
+        extraParams: { cacheRetention: "long" },
+        model: makeGoogleModel(),
+        modelId: "gemini-3.1-pro-preview",
+        provider: "google",
+        sessionManager,
+        streamFn: vi.fn(() => "first" as never),
+        systemPrompt: "Follow policy.",
+      },
+      {
+        buildGuardedFetch: () => fetchMock as typeof fetch,
+        now: () => now,
+      },
+    );
 
     fetchMock.mockClear();
-    const { streamFn: innerStreamFn, getCapturedPayload } = createCapturingStreamFn("second");
-    const wrapped = await preparePromptCacheStream({
-      fetchMock,
-      now: now + 30_000,
-      sessionManager,
-      streamFn: innerStreamFn,
-    });
+    let capturedPayload: Record<string, unknown> | undefined;
+    const innerStreamFn = vi.fn(
+      (
+        model: Parameters<StreamFn>[0],
+        _context: Parameters<StreamFn>[1],
+        options: Parameters<StreamFn>[2],
+      ) => {
+        const payload: Record<string, unknown> = {};
+        void options?.onPayload?.(payload, model);
+        capturedPayload = payload;
+        return "second" as never;
+      },
+    );
+    const wrapped = await prepareGooglePromptCacheStreamFn(
+      {
+        apiKey: "gemini-api-key",
+        extraParams: { cacheRetention: "long" },
+        model: makeGoogleModel(),
+        modelId: "gemini-3.1-pro-preview",
+        provider: "google",
+        sessionManager,
+        streamFn: innerStreamFn,
+        systemPrompt: "Follow policy.",
+      },
+      {
+        buildGuardedFetch: () => fetchMock as typeof fetch,
+        now: () => now + 30_000,
+      },
+    );
 
     void wrapped?.(
       makeGoogleModel(),
@@ -214,7 +225,7 @@ describe("google prompt cache", () => {
       expect.objectContaining({ systemPrompt: undefined }),
       expect.any(Object),
     );
-    expect(getCapturedPayload()).toMatchObject({
+    expect(capturedPayload).toMatchObject({
       cachedContent: "cachedContents/system-cache-2",
     });
   });
@@ -244,18 +255,45 @@ describe("google prompt cache", () => {
         },
       },
     ]);
-    const fetchMock = createCacheFetchMock({
-      name: "cachedContents/system-cache-3",
-      expireTime: new Date(now + 3_600_000).toISOString(),
-    });
-    const { streamFn: innerStreamFn, getCapturedPayload } = createCapturingStreamFn();
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          name: "cachedContents/system-cache-3",
+          expireTime: new Date(now + 3_600_000).toISOString(),
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    let capturedPayload: Record<string, unknown> | undefined;
+    const innerStreamFn = vi.fn(
+      (
+        model: Parameters<StreamFn>[0],
+        _context: Parameters<StreamFn>[1],
+        options: Parameters<StreamFn>[2],
+      ) => {
+        const payload: Record<string, unknown> = {};
+        void options?.onPayload?.(payload, model);
+        capturedPayload = payload;
+        return "stream" as never;
+      },
+    );
 
-    const wrapped = await preparePromptCacheStream({
-      fetchMock,
-      now,
-      sessionManager,
-      streamFn: innerStreamFn,
-    });
+    const wrapped = await prepareGooglePromptCacheStreamFn(
+      {
+        apiKey: "gemini-api-key",
+        extraParams: { cacheRetention: "long" },
+        model: makeGoogleModel(),
+        modelId: "gemini-3.1-pro-preview",
+        provider: "google",
+        sessionManager,
+        streamFn: innerStreamFn,
+        systemPrompt: "Follow policy.",
+      },
+      {
+        buildGuardedFetch: () => fetchMock as typeof fetch,
+        now: () => now,
+      },
+    );
 
     void wrapped?.(
       makeGoogleModel(),
@@ -273,7 +311,7 @@ describe("google prompt cache", () => {
       expect.objectContaining({ systemPrompt: undefined }),
       expect.any(Object),
     );
-    expect(getCapturedPayload()).toMatchObject({
+    expect(capturedPayload).toMatchObject({
       cachedContent: "cachedContents/system-cache-3",
     });
   });

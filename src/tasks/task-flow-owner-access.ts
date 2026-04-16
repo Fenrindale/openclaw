@@ -1,4 +1,3 @@
-import { normalizeOptionalString } from "../shared/string-coerce.js";
 import {
   findLatestTaskFlowForOwnerKey,
   getTaskFlowById,
@@ -6,26 +5,32 @@ import {
 } from "./task-flow-registry.js";
 import type { TaskFlowRecord } from "./task-flow-registry.types.js";
 
+function normalizeOwnerKey(ownerKey?: string): string | undefined {
+  const trimmed = ownerKey?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function canOwnerAccessFlow(flow: TaskFlowRecord, callerOwnerKey: string): boolean {
+  return normalizeOwnerKey(flow.ownerKey) === normalizeOwnerKey(callerOwnerKey);
+}
+
 export function getTaskFlowByIdForOwner(params: {
   flowId: string;
   callerOwnerKey: string;
 }): TaskFlowRecord | undefined {
   const flow = getTaskFlowById(params.flowId);
-  return flow &&
-    normalizeOptionalString(flow.ownerKey) === normalizeOptionalString(params.callerOwnerKey)
-    ? flow
-    : undefined;
+  return flow && canOwnerAccessFlow(flow, params.callerOwnerKey) ? flow : undefined;
 }
 
 export function listTaskFlowsForOwner(params: { callerOwnerKey: string }): TaskFlowRecord[] {
-  const ownerKey = normalizeOptionalString(params.callerOwnerKey);
+  const ownerKey = normalizeOwnerKey(params.callerOwnerKey);
   return ownerKey ? listTaskFlowsForOwnerKey(ownerKey) : [];
 }
 
 export function findLatestTaskFlowForOwner(params: {
   callerOwnerKey: string;
 }): TaskFlowRecord | undefined {
-  const ownerKey = normalizeOptionalString(params.callerOwnerKey);
+  const ownerKey = normalizeOwnerKey(params.callerOwnerKey);
   return ownerKey ? findLatestTaskFlowForOwnerKey(ownerKey) : undefined;
 }
 
@@ -40,8 +45,8 @@ export function resolveTaskFlowForLookupTokenForOwner(params: {
   if (direct) {
     return direct;
   }
-  const normalizedToken = normalizeOptionalString(params.token);
-  const normalizedCallerOwnerKey = normalizeOptionalString(params.callerOwnerKey);
+  const normalizedToken = normalizeOwnerKey(params.token);
+  const normalizedCallerOwnerKey = normalizeOwnerKey(params.callerOwnerKey);
   if (!normalizedToken || normalizedToken !== normalizedCallerOwnerKey) {
     return undefined;
   }

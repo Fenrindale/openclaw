@@ -1,8 +1,4 @@
 import { getProviderEnvVars } from "../secrets/provider-env-vars.js";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-} from "../shared/string-coerce.js";
 import { normalizeProviderId } from "./model-selection.js";
 
 const KEY_SPLIT_RE = /[\s,;]+/g;
@@ -19,11 +15,6 @@ type ProviderApiKeyConfig = {
   primaryVar?: string;
   prefixedVar?: string;
   fallbackVars: string[];
-};
-
-type CollectProviderApiKeysOptions = {
-  env?: NodeJS.ProcessEnv;
-  providerEnvVars?: readonly string[];
 };
 
 const PROVIDER_API_KEY_CONFIG: Record<string, Omit<ProviderApiKeyConfig, "fallbackVars">> = {
@@ -63,13 +54,13 @@ function parseKeyList(raw?: string | null): string[] {
     .filter(Boolean);
 }
 
-function collectEnvPrefixedKeys(prefix: string, env: NodeJS.ProcessEnv): string[] {
+function collectEnvPrefixedKeys(prefix: string): string[] {
   const keys: string[] = [];
-  for (const [name, value] of Object.entries(env)) {
+  for (const [name, value] of Object.entries(process.env)) {
     if (!name.startsWith(prefix)) {
       continue;
     }
-    const trimmed = normalizeOptionalString(value);
+    const trimmed = value?.trim();
     if (!trimmed) {
       continue;
     }
@@ -107,31 +98,24 @@ function resolveProviderApiKeyConfig(provider: string): ProviderApiKeyConfig {
   };
 }
 
-export function collectProviderApiKeys(
-  provider: string,
-  options: CollectProviderApiKeysOptions = {},
-): string[] {
-  const env = options.env ?? process.env;
+export function collectProviderApiKeys(provider: string): string[] {
   const normalizedProvider = normalizeProviderId(provider);
   const config = resolveProviderApiKeyConfig(normalizedProvider);
 
-  const forcedSingle = config.liveSingle
-    ? normalizeOptionalString(env[config.liveSingle])
-    : undefined;
+  const forcedSingle = config.liveSingle ? process.env[config.liveSingle]?.trim() : undefined;
   if (forcedSingle) {
     return [forcedSingle];
   }
 
-  const fromList = parseKeyList(config.listVar ? env[config.listVar] : undefined);
-  const primary = config.primaryVar ? normalizeOptionalString(env[config.primaryVar]) : undefined;
-  const fromPrefixed = config.prefixedVar ? collectEnvPrefixedKeys(config.prefixedVar, env) : [];
+  const fromList = parseKeyList(config.listVar ? process.env[config.listVar] : undefined);
+  const primary = config.primaryVar ? process.env[config.primaryVar]?.trim() : undefined;
+  const fromPrefixed = config.prefixedVar ? collectEnvPrefixedKeys(config.prefixedVar) : [];
 
   const fallback = config.fallbackVars
-    .map((envVar) => normalizeOptionalString(env[envVar]))
+    .map((envVar) => process.env[envVar]?.trim())
     .filter(Boolean) as string[];
-  const manifestEnvVars = options.providerEnvVars ?? getProviderEnvVars(normalizedProvider);
-  const manifestFallback = manifestEnvVars
-    .map((envVar) => normalizeOptionalString(env[envVar]))
+  const manifestFallback = getProviderEnvVars(normalizedProvider)
+    .map((envVar) => process.env[envVar]?.trim())
     .filter(Boolean) as string[];
 
   const seen = new Set<string>();
@@ -172,7 +156,7 @@ export function collectGeminiApiKeys(): string[] {
 }
 
 export function isApiKeyRateLimitError(message: string): boolean {
-  const lower = normalizeLowercaseStringOrEmpty(message);
+  const lower = message.toLowerCase();
   if (lower.includes("rate_limit")) {
     return true;
   }
@@ -199,7 +183,7 @@ export function isAnthropicRateLimitError(message: string): boolean {
 }
 
 export function isAnthropicBillingError(message: string): boolean {
-  const lower = normalizeLowercaseStringOrEmpty(message);
+  const lower = message.toLowerCase();
   if (lower.includes("credit balance")) {
     return true;
   }

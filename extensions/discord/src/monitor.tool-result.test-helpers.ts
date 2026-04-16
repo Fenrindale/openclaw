@@ -4,11 +4,9 @@ import type { loadConfig } from "openclaw/plugin-sdk/config-runtime";
 import { vi } from "vitest";
 import {
   dispatchMock,
-  installDiscordToolResultHarnessSpies,
   loadConfigMock,
   readAllowFromStoreMock,
   sendMock,
-  TOOL_RESULT_SESSION_STORE_PATH,
   updateLastRouteMock,
   upsertPairingRequestMock,
 } from "./monitor.tool-result.test-harness.js";
@@ -28,7 +26,7 @@ export const BASE_CFG: Config = {
   messages: {
     inbound: { debounceMs: 0 },
   },
-  session: { store: TOOL_RESULT_SESSION_STORE_PATH },
+  session: { store: "/tmp/openclaw-sessions.json" },
 };
 
 export const CATEGORY_GUILD_CFG = {
@@ -47,7 +45,6 @@ export const CATEGORY_GUILD_CFG = {
 } satisfies Config;
 
 export function resetDiscordToolResultHarness() {
-  installDiscordToolResultHarnessSpies();
   __resetDiscordChannelInfoCacheForTest();
   sendMock.mockClear().mockResolvedValue(undefined);
   updateLastRouteMock.mockClear();
@@ -307,7 +304,7 @@ export function createMentionRequiredGuildConfig(overrides?: Partial<Config>): C
       },
     },
     ...overrides,
-  };
+  } as Config;
 }
 
 export function captureNextDispatchCtx<

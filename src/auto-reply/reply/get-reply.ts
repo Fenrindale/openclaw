@@ -11,13 +11,11 @@ import { DEFAULT_AGENT_WORKSPACE_DIR, ensureAgentWorkspace } from "../../agents/
 import { resolveChannelModelOverride } from "../../channels/model-overrides.js";
 import { type OpenClawConfig, loadConfig } from "../../config/config.js";
 import { defaultRuntime } from "../../runtime.js";
-import { normalizeOptionalString } from "../../shared/string-coerce.js";
 import { normalizeStringEntries } from "../../shared/string-normalization.js";
-import type { GetReplyOptions } from "../get-reply-options.types.js";
-import type { ReplyPayload } from "../reply-payload.js";
 import type { MsgContext } from "../templating.js";
 import { normalizeVerboseLevel } from "../thinking.js";
 import { SILENT_REPLY_TOKEN } from "../tokens.js";
+import type { GetReplyOptions, ReplyPayload } from "../types.js";
 import { resolveDefaultModel } from "./directive-handling.defaults.js";
 import { clearInlineDirectives } from "./get-reply-directives-utils.js";
 import { resolveReplyDirectives } from "./get-reply-directives.js";
@@ -36,7 +34,6 @@ import { finalizeInboundContext } from "./inbound-context.js";
 import { emitPreAgentMessageHooks } from "./message-preprocess-hooks.js";
 import { createFastTestModelSelectionState } from "./model-selection.js";
 import { initSessionState } from "./session.js";
-import { resolveStoredModelOverride } from "./stored-model-override.js";
 import { createTypingController } from "./typing.js";
 
 type ResetCommandAction = "new" | "reset";
@@ -101,10 +98,10 @@ function hasInboundMedia(ctx: MsgContext): boolean {
   return Boolean(
     ctx.StickerMediaIncluded ||
     ctx.Sticker ||
-    normalizeOptionalString(ctx.MediaPath) ||
-    normalizeOptionalString(ctx.MediaUrl) ||
-    ctx.MediaPaths?.some((value) => normalizeOptionalString(value)) ||
-    ctx.MediaUrls?.some((value) => normalizeOptionalString(value)) ||
+    ctx.MediaPath?.trim() ||
+    ctx.MediaUrl?.trim() ||
+    ctx.MediaPaths?.some((value) => value?.trim()) ||
+    ctx.MediaUrls?.some((value) => value?.trim()) ||
     ctx.MediaTypes?.length,
   );
 }
@@ -163,9 +160,7 @@ export async function getReplyFromConfig(
     isFastTestEnv,
   });
   const targetSessionKey =
-    ctx.CommandSource === "native"
-      ? normalizeOptionalString(ctx.CommandTargetSessionKey)
-      : undefined;
+    ctx.CommandSource === "native" ? ctx.CommandTargetSessionKey?.trim() : undefined;
   const agentSessionKey = targetSessionKey || ctx.SessionKey;
   const agentId = resolveSessionAgentId({
     sessionKey: agentSessionKey,
@@ -190,9 +185,7 @@ export async function getReplyFromConfig(
     // Prefer the resolved per-agent heartbeat model passed from the heartbeat runner,
     // fall back to the global defaults heartbeat model for backward compatibility.
     const heartbeatRaw =
-      normalizeOptionalString(opts.heartbeatModelOverride) ??
-      normalizeOptionalString(agentCfg?.heartbeat?.model) ??
-      "";
+      opts.heartbeatModelOverride?.trim() ?? agentCfg?.heartbeat?.model?.trim() ?? "";
     const heartbeatRef = heartbeatRaw
       ? resolveModelRefFromString({
           raw: heartbeatRaw,
@@ -282,7 +275,8 @@ export async function getReplyFromConfig(
     triggerBodyNormalized,
     bodyStripped,
   } = sessionState;
-  if (resetTriggered && normalizeOptionalString(bodyStripped)) {
+
+  if (resetTriggered && bodyStripped?.trim()) {
     const { applyResetModelOverride } = await loadSessionResetModelRuntime();
     await applyResetModelOverride({
       cfg,
@@ -318,20 +312,8 @@ export async function getReplyFromConfig(
     parentSessionKey: sessionCtx.ParentSessionKey,
   });
   const hasSessionModelOverride = Boolean(
-    normalizeOptionalString(sessionEntry.modelOverride) ||
-    normalizeOptionalString(sessionEntry.providerOverride),
+    sessionEntry.modelOverride?.trim() || sessionEntry.providerOverride?.trim(),
   );
-  const storedModelOverride = resolveStoredModelOverride({
-    sessionEntry,
-    sessionStore,
-    sessionKey,
-    parentSessionKey: sessionEntry.parentSessionKey ?? sessionCtx.ParentSessionKey,
-    defaultProvider,
-  });
-  if (storedModelOverride?.model && !hasResolvedHeartbeatModelOverride) {
-    provider = storedModelOverride.provider ?? defaultProvider;
-    model = storedModelOverride.model;
-  }
   if (!hasResolvedHeartbeatModelOverride && !hasSessionModelOverride && channelModelOverride) {
     const resolved = resolveModelRefFromString({
       raw: channelModelOverride.model,

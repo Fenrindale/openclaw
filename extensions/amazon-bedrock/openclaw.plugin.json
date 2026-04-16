@@ -34,9 +34,6 @@
       }
     }
   },
-  "configContracts": {
-    "compatibilityMigrationPaths": ["models.bedrockDiscovery"]
-  },
   "uiHints": {
     "discovery": {
       "label": "Model Discovery",

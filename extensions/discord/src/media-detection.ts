@@ -1,5 +1,3 @@
-import { normalizeLowercaseStringOrEmpty } from "openclaw/plugin-sdk/text-runtime";
-
 const DISCORD_VIDEO_MEDIA_EXTENSIONS = new Set([".avi", ".m4v", ".mkv", ".mov", ".mp4", ".webm"]);
 
 function normalizeMediaPathForExtension(mediaUrl: string): string {
@@ -9,11 +7,11 @@ function normalizeMediaPathForExtension(mediaUrl: string): string {
   }
   try {
     const parsed = new URL(trimmed);
-    return normalizeLowercaseStringOrEmpty(parsed.pathname);
+    return parsed.pathname.toLowerCase();
   } catch {
     const withoutHash = trimmed.split("#", 1)[0] ?? trimmed;
     const withoutQuery = withoutHash.split("?", 1)[0] ?? withoutHash;
-    return normalizeLowercaseStringOrEmpty(withoutQuery);
+    return withoutQuery.toLowerCase();
   }
 }
 

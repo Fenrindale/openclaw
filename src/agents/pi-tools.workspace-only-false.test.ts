@@ -1,7 +1,6 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { createReadTool } from "@mariozechner/pi-coding-agent";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@mariozechner/pi-ai", async () => {
@@ -23,14 +22,7 @@ vi.mock("@mariozechner/pi-ai/oauth", async () => {
   };
 });
 
-import {
-  createHostWorkspaceEditTool,
-  createHostWorkspaceWriteTool,
-  createOpenClawReadTool,
-  wrapToolMemoryFlushAppendOnlyWrite,
-  wrapToolWorkspaceRootGuard,
-} from "./pi-tools.read.js";
-import type { AnyAgentTool } from "./tools/common.js";
+import { createOpenClawCodingTools } from "./pi-tools.js";
 
 describe("FS tools with workspaceOnly=false", () => {
   let tmpDir: string;
@@ -45,15 +37,20 @@ describe("FS tools with workspaceOnly=false", () => {
       return content.text?.toLowerCase().includes("error") ?? false;
     });
 
-  const toolsFor = (workspaceOnly: boolean | undefined): AnyAgentTool[] => {
-    const read = createOpenClawReadTool(createReadTool(workspaceDir) as unknown as AnyAgentTool);
-    const write = createHostWorkspaceWriteTool(workspaceDir, { workspaceOnly });
-    const edit = createHostWorkspaceEditTool(workspaceDir, { workspaceOnly });
-    const tools = [read, write, edit];
-    return workspaceOnly
-      ? tools.map((tool) => wrapToolWorkspaceRootGuard(tool, workspaceDir))
-      : tools;
-  };
+  const toolsFor = (workspaceOnly: boolean | undefined) =>
+    createOpenClawCodingTools({
+      workspaceDir,
+      config:
+        workspaceOnly === undefined
+          ? {}
+          : {
+              tools: {
+                fs: {
+                  workspaceOnly,
+                },
+              },
+            },
+    });
 
   const runFsTool = async (
     toolName: "write" | "edit" | "read",
@@ -208,13 +205,20 @@ describe("FS tools with workspaceOnly=false", () => {
     await fs.mkdir(path.dirname(allowedAbsolutePath), { recursive: true });
     await fs.writeFile(allowedAbsolutePath, "seed");
 
-    const tools = [
-      createOpenClawReadTool(createReadTool(workspaceDir) as unknown as AnyAgentTool),
-      wrapToolMemoryFlushAppendOnlyWrite(createHostWorkspaceWriteTool(workspaceDir), {
-        root: workspaceDir,
-        relativePath: allowedRelativePath,
-      }),
-    ];
+    const tools = createOpenClawCodingTools({
+      workspaceDir,
+      trigger: "memory",
+      memoryFlushWritePath: allowedRelativePath,
+      config: {
+        tools: {
+          exec: {
+            applyPatch: {},
+          },
+        },
+      },
+      modelProvider: "openai",
+      modelId: "gpt-5",
+    });
 
     const writeTool = tools.find((tool) => tool.name === "write");
     expect(writeTool).toBeDefined();

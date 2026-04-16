@@ -1,5 +1,4 @@
 import type { SessionId } from "@agentclientprotocol/sdk";
-import { normalizeOptionalLowercaseString } from "../shared/string-coerce.js";
 import { VERSION } from "../version.js";
 
 export const ACP_PROVENANCE_MODE_VALUES = ["off", "meta", "meta+receipt"] as const;
@@ -9,10 +8,10 @@ export type AcpProvenanceMode = (typeof ACP_PROVENANCE_MODE_VALUES)[number];
 export function normalizeAcpProvenanceMode(
   value: string | undefined,
 ): AcpProvenanceMode | undefined {
-  const normalized = normalizeOptionalLowercaseString(value);
-  if (!normalized) {
+  if (!value) {
     return undefined;
   }
+  const normalized = value.trim().toLowerCase();
   return (ACP_PROVENANCE_MODE_VALUES as readonly string[]).includes(normalized)
     ? (normalized as AcpProvenanceMode)
     : undefined;

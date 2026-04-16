@@ -1,9 +1,4 @@
 import { sanitizeAgentId } from "../routing/session-key.js";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalLowercaseString,
-  normalizeOptionalString,
-} from "../shared/string-coerce.js";
 import { isRecord } from "../utils.js";
 import {
   TimeoutSecondsFieldSchema,
@@ -51,8 +46,8 @@ function normalizeTrimmedStringArray(
 ): string[] | null | undefined {
   if (Array.isArray(value)) {
     const normalized = value
-      .map((entry) => normalizeOptionalString(entry))
-      .filter((entry): entry is string => Boolean(entry));
+      .filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
+      .map((entry) => entry.trim());
     if (normalized.length === 0 && value.length > 0) {
       return undefined;
     }
@@ -66,14 +61,14 @@ function normalizeTrimmedStringArray(
 
 function coerceSchedule(schedule: UnknownRecord) {
   const next: UnknownRecord = { ...schedule };
-  const rawKind = normalizeLowercaseStringOrEmpty(schedule.kind);
+  const rawKind = typeof schedule.kind === "string" ? schedule.kind.trim().toLowerCase() : "";
   const kind = rawKind === "at" || rawKind === "every" || rawKind === "cron" ? rawKind : undefined;
-  const exprRaw = normalizeOptionalString(schedule.expr) ?? "";
-  const legacyCronRaw = normalizeOptionalString(schedule.cron) ?? "";
+  const exprRaw = typeof schedule.expr === "string" ? schedule.expr.trim() : "";
+  const legacyCronRaw = typeof schedule.cron === "string" ? schedule.cron.trim() : "";
   const normalizedExpr = exprRaw || legacyCronRaw;
   const atMsRaw = schedule.atMs;
   const atRaw = schedule.at;
-  const atString = normalizeOptionalString(atRaw) ?? "";
+  const atString = typeof atRaw === "string" ? atRaw.trim() : "";
   const parsedAtMs =
     typeof atMsRaw === "number"
       ? atMsRaw
@@ -146,7 +141,7 @@ function coerceSchedule(schedule: UnknownRecord) {
 
 function coercePayload(payload: UnknownRecord) {
   const next: UnknownRecord = { ...payload };
-  const kindRaw = normalizeLowercaseStringOrEmpty(next.kind);
+  const kindRaw = typeof next.kind === "string" ? next.kind.trim().toLowerCase() : "";
   if (kindRaw === "agentturn") {
     next.kind = "agentTurn";
   } else if (kindRaw === "systemevent") {
@@ -155,8 +150,8 @@ function coercePayload(payload: UnknownRecord) {
     next.kind = kindRaw;
   }
   if (!next.kind) {
-    const hasMessage = Boolean(normalizeOptionalString(next.message));
-    const hasText = Boolean(normalizeOptionalString(next.text));
+    const hasMessage = typeof next.message === "string" && next.message.trim().length > 0;
+    const hasText = typeof next.text === "string" && next.text.trim().length > 0;
     if (hasMessage) {
       next.kind = "agentTurn";
     } else if (hasText) {
@@ -167,13 +162,13 @@ function coercePayload(payload: UnknownRecord) {
     }
   }
   if (typeof next.message === "string") {
-    const trimmed = normalizeOptionalString(next.message) ?? "";
+    const trimmed = next.message.trim();
     if (trimmed) {
       next.message = trimmed;
     }
   }
   if (typeof next.text === "string") {
-    const trimmed = normalizeOptionalString(next.text) ?? "";
+    const trimmed = next.text.trim();
     if (trimmed) {
       next.text = trimmed;
     }
@@ -289,12 +284,12 @@ function coerceDelivery(delivery: UnknownRecord) {
 }
 
 function inferTopLevelPayload(next: UnknownRecord) {
-  const message = normalizeOptionalString(next.message) ?? "";
+  const message = typeof next.message === "string" ? next.message.trim() : "";
   if (message) {
     return { kind: "agentTurn", message } satisfies UnknownRecord;
   }
 
-  const text = normalizeOptionalString(next.text) ?? "";
+  const text = typeof next.text === "string" ? next.text.trim() : "";
   if (text) {
     return { kind: "systemEvent", text } satisfies UnknownRecord;
   }
@@ -321,7 +316,7 @@ function normalizeSessionTarget(raw: unknown) {
     return undefined;
   }
   const trimmed = raw.trim();
-  const lower = normalizeLowercaseStringOrEmpty(trimmed);
+  const lower = trimmed.toLowerCase();
   if (lower === "main" || lower === "isolated" || lower === "current") {
     return lower;
   }
@@ -336,7 +331,7 @@ function normalizeWakeMode(raw: unknown) {
   if (typeof raw !== "string") {
     return undefined;
   }
-  const trimmed = normalizeOptionalLowercaseString(raw);
+  const trimmed = raw.trim().toLowerCase();
   if (trimmed === "now" || trimmed === "next-heartbeat") {
     return trimmed;
   }
@@ -345,13 +340,12 @@ function normalizeWakeMode(raw: unknown) {
 
 function copyTopLevelAgentTurnFields(next: UnknownRecord, payload: UnknownRecord) {
   const copyString = (field: "model" | "thinking") => {
-    if (normalizeOptionalString(payload[field])) {
+    if (typeof payload[field] === "string" && payload[field].trim()) {
       return;
     }
     const value = next[field];
-    const normalized = normalizeOptionalString(value);
-    if (normalized) {
-      payload[field] = normalized;
+    if (typeof value === "string" && value.trim()) {
+      payload[field] = value.trim();
     }
   };
   copyString("model");
@@ -445,7 +439,7 @@ export function normalizeCronJobInput(
     if (typeof enabled === "boolean") {
       next.enabled = enabled;
     } else if (typeof enabled === "string") {
-      const trimmed = normalizeOptionalLowercaseString(enabled);
+      const trimmed = enabled.trim().toLowerCase();
       if (trimmed === "true") {
         next.enabled = true;
       }

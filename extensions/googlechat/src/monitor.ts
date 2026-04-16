@@ -3,7 +3,6 @@ import {
   deliverTextOrMediaReply,
   resolveSendableOutboundReplyParts,
 } from "openclaw/plugin-sdk/reply-payload";
-import { normalizeOptionalLowercaseString } from "openclaw/plugin-sdk/text-runtime";
 import type { OpenClawConfig } from "../runtime-api.js";
 import {
   createChannelReplyPipeline,
@@ -73,7 +72,7 @@ export function registerGoogleChatWebhookTarget(target: WebhookTarget): () => vo
 }
 
 function normalizeAudienceType(value?: string | null): GoogleChatAudienceType | undefined {
-  const normalized = normalizeOptionalLowercaseString(value);
+  const normalized = value?.trim().toLowerCase();
   if (normalized === "app-url" || normalized === "app_url" || normalized === "app") {
     return "app-url";
   }

@@ -6,7 +6,6 @@ import {
 } from "../agents/subagent-control.js";
 import { getLatestSubagentRunByChildSessionKey } from "../agents/subagent-registry.js";
 import { loadConfig } from "../config/config.js";
-import { normalizeOptionalString } from "../shared/string-coerce.js";
 import type { AuthRateLimiter } from "./auth-rate-limit.js";
 import { isLocalDirectRequest, type ResolvedGatewayAuth } from "./auth.js";
 import { sendJson, sendMethodNotAllowed } from "./http-common.js";
@@ -68,9 +67,7 @@ export async function handleSessionKillHttpRequest(
 
   const trustedProxies = opts.trustedProxies ?? cfg.gateway?.trustedProxies;
   const allowRealIpFallback = opts.allowRealIpFallback ?? cfg.gateway?.allowRealIpFallback;
-  const requesterSessionKey = normalizeOptionalString(
-    req.headers[REQUESTER_SESSION_KEY_HEADER]?.toString(),
-  );
+  const requesterSessionKey = req.headers[REQUESTER_SESSION_KEY_HEADER]?.toString().trim();
   const allowLocalAdminKill = isLocalDirectRequest(req, trustedProxies, allowRealIpFallback);
   const requestedScopes = resolveTrustedHttpOperatorScopes(req, requestAuth);
 

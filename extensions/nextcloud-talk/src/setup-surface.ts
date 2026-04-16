@@ -6,7 +6,6 @@ import {
   setSetupChannelEnabled,
   type ChannelSetupWizard,
 } from "openclaw/plugin-sdk/setup";
-import { normalizeOptionalString } from "openclaw/plugin-sdk/text-runtime";
 import { resolveNextcloudTalkAccount } from "./accounts.js";
 import {
   clearNextcloudTalkAccountFields,
@@ -64,7 +63,7 @@ export const nextcloudTalkSetupWizard: ChannelSetupWizard = {
       initialValue: hasApiCredentials,
     });
     if (!configureApiCredentials) {
-      return undefined;
+      return;
     }
     return {
       credentialValues: {
@@ -94,7 +93,7 @@ export const nextcloudTalkSetupWizard: ChannelSetupWizard = {
           resolvedValue: resolvedAccount.secret || undefined,
           envValue:
             accountId === DEFAULT_ACCOUNT_ID
-              ? normalizeOptionalString(process.env.NEXTCLOUD_TALK_BOT_SECRET)
+              ? process.env.NEXTCLOUD_TALK_BOT_SECRET?.trim() || undefined
               : undefined,
         };
       },

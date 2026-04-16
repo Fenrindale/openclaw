@@ -1,17 +1,12 @@
 import type { AssistantMessage } from "@mariozechner/pi-ai";
-import type { OpenClawConfig } from "../../config/types.openclaw.js";
-import { estimateBase64DecodedBytes } from "../../media/base64.js";
-import { normalizeLowercaseStringOrEmpty } from "../../shared/string-coerce.js";
+import type { OpenClawConfig } from "../../config/config.js";
 import { findNormalizedProviderValue } from "../model-selection.js";
 import { extractAssistantText } from "../pi-embedded-utils.js";
 import { coerceToolModelConfig, type ToolModelConfig } from "./model-config.helpers.js";
 
 export type ImageModelConfig = ToolModelConfig;
 
-export function decodeDataUrl(
-  dataUrl: string,
-  opts?: { maxBytes?: number },
-): {
+export function decodeDataUrl(dataUrl: string): {
   buffer: Buffer;
   mimeType: string;
   kind: "image";
@@ -21,14 +16,11 @@ export function decodeDataUrl(
   if (!match) {
     throw new Error("Invalid data URL (expected base64 data: URL).");
   }
-  const mimeType = normalizeLowercaseStringOrEmpty(match[1]);
+  const mimeType = (match[1] ?? "").trim().toLowerCase();
   if (!mimeType.startsWith("image/")) {
     throw new Error(`Unsupported data URL type: ${mimeType || "unknown"}`);
   }
   const b64 = (match[2] ?? "").trim();
-  if (typeof opts?.maxBytes === "number" && estimateBase64DecodedBytes(b64) > opts.maxBytes) {
-    throw new Error("Invalid data URL: payload exceeds size limit.");
-  }
   const buffer = Buffer.from(b64, "base64");
   if (buffer.length === 0) {
     throw new Error("Invalid data URL: empty payload.");

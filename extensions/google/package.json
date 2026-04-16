@@ -1,19 +1,13 @@
 {
   "name": "@openclaw/google-plugin",
-  "version": "2026.4.15-beta.1",
+  "version": "2026.4.6",
   "private": true,
   "description": "OpenClaw Google plugin",
   "type": "module",
   "dependencies": {
-    "@google/genai": "^1.49.0"
-  },
-  "devDependencies": {
-    "@openclaw/plugin-sdk": "workspace:*"
+    "@google/genai": "^1.48.0"
   },
   "openclaw": {
-    "bundle": {
-      "stageRuntimeDependencies": true
-    },
     "extensions": [
       "./index.ts"
     ]

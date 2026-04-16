@@ -1,4 +1,3 @@
-import { normalizeOptionalLowercaseString } from "../shared/string-coerce.js";
 import {
   normalizePluginInteractiveNamespace,
   resolvePluginInteractiveMatch,
@@ -50,7 +49,7 @@ export function registerPluginInteractiveHandler(
   interactiveHandlers.set(key, {
     ...registration,
     namespace,
-    channel: normalizeOptionalLowercaseString(registration.channel) ?? "",
+    channel: registration.channel.trim().toLowerCase(),
     pluginId,
     pluginName: opts?.pluginName,
     pluginRoot: opts?.pluginRoot,

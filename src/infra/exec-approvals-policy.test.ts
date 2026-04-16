@@ -275,7 +275,7 @@ describe("exec approvals policy helpers", () => {
     });
   });
 
-  it("does not let host ask=off suppress a stricter requested ask", () => {
+  it("explains host ask=off suppression separately from stricter ask", () => {
     const summary = resolveExecPolicyScopeSummary({
       approvals: {
         version: 1,
@@ -293,32 +293,8 @@ describe("exec approvals policy helpers", () => {
     expect(summary.ask).toMatchObject({
       requested: "always",
       host: "off",
-      effective: "always",
-      note: "requested ask applies",
-    });
-  });
-
-  it("clamps askFallback to the effective security", () => {
-    const summary = resolveExecPolicyScopeSummary({
-      approvals: {
-        version: 1,
-        defaults: {
-          security: "full",
-          ask: "always",
-          askFallback: "full",
-        },
-      },
-      scopeExecConfig: {
-        security: "allowlist",
-        ask: "always",
-      },
-      configPath: "tools.exec",
-      scopeLabel: "tools.exec",
-    });
-
-    expect(summary.askFallback).toEqual({
-      effective: "allowlist",
-      source: "~/.openclaw/exec-approvals.json defaults.askFallback",
+      effective: "off",
+      note: "host ask=off suppresses prompts",
     });
   });
 

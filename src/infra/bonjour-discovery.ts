@@ -1,5 +1,4 @@
 import { runCommandWithTimeout } from "../process/exec.js";
-import { normalizeOptionalLowercaseString } from "../shared/string-coerce.js";
 import { isTailnetIPv4 } from "./tailnet.js";
 import { resolveWideAreaDiscoveryDomain } from "./widearea-dns.js";
 
@@ -280,7 +279,7 @@ function parseDnsSdResolve(stdout: string, instanceName: string): GatewayBonjour
   beacon.gatewayPort = parseIntOrNull(txt.gatewayPort);
   beacon.sshPort = parseIntOrNull(txt.sshPort);
   if (txt.gatewayTls) {
-    const raw = normalizeOptionalLowercaseString(txt.gatewayTls);
+    const raw = txt.gatewayTls.trim().toLowerCase();
     beacon.gatewayTls = raw === "1" || raw === "true" || raw === "yes";
   }
   if (txt.gatewayTlsSha256) {
@@ -458,7 +457,7 @@ async function discoverWideAreaViaTailnetDns(
       cliPath: txtMap.cliPath || undefined,
     };
     if (txtMap.gatewayTls) {
-      const raw = normalizeOptionalLowercaseString(txtMap.gatewayTls);
+      const raw = txtMap.gatewayTls.trim().toLowerCase();
       beacon.gatewayTls = raw === "1" || raw === "true" || raw === "yes";
     }
     if (txtMap.gatewayTlsSha256) {
@@ -542,7 +541,7 @@ function parseAvahiBrowse(stdout: string): GatewayBonjourBeacon[] {
       current.gatewayPort = parseIntOrNull(txt.gatewayPort);
       current.sshPort = parseIntOrNull(txt.sshPort);
       if (txt.gatewayTls) {
-        const raw = normalizeOptionalLowercaseString(txt.gatewayTls);
+        const raw = txt.gatewayTls.trim().toLowerCase();
         current.gatewayTls = raw === "1" || raw === "true" || raw === "yes";
       }
       if (txt.gatewayTlsSha256) {
@@ -590,7 +589,7 @@ export async function discoverGatewayBeacons(
   const domainsRaw = Array.isArray(opts.domains) ? opts.domains : [];
   const defaultDomains = ["local.", ...(wideAreaDomain ? [wideAreaDomain] : [])];
   const domains = (domainsRaw.length > 0 ? domainsRaw : defaultDomains)
-    .map((d) => d.trim())
+    .map((d) => String(d).trim())
     .filter(Boolean)
     .map((d) => (d.endsWith(".") ? d : `${d}.`));
 

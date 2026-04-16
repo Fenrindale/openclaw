@@ -1,7 +1,5 @@
-import { normalizeOptionalLowercaseString } from "../shared/string-coerce.js";
-
 export function toPluginInteractiveRegistryKey(channel: string, namespace: string): string {
-  return `${normalizeOptionalLowercaseString(channel) ?? ""}:${namespace.trim()}`;
+  return `${channel.trim().toLowerCase()}:${namespace.trim()}`;
 }
 
 export function normalizePluginInteractiveNamespace(namespace: string): string {

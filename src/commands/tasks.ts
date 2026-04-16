@@ -1,7 +1,6 @@
 import { loadConfig } from "../config/config.js";
 import { info } from "../globals.js";
 import type { RuntimeEnv } from "../runtime.js";
-import { normalizeOptionalString } from "../shared/string-coerce.js";
 import {
   cancelTaskById,
   getTaskById,
@@ -56,7 +55,7 @@ function truncate(value: string, maxChars: number) {
 }
 
 function shortToken(value: string | undefined, maxChars = ID_PAD): string {
-  const trimmed = normalizeOptionalString(value);
+  const trimmed = value?.trim();
   if (!trimmed) {
     return "n/a";
   }
@@ -93,9 +92,9 @@ function formatTaskRows(tasks: TaskRecord[], rich: boolean) {
   const lines = [rich ? theme.heading(header) : header];
   for (const task of tasks) {
     const summary = truncate(
-      normalizeOptionalString(task.terminalSummary) ||
-        normalizeOptionalString(task.progressSummary) ||
-        normalizeOptionalString(task.label) ||
+      task.terminalSummary?.trim() ||
+        task.progressSummary?.trim() ||
+        task.label?.trim() ||
         task.task.trim(),
       80,
     );
@@ -105,7 +104,7 @@ function formatTaskRows(tasks: TaskRecord[], rich: boolean) {
       formatTaskStatusCell(task.status, rich),
       task.deliveryStatus.padEnd(DELIVERY_PAD),
       shortToken(task.runId, RUN_PAD).padEnd(RUN_PAD),
-      truncate(normalizeOptionalString(task.childSessionKey) || "n/a", 36).padEnd(36),
+      truncate(task.childSessionKey?.trim() || "n/a", 36).padEnd(36),
       summary,
     ].join(" ");
     lines.push(line.trimEnd());

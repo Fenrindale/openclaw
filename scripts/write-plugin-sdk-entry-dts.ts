@@ -70,17 +70,6 @@ for (const entry of pluginSdkEntrypoints) {
     "utf8",
   );
 
-  const packageTypeOut = path.join(
-    process.cwd(),
-    `packages/plugin-sdk/dist/src/plugin-sdk/${entry}.d.ts`,
-  );
-  fs.mkdirSync(path.dirname(packageTypeOut), { recursive: true });
-  fs.writeFileSync(
-    packageTypeOut,
-    `export * from "../../../../../dist/plugin-sdk/${entry}.js";\n`,
-    "utf8",
-  );
-
   const runtimeShim = RUNTIME_SHIMS[entry];
   if (!runtimeShim) {
     continue;
@@ -89,7 +78,3 @@ for (const entry of pluginSdkEntrypoints) {
   fs.mkdirSync(path.dirname(runtimeOut), { recursive: true });
   fs.writeFileSync(runtimeOut, runtimeShim, "utf8");
 }
-
-const stampPath = path.join(process.cwd(), "dist/plugin-sdk/.boundary-entry-shims.stamp");
-fs.mkdirSync(path.dirname(stampPath), { recursive: true });
-fs.writeFileSync(stampPath, `${new Date().toISOString()}\n`, "utf8");

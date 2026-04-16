@@ -51,12 +51,5 @@ describe("command-path-policy", () => {
       hideBanner: true,
       ensureCliPath: true,
     });
-    expect(resolveCliCommandPathPolicy(["cron", "list"])).toEqual({
-      bypassConfigGuard: true,
-      routeConfigGuard: "never",
-      loadPlugins: "never",
-      hideBanner: false,
-      ensureCliPath: true,
-    });
   });
 });

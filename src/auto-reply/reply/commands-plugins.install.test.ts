@@ -2,9 +2,9 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { withTempHome } from "../../config/home-env.test-harness.js";
+import { handleCommands } from "./commands-core.js";
 import { createCommandWorkspaceHarness } from "./commands-filesystem.test-support.js";
-import { handlePluginsCommand } from "./commands-plugins.js";
-import type { HandleCommandsParams } from "./commands-types.js";
+import { buildCommandTestParams } from "./commands.test-harness.js";
 
 const { installPluginFromPathMock, installPluginFromClawHubMock, persistPluginInstallMock } =
   vi.hoisted(() => ({
@@ -39,47 +39,6 @@ vi.mock("../../cli/plugins-install-persist.js", () => ({
 
 const workspaceHarness = createCommandWorkspaceHarness("openclaw-command-plugins-install-");
 
-function buildPluginsParams(
-  commandBodyNormalized: string,
-  workspaceDir: string,
-): HandleCommandsParams {
-  return {
-    cfg: {
-      commands: {
-        text: true,
-        plugins: true,
-      },
-      plugins: { enabled: true },
-    },
-    ctx: {
-      Provider: "whatsapp",
-      Surface: "whatsapp",
-      CommandSource: "text",
-      GatewayClientScopes: ["operator.admin", "operator.write", "operator.pairing"],
-      AccountId: undefined,
-    },
-    command: {
-      commandBodyNormalized,
-      rawBodyNormalized: commandBodyNormalized,
-      isAuthorizedSender: true,
-      senderIsOwner: true,
-      senderId: "owner",
-      channel: "whatsapp",
-      channelId: "whatsapp",
-      surface: "whatsapp",
-      ownerList: [],
-      from: "test-user",
-      to: "test-bot",
-    },
-    sessionKey: "agent:main:whatsapp:direct:test-user",
-    sessionEntry: {
-      sessionId: "session-plugin-command",
-      updatedAt: Date.now(),
-    },
-    workspaceDir,
-  } as unknown as HandleCommandsParams;
-}
-
 describe("handleCommands /plugins install", () => {
   afterEach(async () => {
     installPluginFromPathMock.mockReset();
@@ -103,11 +62,20 @@ describe("handleCommands /plugins install", () => {
       const pluginDir = path.join(workspaceDir, "fixtures", "path-install-plugin");
       await fs.mkdir(pluginDir, { recursive: true });
 
-      const params = buildPluginsParams(`/plugins install ${pluginDir}`, workspaceDir);
-      const result = await handlePluginsCommand(params, true);
-      if (result === null) {
-        throw new Error("expected plugin install result");
-      }
+      const params = buildCommandTestParams(
+        `/plugins install ${pluginDir}`,
+        {
+          commands: {
+            text: true,
+            plugins: true,
+          },
+        },
+        undefined,
+        { workspaceDir },
+      );
+      params.command.senderIsOwner = true;
+
+      const result = await handleCommands(params);
       expect(result.reply?.text).toContain('Installed plugin "path-install-plugin"');
       expect(installPluginFromPathMock).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -151,14 +119,20 @@ describe("handleCommands /plugins install", () => {
 
     await withTempHome("openclaw-command-plugins-home-", async () => {
       const workspaceDir = await workspaceHarness.createWorkspace();
-      const params = buildPluginsParams(
+      const params = buildCommandTestParams(
         "/plugins install clawhub:@openclaw/clawhub-demo@1.2.3",
-        workspaceDir,
+        {
+          commands: {
+            text: true,
+            plugins: true,
+          },
+        },
+        undefined,
+        { workspaceDir },
       );
-      const result = await handlePluginsCommand(params, true);
-      if (result === null) {
-        throw new Error("expected plugin install result");
-      }
+      params.command.senderIsOwner = true;
+
+      const result = await handleCommands(params);
       expect(result.reply?.text).toContain('Installed plugin "clawhub-demo"');
       expect(installPluginFromClawHubMock).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -205,14 +179,20 @@ describe("handleCommands /plugins install", () => {
 
     await withTempHome("openclaw-command-plugins-home-", async () => {
       const workspaceDir = await workspaceHarness.createWorkspace();
-      const params = buildPluginsParams(
+      const params = buildCommandTestParams(
         "/plugin add clawhub:@openclaw/alias-demo@1.0.0",
-        workspaceDir,
+        {
+          commands: {
+            text: true,
+            plugins: true,
+          },
+        },
+        undefined,
+        { workspaceDir },
       );
-      const result = await handlePluginsCommand(params, true);
-      if (result === null) {
-        throw new Error("expected plugin install result");
-      }
+      params.command.senderIsOwner = true;
+
+      const result = await handleCommands(params);
       expect(result.reply?.text).toContain('Installed plugin "alias-demo"');
       expect(installPluginFromClawHubMock).toHaveBeenCalledWith(
         expect.objectContaining({

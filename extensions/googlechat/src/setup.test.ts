@@ -15,13 +15,8 @@ import {
 } from "../../../test/helpers/plugins/start-account-lifecycle.js";
 import type { OpenClawConfig } from "../runtime-api.js";
 import { resolveGoogleChatAccount, type ResolvedGoogleChatAccount } from "./accounts.js";
-import {
-  listGoogleChatAccountIds,
-  resolveDefaultGoogleChatAccountId,
-} from "./channel.deps.runtime.js";
-import { startGoogleChatGatewayAccount } from "./gateway.js";
+import { googlechatPlugin } from "./channel.js";
 import { googlechatSetupAdapter } from "./setup-core.js";
-import { googlechatSetupWizard } from "./setup-surface.js";
 
 const hoisted = vi.hoisted(() => ({
   startGoogleChatMonitor: vi.fn(),
@@ -35,20 +30,8 @@ vi.mock("./monitor.js", async () => {
   };
 });
 
-const googlechatSetupPlugin = {
-  id: "googlechat",
-  meta: {
-    label: "Google Chat",
-  },
-  config: {
-    defaultAccountId: resolveDefaultGoogleChatAccountId,
-    listAccountIds: listGoogleChatAccountIds,
-  },
-  setupWizard: googlechatSetupWizard,
-} as never;
-
-const googlechatConfigure = createPluginSetupWizardConfigure(googlechatSetupPlugin);
-const googlechatStatus = createPluginSetupWizardStatus(googlechatSetupPlugin);
+const googlechatConfigure = createPluginSetupWizardConfigure(googlechatPlugin);
+const googlechatStatus = createPluginSetupWizardStatus(googlechatPlugin);
 
 function buildAccount(): ResolvedGoogleChatAccount {
   return {
@@ -182,7 +165,7 @@ describe("googlechat setup", () => {
 
   it("reads the named-account DM policy instead of the channel root", () => {
     expect(
-      googlechatSetupWizard.dmPolicy?.getCurrent(
+      googlechatPlugin.setupWizard?.dmPolicy?.getCurrent(
         {
           channels: {
             googlechat: {
@@ -251,7 +234,7 @@ describe("googlechat setup", () => {
   });
 
   it("reports account-scoped config keys for named accounts", () => {
-    expect(googlechatSetupWizard.dmPolicy?.resolveConfigKeys?.({}, "alerts")).toEqual({
+    expect(googlechatPlugin.setupWizard?.dmPolicy?.resolveConfigKeys?.({}, "alerts")).toEqual({
       policyKey: "channels.googlechat.accounts.alerts.dm.policy",
       allowFromKey: "channels.googlechat.accounts.alerts.dm.allowFrom",
     });
@@ -277,13 +260,13 @@ describe("googlechat setup", () => {
       },
     } as OpenClawConfig;
 
-    expect(googlechatSetupWizard.dmPolicy?.getCurrent(cfg)).toBe("allowlist");
-    expect(googlechatSetupWizard.dmPolicy?.resolveConfigKeys?.(cfg)).toEqual({
+    expect(googlechatPlugin.setupWizard?.dmPolicy?.getCurrent(cfg)).toBe("allowlist");
+    expect(googlechatPlugin.setupWizard?.dmPolicy?.resolveConfigKeys?.(cfg)).toEqual({
       policyKey: "channels.googlechat.accounts.alerts.dm.policy",
       allowFromKey: "channels.googlechat.accounts.alerts.dm.allowFrom",
     });
 
-    const next = googlechatSetupWizard.dmPolicy?.setPolicy(cfg, "open");
+    const next = googlechatPlugin.setupWizard?.dmPolicy?.setPolicy(cfg, "open");
     expect(next?.channels?.googlechat?.dm?.policy).toBe("disabled");
     expect(next?.channels?.googlechat?.accounts?.alerts?.dm?.policy).toBe("open");
   });
@@ -294,7 +277,7 @@ describe("googlechat setup", () => {
       text: vi.fn(async () => "users/123456789"),
     };
 
-    const next = await googlechatSetupWizard.dmPolicy?.promptAllowFrom?.({
+    const next = await googlechatPlugin.setupWizard?.dmPolicy?.promptAllowFrom?.({
       cfg: {
         channels: {
           googlechat: {
@@ -323,7 +306,7 @@ describe("googlechat setup", () => {
   });
 
   it('writes open DM policy to the named account and preserves inherited allowFrom with "*"', () => {
-    const next = googlechatSetupWizard.dmPolicy?.setPolicy(
+    const next = googlechatPlugin.setupWizard?.dmPolicy?.setPolicy(
       {
         channels: {
           googlechat: {
@@ -352,7 +335,7 @@ describe("googlechat setup", () => {
     hoisted.startGoogleChatMonitor.mockResolvedValue(unregister);
 
     const { abort, patches, task, isSettled } = startAccountAndTrackLifecycle({
-      startAccount: startGoogleChatGatewayAccount,
+      startAccount: googlechatPlugin.gateway!.startAccount!,
       account: buildAccount(),
     });
     await expectPendingUntilAbort({

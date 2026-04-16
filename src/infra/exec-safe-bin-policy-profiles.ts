@@ -1,5 +1,3 @@
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
-
 export type SafeBinProfile = {
   minPositional?: number;
   maxPositional?: number;
@@ -224,7 +222,7 @@ export const SAFE_BIN_PROFILES: Record<string, SafeBinProfile> =
   compileSafeBinProfiles(SAFE_BIN_PROFILE_FIXTURES);
 
 function normalizeSafeBinProfileName(raw: string): string | null {
-  const name = normalizeLowercaseStringOrEmpty(raw);
+  const name = raw.trim().toLowerCase();
   return name.length > 0 ? name : null;
 }
 

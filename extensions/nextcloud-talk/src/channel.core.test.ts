@@ -1,10 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
-import {
-  nextcloudTalkConfigAdapter,
-  nextcloudTalkPairingTextAdapter,
-  nextcloudTalkSecurityAdapter,
-} from "./channel.adapters.js";
-import { NextcloudTalkConfigSchema } from "./config-schema.js";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { CoreConfig } from "./types.js";
 
 vi.mock("../../../test/helpers/config/bundled-channel-config-runtime.js", () => ({
@@ -16,6 +10,14 @@ vi.mock("../../../src/channels/plugins/bundled.js", () => ({
   bundledChannelPlugins: [],
   bundledChannelSetupPlugins: [],
 }));
+
+let nextcloudTalkPlugin: typeof import("./channel.js").nextcloudTalkPlugin;
+let NextcloudTalkConfigSchema: typeof import("./config-schema.js").NextcloudTalkConfigSchema;
+
+beforeAll(async () => {
+  ({ nextcloudTalkPlugin } = await import("./channel.js"));
+  ({ NextcloudTalkConfigSchema } = await import("./config-schema.js"));
+});
 
 describe("nextcloud talk channel core", () => {
   it("accepts SecretRef botSecret and apiPassword at top-level", () => {
@@ -51,7 +53,7 @@ describe("nextcloud talk channel core", () => {
   });
 
   it("normalizes trimmed DM allowlist prefixes to lowercase ids", () => {
-    const resolveDmPolicy = nextcloudTalkSecurityAdapter.resolveDmPolicy;
+    const resolveDmPolicy = nextcloudTalkPlugin.security?.resolveDmPolicy;
     if (!resolveDmPolicy) {
       throw new Error("resolveDmPolicy unavailable");
     }
@@ -69,7 +71,7 @@ describe("nextcloud talk channel core", () => {
 
     const result = resolveDmPolicy({
       cfg,
-      account: nextcloudTalkConfigAdapter.resolveAccount(cfg, "default"),
+      account: nextcloudTalkPlugin.config.resolveAccount(cfg, "default"),
     });
     if (!result) {
       throw new Error("nextcloud-talk resolveDmPolicy returned null");
@@ -78,7 +80,7 @@ describe("nextcloud talk channel core", () => {
     expect(result.policy).toBe("allowlist");
     expect(result.allowFrom).toEqual(["  nc:User-Id  "]);
     expect(result.normalizeEntry?.("  nc:User-Id  ")).toBe("user-id");
-    expect(nextcloudTalkPairingTextAdapter.normalizeAllowEntry("  nextcloud-talk:User-Id  ")).toBe(
+    expect(nextcloudTalkPlugin.pairing?.normalizeAllowEntry?.("  nextcloud-talk:User-Id  ")).toBe(
       "user-id",
     );
   });

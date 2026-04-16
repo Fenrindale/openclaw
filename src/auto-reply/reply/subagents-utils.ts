@@ -1,13 +1,9 @@
 import type { SubagentRunRecord } from "../../agents/subagent-registry.js";
-import {
-  normalizeLowercaseStringOrEmpty,
-  normalizeOptionalString,
-} from "../../shared/string-coerce.js";
 import { sanitizeTaskStatusText } from "../../tasks/task-status.js";
 import { truncateUtf16Safe } from "../../utils.js";
 
 export function resolveSubagentLabel(entry: SubagentRunRecord, fallback = "subagent") {
-  const raw = normalizeOptionalString(entry.label) || normalizeOptionalString(entry.task) || "";
+  const raw = entry.label?.trim() || entry.task?.trim() || "";
   return raw || fallback;
 }
 
@@ -57,7 +53,7 @@ export function resolveSubagentTargetFromRuns(params: {
     unknownTarget: (value: string) => string;
   };
 }): SubagentTargetResolution {
-  const trimmed = normalizeOptionalString(params.token);
+  const trimmed = params.token?.trim();
   if (!trimmed) {
     return { error: params.errors.missingTarget };
   }
@@ -95,10 +91,8 @@ export function resolveSubagentTargetFromRuns(params: {
       ? { entry: bySessionKey }
       : { error: params.errors.unknownSession(trimmed) };
   }
-  const lowered = normalizeLowercaseStringOrEmpty(trimmed);
-  const byExactLabel = deduped.filter(
-    (entry) => normalizeLowercaseStringOrEmpty(params.label(entry)) === lowered,
-  );
+  const lowered = trimmed.toLowerCase();
+  const byExactLabel = deduped.filter((entry) => params.label(entry).toLowerCase() === lowered);
   if (byExactLabel.length === 1) {
     return { entry: byExactLabel[0] };
   }
@@ -106,7 +100,7 @@ export function resolveSubagentTargetFromRuns(params: {
     return { error: params.errors.ambiguousLabel(trimmed) };
   }
   const byLabelPrefix = deduped.filter((entry) =>
-    normalizeLowercaseStringOrEmpty(params.label(entry)).startsWith(lowered),
+    params.label(entry).toLowerCase().startsWith(lowered),
   );
   if (byLabelPrefix.length === 1) {
     return { entry: byLabelPrefix[0] };
