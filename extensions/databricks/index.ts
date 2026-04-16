@@ -273,7 +273,41 @@ export default definePluginEntry({
       }
       const normalizedBaseUrl = normalizeDatabricksBaseUrl(baseUrl);
       if (!normalizedBaseUrl) {
-        return originalRun(ctx);
+        // If the base URL was explicitly provided (e.g. via --databricks-base-url) but
+        // normalizes to empty (whitespace-only or otherwise invalid), do not silently
+        // fall back to a success path without persisting a baseUrl.  Re-prompt so the
+        // user can correct the value instead of ending up with a config that fails at
+        // runtime ("Databricks base URL not found").
+        const retryUrl = await ctx.prompter.text({
+          message:
+            "Enter Databricks Workspace Base URL (e.g. https://dbc-xxxx.cloud.databricks.com)",
+          validate: (value) =>
+            !normalizeDatabricksBaseUrl(value)
+              ? "Databricks Workspace Base URL is required."
+              : undefined,
+        });
+        const retryNormalized = normalizeDatabricksBaseUrl(retryUrl);
+        if (!retryNormalized) {
+          return originalRun(ctx);
+        }
+        const result = await originalRun(ctx);
+        const existingPatch = result.configPatch ?? {};
+        const providersPatch = existingPatch.models?.providers ?? {};
+        const databricksPatch = providersPatch[PROVIDER_ID] ?? {};
+        result.configPatch = {
+          ...existingPatch,
+          models: {
+            ...existingPatch.models,
+            providers: {
+              ...providersPatch,
+              [PROVIDER_ID]: {
+                ...databricksPatch,
+                baseUrl: retryNormalized,
+              },
+            },
+          },
+        };
+        return result;
       }
 
       const result = await originalRun(ctx);
