@@ -117,6 +117,9 @@ function mapDatabricksMessages(context: {
 
       pendingToolCalls = newToolCalls;
       seenToolResultIds = new Set();
+      // Only role, content, and stopReason are relevant for assistant messages in the
+      // normalized form. toolCalls live inside content blocks (type: "toolCall"), and
+      // toolCallId/name are only meaningful on toolResult messages.
       normalized.push({ role: msg.role, content: strippedContent, stopReason: msg.stopReason });
       continue;
     }
