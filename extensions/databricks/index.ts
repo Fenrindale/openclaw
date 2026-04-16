@@ -1,7 +1,7 @@
 import { definePluginEntry, type ProviderAuthContext, type ProviderWrapStreamFnContext } from "openclaw/plugin-sdk/plugin-entry";
 import { createAssistantMessageEventStream } from "@mariozechner/pi-ai";
 import type { StreamFn } from "@mariozechner/pi-agent-core";
-import { applyDatabricksConfig, DATABRICKS_DEFAULT_MODEL_REF } from "./api.js";
+import { DATABRICKS_DEFAULT_MODEL_REF } from "./api.js";
 import { normalizeDatabricksBaseUrl } from "./onboard.js";
 import { createProviderApiKeyAuthMethod } from "openclaw/plugin-sdk/provider-auth-api-key";
 import { fetchWithSsrFGuard } from "openclaw/plugin-sdk/ssrf-runtime";
@@ -237,7 +237,6 @@ export default definePluginEntry({
       envVar: "DATABRICKS_API_KEY",
       promptMessage: "Enter Databricks API key",
       defaultModel: DATABRICKS_DEFAULT_MODEL_REF,
-      applyConfig: (cfg) => applyDatabricksConfig(cfg),
       wizard: {
         groupId: "databricks",
         groupLabel: "Databricks",
@@ -285,9 +284,16 @@ export default definePluginEntry({
       const opts = ctx.opts as Record<string, unknown> | undefined;
       const baseUrl = normalizeDatabricksBaseUrl(typeof opts?.databricksBaseUrl === "string" ? opts.databricksBaseUrl : undefined);
 
+      // Reject incomplete non-interactive setup: baseUrl is required for Databricks to work.
+      // Failing early here prevents an invalid config from being saved and deferring the
+      // error to runtime on the first API call.
+      if (!baseUrl) {
+        return null;
+      }
+
       const result = await originalRunNonInteractive?.(ctx);
-      if (!result || !baseUrl) {
-        return result ?? null;
+      if (!result) {
+        return null;
       }
 
       const existingPatch = result.models?.providers ?? {};
@@ -379,9 +385,13 @@ export default definePluginEntry({
       wrapStreamFn: (_ctx: ProviderWrapStreamFnContext) => {
         return async (model, context, options) => {
           const streamOptions = options || {};
-          const apiKey = streamOptions.apiKey || process.env.DATABRICKS_API_KEY || process.env.DATABRICKS_TOKEN;
+          // Accept both DATABRICKS_API_KEY and DATABRICKS_TOKEN env vars (Databricks PATs are
+          // commonly stored as DATABRICKS_TOKEN in standard Databricks CLI tooling).
+          const apiKey = streamOptions.apiKey
+            ?? process.env.DATABRICKS_API_KEY
+            ?? process.env.DATABRICKS_TOKEN;
           if (!apiKey) {
-            throw new Error("Databricks API key not found. Please provide it via config or DATABRICKS_API_KEY environment variable.");
+            throw new Error("Databricks API key not found. Set DATABRICKS_API_KEY or DATABRICKS_TOKEN, or configure it via openclaw auth.");
           }
 
           const baseUrl = normalizeDatabricksBaseUrl(model.baseUrl || "");
@@ -560,9 +570,12 @@ export default definePluginEntry({
                 await releaseStream();
               }
             } catch (e: unknown) {
-              output.stopReason = "error";
+              // Preserve aborted stop reason: AbortError means the caller cancelled the
+              // stream intentionally (e.g. user hit stop), so report "aborted" not "error".
+              const isAbort = e instanceof Error && (e.name === "AbortError" || e.name === "TimeoutError");
+              output.stopReason = isAbort ? "aborted" : "error";
               output.errorMessage = e instanceof Error ? e.message : String(e);
-              stream.push({ type: "error", reason: "error", error: output });
+              stream.push({ type: isAbort ? "done" : "error", reason: output.stopReason, ...(isAbort ? { message: output } : { error: output }) });
               stream.end();
             }
           })();
