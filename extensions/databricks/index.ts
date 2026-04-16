@@ -259,10 +259,14 @@ export default definePluginEntry({
     const originalRun = defaultAuth.run;
     defaultAuth.run = async (ctx: ProviderAuthContext) => {
       const opts = ctx.opts as Record<string, unknown> | undefined;
-      let baseUrl =
+      const rawBaseUrl =
         typeof opts?.databricksBaseUrl === "string" ? opts.databricksBaseUrl : undefined;
-      if (!baseUrl) {
-        baseUrl = await ctx.prompter.text({
+
+      // Prompt for a valid base URL.  If the CLI-provided value normalizes to empty
+      // (e.g. whitespace-only), the user is asked to re-enter so the config is never
+      // left without a baseUrl that would fail at runtime.
+      const promptForBaseUrl = async () =>
+        ctx.prompter.text({
           message:
             "Enter Databricks Workspace Base URL (e.g. https://dbc-xxxx.cloud.databricks.com)",
           validate: (value) =>
@@ -270,44 +274,13 @@ export default definePluginEntry({
               ? "Databricks Workspace Base URL is required."
               : undefined,
         });
-      }
-      const normalizedBaseUrl = normalizeDatabricksBaseUrl(baseUrl);
+
+      const normalizedBaseUrl =
+        normalizeDatabricksBaseUrl(rawBaseUrl) ??
+        normalizeDatabricksBaseUrl(await promptForBaseUrl());
+
       if (!normalizedBaseUrl) {
-        // If the base URL was explicitly provided (e.g. via --databricks-base-url) but
-        // normalizes to empty (whitespace-only or otherwise invalid), do not silently
-        // fall back to a success path without persisting a baseUrl.  Re-prompt so the
-        // user can correct the value instead of ending up with a config that fails at
-        // runtime ("Databricks base URL not found").
-        const retryUrl = await ctx.prompter.text({
-          message:
-            "Enter Databricks Workspace Base URL (e.g. https://dbc-xxxx.cloud.databricks.com)",
-          validate: (value) =>
-            !normalizeDatabricksBaseUrl(value)
-              ? "Databricks Workspace Base URL is required."
-              : undefined,
-        });
-        const retryNormalized = normalizeDatabricksBaseUrl(retryUrl);
-        if (!retryNormalized) {
-          return originalRun(ctx);
-        }
-        const result = await originalRun(ctx);
-        const existingPatch = result.configPatch ?? {};
-        const providersPatch = existingPatch.models?.providers ?? {};
-        const databricksPatch = providersPatch[PROVIDER_ID] ?? {};
-        result.configPatch = {
-          ...existingPatch,
-          models: {
-            ...existingPatch.models,
-            providers: {
-              ...providersPatch,
-              [PROVIDER_ID]: {
-                ...databricksPatch,
-                baseUrl: retryNormalized,
-              },
-            },
-          },
-        };
-        return result;
+        return originalRun(ctx);
       }
 
       const result = await originalRun(ctx);
