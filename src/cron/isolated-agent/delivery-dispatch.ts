@@ -1,5 +1,9 @@
 import type { ReplyPayload } from "../../auto-reply/reply-payload.js";
-import { isSilentReplyText, stripSilentToken, SILENT_REPLY_TOKEN } from "../../auto-reply/tokens.js";
+import {
+  isSilentReplyText,
+  stripSilentToken,
+  SILENT_REPLY_TOKEN,
+} from "../../auto-reply/tokens.js";
 import type { CliDeps } from "../../cli/outbound-send-deps.js";
 import {
   resolveAgentMainSessionKey,

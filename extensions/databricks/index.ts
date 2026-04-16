@@ -188,9 +188,24 @@ function mapDatabricksMessages(context: {
       continue;
     }
 
+    // For tool-result messages, ensure content is a plain string.
+    // OpenClaw tool results can be block arrays (e.g. [{type:"text",text:"..."}]),
+    // but the OpenAI/Databricks wire format expects a string for tool role messages.
+    let wireContent: string | null = msg.content as string | null;
+    if (role === "tool" && msg.content != null && typeof msg.content !== "string") {
+      if (Array.isArray(msg.content)) {
+        wireContent = (msg.content as Array<{ type?: string; text?: string }>)
+          .filter((b) => b.type === "text" || typeof b === "string")
+          .map((b) => (typeof b === "string" ? b : (b.text ?? "")))
+          .join("");
+      } else {
+        wireContent = String(msg.content);
+      }
+    }
+
     result.push({
       role,
-      content: msg.content as string | unknown[],
+      content: wireContent,
       ...(msg.toolCallId ? { tool_call_id: msg.toolCallId } : {}),
       ...(msg.name ? { name: msg.name } : {}),
     });
@@ -307,9 +322,17 @@ export default definePluginEntry({
     const originalRunNonInteractive = defaultAuth.runNonInteractive;
     defaultAuth.runNonInteractive = async (ctx) => {
       const opts = ctx.opts as Record<string, unknown> | undefined;
-      const baseUrl = normalizeDatabricksBaseUrl(
-        typeof opts?.databricksBaseUrl === "string" ? opts.databricksBaseUrl : undefined,
-      );
+      // Try CLI flag first, then fall back to already-saved config value so
+      // re-running non-interactive setup without --databricks-base-url still works
+      // when the base URL was previously configured.
+      const savedBaseUrl = (() => {
+        const providerConfig = ctx.config?.models?.providers?.[PROVIDER_ID];
+        return typeof providerConfig?.baseUrl === "string" ? providerConfig.baseUrl : undefined;
+      })();
+      const baseUrl =
+        normalizeDatabricksBaseUrl(
+          typeof opts?.databricksBaseUrl === "string" ? opts.databricksBaseUrl : undefined,
+        ) ?? normalizeDatabricksBaseUrl(savedBaseUrl);
 
       // Reject incomplete non-interactive setup: baseUrl is required for Databricks to work.
       // Failing early here prevents an invalid config from being saved and deferring the
